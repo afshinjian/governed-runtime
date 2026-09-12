@@ -144,6 +144,7 @@ A structured, **non-authoritative** worker assertion. Never gates a transition.
 | `budget_used` | `BudgetUsage` | D | A | R | |
 | `event_head` | `Hash` | D | M | R | head of hash-chained log |
 | `event_seq` | `uint64` | D | M | R | monotonic, gapless |
+| `controller_epoch` | `uint64` | D | M | R | incremented once per controller start, before any dispatch or apply; operations carry the epoch they were created under |
 | `snapshot_current` | `Ref<RealitySnapshot>?` | D | M | R | |
 | `created_at` / `updated_at` | `Ts` | Y | M | R | |
 | `created_by` | `ActorRef` | Y | I | R | `actor_kind` MUST be `HUMAN` |
@@ -151,6 +152,10 @@ A structured, **non-authoritative** worker assertion. Never gates a transition.
 **P-INV-1** `governance_mode` transitions require a `HumanDecision` of kind `SET_MODE`.
 **P-INV-2** No grant anywhere in the project may exceed `capability_ceiling`.
 **P-INV-3** `lifecycle`, `suspension` are independent; neither encodes the other.
+**P-INV-4** `controller_epoch` increments before the controller performs any
+work. An operation whose `controller_epoch` is lower than the project's and whose
+status is non-terminal outlived a controller and MUST be reconciled before the
+run it belongs to does anything further (`RUN-INV-3`).
 
 ---
 
@@ -262,6 +267,7 @@ separate writers. No code path derives one from the other.
 | `stage_id` | `Ref<Stage>` | Y | I | R | |
 | `project_id` | `Ref<Project>` | Y | I | R | |
 | `attempt_ordinal` | `uint32` | Y | I | R | 1-based |
+| `controller_epoch` | `uint64` | Y | I | R | `project.controller_epoch` at allocation |
 | `contract_id` | `Ref<StageContract>` | Y | I | R | |
 | `contract_hash` | `Hash` | Y | I | R | pinned; drift = integrity violation |
 | `activation_id` | `Ref<ContractActivationRecord>` | Y | I | R | |
@@ -286,6 +292,14 @@ separate writers. No code path derives one from the other.
 **RUN-INV-1** Exactly one `StageRun` per stage may be non-terminal.
 **RUN-INV-2** `effective_capabilities` is immutable for the run's life; widening
 requires abort + new activation.
+**RUN-INV-3** A run may create no new `WorkerInvocation`, and may advance no
+`CommitIntent` past `AUTHORIZED`, while any of its `WorkerInvocation` or
+`CommitIntent` records has `reconciliation_state ∈ {PENDING, UNRESOLVABLE}`.
+Every such record is reconciled first, by replaying the persisted request under
+its original `idempotency_key` or by matching the repository against
+`operation_token`. This is the guarantee that a controller restart cannot produce
+a duplicate worker or a duplicate commit: the effect is adopted, or proven not to
+have happened, never repeated.
 
 ---
 
@@ -317,7 +331,7 @@ requires abort + new activation.
 | `evidence_retention_class` | `Enum<PERMANENT,STANDARD,EPHEMERAL>` | Y | I | H | |
 | `authored_by` | `ActorRef` | Y | I | R | |
 | `authored_at` | `Ts` | Y | I | R | |
-| `contract_hash` | `Hash` | D | I | R | over all fields except itself; see schema |
+| `contract_hash` | `Hash` | D | I | R | over all fields except itself **and except `status`**; see schema HASHING comment |
 
 #### `AcceptanceCriterion`
 
@@ -354,7 +368,12 @@ requires abort + new activation.
 **C-INV-1** Every `mandatory` criterion MUST resolve `verifier_ref` to a spec of
 the matching kind. Unbound mandatory criteria make the contract unactivatable.
 **C-INV-2** `contract_hash` is computed over the canonical JSON of every field
-except `contract_hash`. Any mutation after `ACTIVE` is an integrity violation.
+except `contract_hash` and except `status`. `status` is lifecycle, not content:
+excluding it is what lets the legal transitions `DRAFT → ACTIVE` and
+`ACTIVE → FULFILLED`/`REVOKED`/`EXPIRED`/`SUPERSEDED` preserve the hash pinned
+into `StageRun.contract_hash`, while `XC-13` keeps `status` the only member that
+may differ between persisted documents sharing a `contract_id`. Mutation of any
+field inside the preimage after `ACTIVE` is an integrity violation.
 **C-INV-3** `capability_request` is a request. Grants come only from
 `ContractActivationRecord`.
 
@@ -370,6 +389,7 @@ except `contract_hash`. Any mutation after `ACTIVE` is an integrity violation.
 | `granted_capabilities` | `Set<CapabilityId>` | Y | I | R | AUTHORITY record |
 | `denied_capabilities` | `{CapabilityId: Enum<NOT_IN_CEILING,ROLE_FORBIDDEN,MODE_FORBIDDEN,NO_GRANTOR,BUDGET,POLICY,NEVER_GRANTABLE>}` | Y | I | R | |
 | `authority_chain` | `[{grantor: ActorRef, grant_kind: Enum<HUMAN_DECISION,POLICY,CEILING,ROLE_DEFAULT>, ref: Id?, at: Ts}]` | Y | I | R | non-empty |
+| `capability_grant_basis` | `{CapabilityId: {grantor: ActorRef, grant_kind: Enum<HUMAN_DECISION,POLICY,ROLE_DEFAULT>, ref: Id?, at: Ts}}` | Y | I | R | one entry per granted capability, naming the admissible grantor that supplied it (authority-matrix §5.1) |
 | `governance_mode_at_activation` | `Enum<SUPERVISED,AUTONOMOUS>` | Y | I | R | |
 | `policy_digest` | `Hash` | Y | I | R | |
 | `input_snapshot_id` | `Ref<RealitySnapshot>` | Y | I | R | |
@@ -385,6 +405,13 @@ except `contract_hash`. Any mutation after `ACTIVE` is an integrity violation.
 **A-INV-1** `granted_capabilities ⊆ capability_request ∩ role_defaults ∩
 project.capability_ceiling ∩ mode_allowed`. Anything not granted is DENIED.
 **A-INV-2** Activation is the **only** entity that confers authority on a run.
+**A-INV-3** `capability_grant_basis` has exactly one entry per member of
+`granted_capabilities`, and each entry names a grantor listed in that
+capability's `grantable by` column in authority-matrix §2. A granted capability
+with no basis entry, or one whose basis names a principal the register does not
+list for it, is an integrity violation, not a grant. `CEILING` is not an
+admissible `grant_kind` here: the ceiling bounds grants and issues none
+(`AX-11`).
 
 ---
 
@@ -463,6 +490,49 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 **RV-INV-1** `independence = SELF_REVIEW` never satisfies a `ReviewSpec` with
 `independence_required = INDEPENDENT`; it is recorded, and counted as `ABSTAIN`.
 
+#### 7.3.1 `ReviewAttestation` — EVIDENCE
+
+A `Review` is a judgement, and a judgement by an `AUTOMATED` or `PEER_WORKER`
+reviewer is CLAIM class. A `ReviewAttestation` is the kernel's measurement *of*
+that judgement: it does not assert the defect-freedom the review asserts, it
+attests that a review meeting a named `ReviewSpec`'s quorum and independence
+exists, was computed over a stated snapshot, and carries a stated verdict. This
+is the same shape as `WorkerReceipt`, which is EVIDENCE that a worker said
+something without making what it said true.
+
+| field | type | req | mut | src | notes |
+|---|---|---|---|---|---|
+| `attestation_id` | `Id` | Y | I | R | |
+| `run_id` | `Ref<StageRun>` | Y | I | R | |
+| `stage_id` | `Ref<Stage>` | Y | I | R | |
+| `review_spec_id` | `Str(1..64)` | Y | I | R | the spec this attestation discharges |
+| `review_ids` | `Set<Ref<Review>>` | Y | I | R | the reviews counted toward quorum; size ≥ `spec.quorum` |
+| `verdict` | `Enum<PASS,PASS_WITH_FINDINGS,FAIL,INCONCLUSIVE,ABSTAIN>` | D | I | R | aggregated over `review_ids` per spec; the value `RVW(v)` matches |
+| `criteria_addressed` | `Set<Str(1..64)>` | D | I | R | union over `review_ids`, ⊆ contract criteria |
+| `quorum_met` | `bool` | D | I | R | |
+| `independence_satisfied` | `bool` | D | I | R | computed from provenance (`RC-2`, `WP-12`), never asserted |
+| `blocking_findings` | `Set<Ref<Finding>>` | D | I | R | findings with `blocks_satisfaction = true` |
+| `input_snapshot_id` | `Ref<RealitySnapshot>` | Y | I | R | every counted review measured this snapshot |
+| `contract_hash` | `Hash` | Y | I | R | the pinned contract the spec came from |
+| `attested_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
+| `attested_at` | `Ts` | Y | I | R | |
+| `attestation_hash` | `Hash` | D | I | R | |
+| `prev_event_hash` | `Hash` | D | I | R | |
+
+**RA-INV-1** Minting requires `review.attest`, a `KERNEL` capability. A
+worker-authored or human-authored attestation is an integrity violation, not a
+review result.
+**RA-INV-2** An attestation is minted only when `quorum_met = true` and
+`independence_satisfied = true` for its spec. A spec that cannot be satisfied
+produces no attestation; the stage takes the `AWAITING_REVIEW → AWAITING_DECISION`
+row instead.
+**RA-INV-3** The attestation carries a verdict; it never carries the reviewer's
+reasoning as fact. The `Review` records it cites stay CLAIM class, and a finding
+raised inside one is promoted only by its own `evidence_refs`.
+**RA-INV-4** Like every receipt, an attestation is bound to
+`input_snapshot_id` and stops being current evidence when that snapshot is
+superseded within the stage's scope.
+
 ### 7.4 `Finding`
 
 | field | type | req | mut | src | notes |
@@ -503,7 +573,10 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 | `granted_capabilities` | `Set<CapabilityId>` | Y | I | R | ⊆ run's effective set |
 | `sandbox_profile_id` | `Str(1..64)` | Y | I | R | |
 | `budget_allocated` | `Budget` | Y | I | R | |
-| `idempotency_key` | `Hash` | Y | I | R | `H(context_digest ‖ role ‖ attempt)` |
+| `idempotency_key` | `Hash` | Y | I | R | `H(context_digest ‖ role ‖ attempt)`; stable for the life of the invocation, including across controller restarts |
+| `request_ref` | `ArtifactRef` | Y | I | R | the exact `InvocationRequest`, persisted **before** the first provider call so a restart can replay it rather than rebuild it |
+| `controller_epoch` | `uint64` | Y | I | R | `project.controller_epoch` at creation |
+| `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | `NOT_REQUIRED` while the invocation is terminal or its epoch is current; `PENDING` once it outlives its controller; `ADOPTED`/`ORPHANED` after the replay resolved it; `UNRESOLVABLE` when the provider cannot say |
 | `dispatched_at` | `Ts` | Y | I | R | |
 | `deadline_at` | `Ts` | Y | I | R | |
 | `status` | `Enum<PENDING,DISPATCHED,RUNNING,COMPLETED,FAILED,TIMED_OUT,CANCELLED,REJECTED_BY_POLICY>` | Y | M | R | |
@@ -526,6 +599,7 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 | `scope_breaches_attempted` | `[{path: Path, at: Ts}]` | Y | I | R | |
 | `termination_reason` | `Enum<COMPLETED,DEADLINE,BUDGET,POLICY_STOP,PROVIDER_ERROR,HUMAN_STOP,INTEGRITY>` | Y | I | R | |
 | `attested_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
+| `attribution` | `Enum<DIRECT,RECONCILED>` | Y | I | R | `RECONCILED` iff minted under `recovery.reconcile` from a replayed outcome rather than from a live invocation |
 | `receipt_hash` | `Hash` | D | I | R | |
 | `prev_event_hash` | `Hash` | D | I | R | |
 
@@ -533,6 +607,11 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 `claims` remain CLAIMs. It never raises `observed_satisfaction`.
 **W-INV-2** `proposed_mutations` do not touch the workspace. Only an applied
 `CommitIntent` does.
+**W-INV-3** A receipt with `attribution = RECONCILED` is the same EVIDENCE class
+as a direct one and is never re-executed for. Replay under the original
+`idempotency_key` returns the provider's prior outcome (`WP-6`); a second
+execution would be a duplicate worker and is illegal
+(transition-matrix §9.3).
 
 ### 8.3 `CommitIntent`
 
@@ -547,7 +626,10 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 | `mutations` | `[MutationProposal]` | Y | I | R | all must be `in_scope` |
 | `expected_tree_digest` | `Hash` | Y | I | R | post-application prediction |
 | `message` | `Str(1..8192)` | Y | I | W | |
-| `trailers` | `{Str: Str}` | Y | I | R | includes evidence back-references |
+| `trailers` | `{Str: Str}` | Y | I | R | includes evidence back-references **and `operation_token`**, so the landed revision carries its own identity |
+| `operation_token` | `Str(32..128)` | Y | I | R | durable, globally unique identity of this application attempt, minted at `PROPOSED` and written into `trailers`; the key a restart scans the repository by |
+| `controller_epoch` | `uint64` | Y | I | R | `project.controller_epoch` at creation |
+| `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | `PENDING` once an `APPLYING` intent outlives its controller; `ADOPTED` when a revision carrying `operation_token` is found, `ORPHANED` when none is and the base revision is intact, `UNRESOLVABLE` otherwise |
 | `preconditions` | `{validations: Set<Hash>, reviews: Set<Ref<Review>>, decisions: Set<Ref<HumanDecision>>}` | Y | I | R | |
 | `preconditions_met` | `bool` | D | M | R | |
 | `status` | `Enum<PROPOSED,BLOCKED,AUTHORIZED,DENIED,APPLYING,APPLIED,FAILED,ROLLED_BACK>` | Y | M | R | §9.7 |
@@ -570,6 +652,8 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 | `diff_ref` | `ArtifactRef` | Y | I | R | |
 | `applied_at` | `Ts` | Y | I | R | |
 | `applied_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
+| `attribution` | `Enum<DIRECT,RECONCILED>` | Y | I | R | `RECONCILED` iff minted under `recovery.reconcile` for a revision found by `operation_token` after a restart |
+| `operation_token` | `Str(32..128)` | Y | I | R | copied from the intent; equals the token carried by `revision_id`'s trailers |
 | `post_snapshot_id` | `Ref<RealitySnapshot>` | Y | I | R | |
 | `rollback_handle` | `Str(1..256)?` | N | I | R | |
 | `receipt_hash` | `Hash` | D | I | R | |
@@ -577,6 +661,16 @@ evidence when the snapshot it measured is superseded within the stage's scope.
 
 **CM-INV-1** `verification = DIVERGED` MUST raise `Escalation(INTEGRITY_VIOLATION)`
 and suspend the run.
+**CM-INV-2** The `operation_token` is durable before the repository is touched,
+and the repository operation carries it. A revision that landed while the
+controller was down is therefore always findable, so an `APPLYING` intent is
+resolved by adoption (mint the `CommitReceipt` with `attribution = RECONCILED`)
+or by proof that nothing landed — never by a blind retry, which is not
+idempotent.
+**CM-INV-3** A token matching more than one revision, or matching none while the
+workspace no longer matches `base_revision_id`, is `UNRESOLVABLE`: raise
+`Escalation(RECOVERY_AMBIGUITY)` and suspend. Tree equality alone never
+establishes which revision fulfilled which intent.
 
 ---
 
@@ -598,6 +692,9 @@ and suspend the run.
 | `revokes` | `Set<CapabilityId>` | Y | I | H | possibly empty |
 | `scope` | `Enum<PROJECT,STAGE,RUN,SINGLE_ACTION>` | Y | I | H | |
 | `expires_at` | `Ts?` | N | I | H | absent ⇒ `scope` bounds it |
+| `snapshot_bound` | `bool` | D | I | R | true iff the decision speaks about the state of the workspace: `subject.kind ∈ {STAGE, RUN, COMMIT_INTENT, FINDING}`, or `decision_kind ∈ {APPROVE, WAIVE, ACCEPT_RISK, OVERRIDE, REJECT}`. `SET_MODE`, `SUSPEND`, `RESUME`, `ABANDON`, `EXTEND_BUDGET`, `GRANT_CAPABILITY` and `REVOKE_CAPABILITY` over a `PROJECT` or `CAPABILITY` subject are not snapshot-bound |
+| `subject_snapshot_id` | `Ref<RealitySnapshot>?` | Y | I | R | required iff `snapshot_bound`; the `COMPLETE` snapshot the `evidence_shown` artifacts were measured against — the repository reality the human actually approved |
+| `decision_state` | `Enum<VALID,CONSUMED,STALE,EXPIRED,VOID>` | D | M | R | transition-matrix §7.5; only `VALID` is authority |
 | `decided_by` | `ActorRef` | Y | I | R | `actor_kind` MUST be `HUMAN` |
 | `auth_method` | `Enum<SESSION,SIGNATURE,MTLS>` | Y | I | R | `NONE`/`DELEGATED` invalid |
 | `decided_at` | `Ts` | Y | I | R | |
@@ -612,6 +709,15 @@ integrity violation. Runtimes and workers cannot manufacture authority.
 **HD-INV-2** `evidence_shown` is mandatory: an uninformed approval is recorded as
 such and does not satisfy `required_evidence` in the transition matrix.
 **HD-INV-3** A decision is consumed once (`nonce`); it cannot be replayed across runs.
+**HD-INV-4** A snapshot-bound decision is authority only while its
+`subject_snapshot_id` is still the newest `COMPLETE` snapshot covering the
+subject's scope. When a newer snapshot whose `drift_summary` touches that scope
+supersedes it, `decision_state` becomes `STALE` and the decision satisfies no
+`CONFIRM` or `DECIDE(K)`, whatever its `expires_at` says and whether or not it
+was ever used. Fresh validations and reviews over the new reality do not revive
+it: the human approved artifacts that no longer describe the workspace, so the
+subject must be re-decided. `HD-INV-3` prevents reuse after consumption;
+`HD-INV-4` prevents stale first use.
 
 ### 9.B `Escalation`
 
@@ -655,6 +761,7 @@ such and does not satisfy `required_evidence` in the transition matrix.
 | `ROADMAP_DIVERGED` | adapter reports `DIVERGED` or `UNREADABLE` |
 | `POLICY_CONFLICT` | two applicable policy rules give opposite verdicts |
 | `INTEGRITY_VIOLATION` | hash-chain break, contract mutation, forged receipt or decision |
+| `RECOVERY_AMBIGUITY` | after a controller restart an operation cannot be reconciled: the provider cannot say whether an invocation ran, or a repository scan matches an `operation_token` to zero revisions with a changed base, or to more than one |
 
 ### 9.C `AuditEvent`
 
@@ -731,8 +838,11 @@ orthogonal fields**, never collapsed into one.
 
 ### 10.4 Subordinate state fields
 `RunLifecycle`, `StageContract.status`, `Finding.status`, `CommitIntent.status`,
-`Escalation.status`, `ValidationOperation.status`, `WorkerInvocation.status` —
-each defined in its entity table and transitioned in `transition-matrix.md`.
+`Escalation.status`, `ValidationOperation.status`, `WorkerInvocation.status`,
+`HumanDecision.decision_state`, and the `reconciliation_state` carried by
+`WorkerInvocation` and `CommitIntent` — each defined in its entity table and
+transitioned in `transition-matrix.md`. None of them is a lifecycle axis: they
+qualify one entity, never the project or the stage.
 
 ---
 
@@ -752,8 +862,11 @@ each defined in its entity table and transitioned in `transition-matrix.md`.
 | ValidationOperation → ValidationReceipt | 1 : 0..1 |
 | StageRun → Review | 1 : 0..n |
 | Review → Finding | 1 : 0..n |
+| ReviewSpec → ReviewAttestation | 1 : 0..n (≤ 1 current per `input_snapshot_id`) |
+| ReviewAttestation → Review | 1 : 1..n (quorum members) |
 | StageRun → CommitIntent | 1 : 0..n |
 | CommitIntent → CommitReceipt | 1 : 0..1 |
+| HumanDecision → RealitySnapshot | 1 : 0..1 (`subject_snapshot_id`, present iff `snapshot_bound`) |
 | Project → AuditEvent | 1 : 1..n (total order) |
 | Project → RealitySnapshot | 1 : 1..n |
 | Escalation → HumanDecision | 1 : 0..1 (resolution) |
@@ -764,7 +877,7 @@ each defined in its entity table and transitioned in `transition-matrix.md`.
 
 | id | invariant |
 |---|---|
-| `G-1` | No entity outside `{ValidationReceipt, WorkerReceipt, CommitReceipt, RealitySnapshot}` may be cited as `required_evidence`. |
+| `G-1` | No entity outside `{ValidationReceipt, WorkerReceipt, CommitReceipt, ReviewAttestation, RealitySnapshot}` may be cited as `required_evidence`. A `Review` is never cited directly: the kernel-minted `ReviewAttestation` is what the `RVW(v)` token in `transition-matrix.md` resolves to, so a judgmental criterion is discharged by the kernel's measurement of the review, not by the reviewer's own verdict. |
 | `G-2` | No entity outside `{HumanDecision, ContractActivationRecord}` may be cited as `required_capability` authority. |
 | `G-3` | A worker-authored value is `CLAIM` class regardless of its confidence, formatting, or self-declared certainty. |
 | `G-4` | Every state-changing operation names exactly one `CapabilityId`; absence ⇒ DENY. |
@@ -772,3 +885,5 @@ each defined in its entity table and transitioned in `transition-matrix.md`.
 | `G-6` | `declared_status` never appears in any precondition of any transition. |
 | `G-7` | Terminal states (`SATISFIED`, `REJECTED`, `ABANDONED`, `COMPLETED`, `ARCHIVED`) are re-enterable only via a new entity revision, never by mutation. |
 | `G-8` | Suspension never overwrites a lifecycle value; it is read alongside it. |
+| `G-9` | Every side effect outside the kernel's own store — a provider invocation, a repository mutation — has a durable identity persisted **before** the effect (`idempotency_key` with `request_ref`, or `operation_token`), and a non-terminal one that outlives its controller is reconciled before any further work on its run (`RUN-INV-3`, `CM-INV-2`). |
+| `G-10` | An authority record cites the grantor that produced it. A grant with no admissible grantor in the capability register is not a grant (`A-INV-3`, `AX-11`); a decision whose `decision_state ≠ VALID` is not authority (`HD-INV-4`). |

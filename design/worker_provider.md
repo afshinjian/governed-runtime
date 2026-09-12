@@ -82,7 +82,7 @@ recorded with `capability_violations_attempted`.
 | `WP-3` | `requested_validations` may only name a `validation_spec_id` already present in the pinned contract. The provider cannot author a validator or alter a command. |
 | `WP-4` | Every side-effecting action goes through `ToolBridge.call` and is denied unless `tool.required_capability ∈ granted_capabilities`. Denial is returned, not raised, and is recorded. |
 | `WP-5` | `usage` reported by the provider is advisory; the authoritative `Usage` in the `WorkerReceipt` is the kernel's own measurement. Divergence beyond tolerance raises `Escalation(POLICY_CONFLICT)`. |
-| `WP-6` | `invoke` is idempotent on `idempotency_key`: a repeat returns the prior outcome rather than re-executing, so retries cannot double-spend budget. |
+| `WP-6` | `invoke` is idempotent on `idempotency_key`: a repeat returns the prior outcome rather than re-executing, so retries cannot double-spend budget. The prior outcome is retained and returnable for at least the run's `deadline_at` plus the configured recovery window, so a replay after a controller restart still finds it. |
 | `WP-7` | The provider receives no secrets. Secret-bearing values are injected by the kernel into tool execution environments and never appear in `prompt_bundle_ref` or `context_refs`. |
 | `WP-8` | The provider is not told the governance mode, the capability ceiling, the budget of other runs, or the contents of the audit log. It receives exactly `InvocationRequest`. |
 | `WP-9` | A provider may not invoke another provider or spawn a sub-worker; `worker.delegate` is `NEVER` grantable. Fan-out is a kernel decision. |
@@ -91,6 +91,8 @@ recorded with `capability_violations_attempted`.
 | `WP-12` | Provenance for independence (`RC-2`) is the tuple `(provider_id, binding_id, context_digest, session continuity)`. The provider must report session continuity truthfully in `diagnostics`; the kernel additionally computes it from `context_digest` overlap and takes the stricter result. |
 | `WP-13` | `REFUSED` is a legitimate terminal outcome, recorded as such. It is never retried against the same binding within the same run, and never converted into a validation failure. |
 | `WP-14` | The provider is stateless across invocations from core's perspective. Any provider-side session is invisible to core and must not change the meaning of `idempotency_key`. |
+| `WP-15` | **Request-before-call.** The kernel persists the full `InvocationRequest` as `WorkerInvocation.request_ref`, with its `idempotency_key` and `controller_epoch`, and appends that event, *before* calling `invoke`. Recovery replays those stored bytes; it never rebuilds context, because a rebuilt bundle yields a different `context_digest`, a different `idempotency_key`, and therefore a second execution (`G-9`, transition-matrix §9.3). |
+| `WP-16` | **Answerable by key.** `lookup(idempotency_key)` — served by `invoke` with the same request, or by `preflight`-equivalent inspection — tells the kernel one of three things: the outcome, that an invocation under that key is still live, or that the provider holds nothing under it. A provider that cannot answer leaves the invocation `reconciliation_state = UNRESOLVABLE`, which stops the run and raises `Escalation(RECOVERY_AMBIGUITY)` rather than permitting a replacement dispatch. |
 
 ---
 
@@ -122,15 +124,34 @@ computed by `authority-matrix.md` §5 and frozen for the run.
 | 2 | kernel | take `RealitySnapshot`, build `ScopeView` | `RealitySnapshot` (EVIDENCE) |
 | 3 | kernel | assemble prompt bundle and context, store content-addressed, compute `context_digest` | artifacts |
 | 4 | provider | `preflight` | `AuditEvent` |
-| 5 | kernel | `WorkerInvocation` → `DISPATCHED` | `AuditEvent` |
-| 6 | provider | `invoke`; each side effect via `ToolBridge.call` | one `AuditEvent` per call, with `capability_used` |
-| 7 | kernel | measure usage, bound output, mint `WorkerReceipt` | `WorkerReceipt` (EVIDENCE of what was said) |
-| 8 | kernel | convert `requested_validations` into `ValidationOperation` records | CLAIM → request |
-| 9 | kernel | execute validations, mint `ValidationReceipt` | EVIDENCE |
-| 10 | kernel | recompute `observed_satisfaction` | derived EVIDENCE |
+| 5 | kernel | persist the `InvocationRequest` as `request_ref` with its `idempotency_key` and `controller_epoch`, and append it — **before** any provider call (`WP-15`) | `AuditEvent` (durable identity) |
+| 6 | kernel | `WorkerInvocation` → `DISPATCHED` | `AuditEvent` |
+| 7 | provider | `invoke`; each side effect via `ToolBridge.call` | one `AuditEvent` per call, with `capability_used` |
+| 8 | kernel | measure usage, bound output, mint `WorkerReceipt` with `attribution = DIRECT` | `WorkerReceipt` (EVIDENCE of what was said) |
+| 9 | kernel | convert `requested_validations` into `ValidationOperation` records | CLAIM → request |
+| 10 | kernel | execute validations, mint `ValidationReceipt` | EVIDENCE |
+| 11 | kernel | mint a `ReviewAttestation` per satisfied mandatory `ReviewSpec` | EVIDENCE |
+| 12 | kernel | recompute `observed_satisfaction` | derived EVIDENCE |
 
-Steps 7 through 10 are the only path by which anything a worker produced can
+Steps 8 through 12 are the only path by which anything a worker produced can
 affect stage state.
+
+### 6.1 Recovery sequence
+
+Run once per controller start, after `project.controller_epoch` increments and
+before any dispatch on the affected runs.
+
+| step | actor | action | record |
+|---|---|---|---|
+| 1 | kernel | select every `WorkerInvocation` with non-terminal `status` and `controller_epoch < project.controller_epoch`; mark `reconciliation_state = PENDING` | `AuditEvent` |
+| 2 | kernel | for each, re-submit the stored `request_ref` bytes under the original `idempotency_key` (`WP-15`, `WP-16`) | `AuditEvent` |
+| 3 | kernel | prior outcome returned ⇒ mint `WorkerReceipt` with `attribution = RECONCILED`, invocation → `COMPLETED`, state `ADOPTED` | `WorkerReceipt` (EVIDENCE) |
+| 4 | kernel | provider holds nothing under the key ⇒ mint `WorkerReceipt` with `termination_reason = PROVIDER_ERROR`, `attribution = RECONCILED`, invocation → `FAILED`, state `ORPHANED` | `WorkerReceipt` (EVIDENCE) |
+| 5 | kernel | invocation still live ⇒ resume tracking it under the same key; state returns to `NOT_REQUIRED` on its terminal receipt | `AuditEvent` |
+| 6 | kernel | provider cannot answer ⇒ state `UNRESOLVABLE`, run → `AWAITING_DECISION` | `Escalation(RECOVERY_AMBIGUITY)` |
+
+No step here creates an invocation, a key, or an attempt. The whole sequence only
+decides what already happened.
 
 ---
 
@@ -148,3 +169,5 @@ affect stage state.
 | `CF-8` | outputs contain no secret values, verified against the salted digests of resolved secrets |
 | `CF-9` | provider-reported `usage` is within tolerance of kernel measurement |
 | `CF-10` | a `REFUSED` outcome produces a receipt and does not advance any stage state |
+| `CF-11` | `invoke` killed mid-execution and replayed under the same `idempotency_key` after a controller restart returns the original outcome and bills once (`WP-6`, `WP-15`) |
+| `CF-12` | a key the provider never received returns "nothing held" rather than starting an execution, so recovery can orphan the invocation safely (`WP-16`) |

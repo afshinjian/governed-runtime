@@ -5,7 +5,7 @@
   "description": "Frozen, hash-pinned statement of what a stage run is authorized to attempt and what would count as satisfying it. Vendor-neutral: contains no provider, model, or host-project identifiers.",
   "type": "object",
 
-  "$comment": "HASHING: contract_hash = '<alg>:' + lowerhex(alg(JCS(self_without_hash))) where (1) self_without_hash is this object with the member 'contract_hash' removed and nothing else changed; (2) JCS is RFC 8785 JSON Canonicalization Scheme applied to the remaining object, covering every other member defined by this schema, including optional members that are present and excluding members that are absent; (3) alg is the algorithm named by the prefix of contract_hash itself, restricted to 'sha256'. Absent optional members are not defaulted before hashing. Recomputation MUST equal the stored value at activation and at every later verification; inequality is an INTEGRITY_VIOLATION, not a validation error.",
+  "$comment": "HASHING: contract_hash = '<alg>:' + lowerhex(alg(JCS(self_without_hash_or_status))) where (1) self_without_hash_or_status is this object with the members 'contract_hash' and 'status' removed and nothing else changed; (2) JCS is RFC 8785 JSON Canonicalization Scheme applied to the remaining object, covering every other member defined by this schema, including optional members that are present and excluding members that are absent; (3) alg is the algorithm named by the prefix of contract_hash itself, restricted to 'sha256'. Absent optional members are not defaulted before hashing. STATUS IS EXCLUDED FROM THE PREIMAGE because status is lifecycle, not content: the hash pins what the contract authorizes, and the legal transitions DRAFT->ACTIVE->FULFILLED/REVOKED/EXPIRED/SUPERSEDED change only the lifecycle. Were status hashed, no legal status transition could preserve the hash pinned into StageRun.contract_hash, and XC-13 would forbid the only alternative. Recomputation MUST equal the stored value at activation and at every later verification; inequality is an INTEGRITY_VIOLATION, not a validation error.",
 
   "properties": {
     "schema_version": {
@@ -494,12 +494,12 @@
     },
     {
       "id": "XC-12",
-      "rule": "contract_hash recomputes over JCS of this document minus the contract_hash member; mismatch is INTEGRITY_VIOLATION",
+      "rule": "contract_hash recomputes over JCS of this document minus the contract_hash and status members; mismatch is INTEGRITY_VIOLATION. The value is therefore invariant across every status transition and stays equal to the StageRun.contract_hash pinned at activation",
       "enforced_at": "contract.activate and every later verification"
     },
     {
       "id": "XC-13",
-      "rule": "no member other than status differs between any two persisted documents sharing a contract_id",
+      "rule": "no member other than status differs between any two persisted documents sharing a contract_id; since status is outside the hash preimage, contract_hash is identical across them and a status transition is the only legal difference",
       "enforced_at": "persistence layer"
     },
     {

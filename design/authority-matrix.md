@@ -19,6 +19,7 @@ runtime concepts, not provider or model names.
 | `AX-8` | Denial is recorded: every denied capability appears in `ContractActivationRecord.denied_capabilities` with a reason. Silent denial is a defect. |
 | `AX-9` | A capability confers permission to *attempt*; it never substitutes for `required_evidence` in `transition-matrix.md`. |
 | `AX-10` | Revocation is immediate for future operations and never retroactive for recorded evidence. |
+| `AX-11` | **Bounding is not granting.** `project.capability_ceiling`, the §3 mode gate, `capability_request`, and the §4.1 role table only narrow the candidate set. A capability is granted only when a principal named in its §2 `grantable by` column produced an admissible grant record for it (§5.1), and that record is cited in `ContractActivationRecord.capability_grant_basis`. |
 
 ---
 
@@ -37,7 +38,7 @@ runtime concepts, not provider or model names.
 
 | grant_kind | source record | expiry |
 |---|---|---|
-| `HUMAN_DECISION` | `HumanDecision.grants` | `expires_at` or `scope` boundary |
+| `HUMAN_DECISION` | `HumanDecision.grants` | `expires_at`, `scope` boundary, or `decision_state` leaving `VALID` (domain-model §9.A) |
 | `POLICY` | policy evaluation against `policy_digest` | activation expiry |
 | `CEILING` | `Project.capability_ceiling` | project lifetime |
 | `ROLE_DEFAULT` | §4 | activation expiry |
@@ -90,6 +91,7 @@ grant time), `NEVER` (`AX-6`).
 | `run.abort` | terminate a run and drain its operations | `KERNEL` | `RUNTIME_KERNEL`, `HUMAN_PRINCIPAL` | DENY | — |
 | `worker.invoke` | dispatch a `WorkerInvocation` | `KERNEL` | `RUNTIME_KERNEL` | DENY | workers never hold this; see `AX-7` |
 | `worker.delegate` | a worker spawning a sub-worker | `NEVER` | `NOBODY` | DENY | delegation must route through the kernel so grants stay bounded |
+| `recovery.reconcile` | adopt or orphan an operation left unreconciled by a controller restart: replay a persisted `InvocationRequest` under its `idempotency_key`, or match a landed revision to a `CommitIntent.operation_token`, and mint the resulting receipt with `attribution = RECONCILED` | `KERNEL` | `RUNTIME_KERNEL` | DENY | never grantable to a worker or adapter; reconciliation is the kernel deciding what already happened |
 
 ### 2.4 Workspace and execution
 
@@ -116,6 +118,7 @@ grant time), `NEVER` (`AX-6`).
 | `validation.execute` | run the operation in a sandbox | `KERNEL` | `RUNTIME_KERNEL` | DENY | — |
 | `validation.attest` | mint a `ValidationReceipt` | `KERNEL` | `RUNTIME_KERNEL` | DENY | external executors only via signed attestation binding |
 | `review.submit` | create a `Review` with a verdict | `ORD` | `ROLE_DEFAULT` | DENY | — |
+| `review.attest` | mint a `ReviewAttestation` over an existing `Review`: the kernel's EVIDENCE record that a review meeting its spec's quorum and independence exists and carries a stated verdict | `KERNEL` | `RUNTIME_KERNEL` | DENY | the attestation measures the review's provenance, never its judgement |
 | `review.attest.independent` | mark a review as satisfying an `INDEPENDENT` spec | `KERNEL` | `RUNTIME_KERNEL` | DENY | independence is computed from provenance, never asserted |
 | `finding.raise` | create a `Finding` | `ORD` | `ROLE_DEFAULT` | DENY | — |
 | `finding.resolve` | move a finding to `ACKNOWLEDGED`, `FIXED`, `DISPUTED`, `INVALID` | `ORD` | `ROLE_DEFAULT` | DENY | `FIXED` still requires fresh evidence |
@@ -240,14 +243,38 @@ Every cell is additionally bounded by `AX-4`; `D` is not overridable by request.
 | 3 | `S₂ = S₁` minus capabilities denied by the §3 mode gate; recorded as `MODE_FORBIDDEN` |
 | 4 | `S₃ = S₂ ∩ role_default(worker_role)` per §4.1, with `C` cells retained only if requested; differences recorded as `ROLE_FORBIDDEN` |
 | 5 | `S₄ = S₃` minus every `KERNEL` and `NEVER` capability; recorded as `NEVER_GRANTABLE` |
-| 6 | for each remaining `HUMAN`-class capability, require a live `HumanDecision{kind: GRANT_CAPABILITY}` covering it; otherwise drop and record `NO_GRANTOR` |
+| 6 | for each remaining capability, require an admissible grantor per §5.1 and record the grant record that supplied it; otherwise drop and record `NO_GRANTOR`. Class is not a shortcut: an `ORD` capability whose `grantable by` column names only `HUMAN_PRINCIPAL` needs the same live `HumanDecision{kind: GRANT_CAPABILITY}` an `HUMAN`-class one needs |
 | 7 | if any budget dimension is exhausted, drop every capability with a cost side effect and record `BUDGET` |
-| 8 | `granted_capabilities = S₄` after step 7; write `ContractActivationRecord` with both `granted_capabilities` and `denied_capabilities` |
+| 8 | `granted_capabilities = S₄` after step 7; write `ContractActivationRecord` with `granted_capabilities`, `denied_capabilities`, and `capability_grant_basis` carrying exactly one §5.1 grant record per granted capability. A granted capability with no basis entry is an integrity violation, not a grant (`A-INV-3`) |
 | 9 | freeze: `StageRun.effective_capabilities = granted_capabilities`, immutable for the run |
 
 An empty `granted_capabilities` is legal and means the run can do nothing; it is
 recorded rather than treated as an error, and raises
 `Escalation(CAPABILITY_DENIED)`.
+
+### 5.1 Admissible grantors
+
+A grantor is admissible for capability `c` only if it appears in `c`'s
+`grantable by` column in §2 **and** the matching record below exists at
+activation time.
+
+| grantor named in §2 | admissible only when | recorded in `capability_grant_basis` |
+|---|---|---|
+| `HUMAN_PRINCIPAL` | a `HumanDecision{kind: GRANT_CAPABILITY}` naming `c` is live: `decision_state = VALID`, nonce unconsumed, unexpired, and its `scope` covers this run | `grant_kind = HUMAN_DECISION`, `ref = decision_id` |
+| `POLICY_ENGINE` | `governance_mode = AUTONOMOUS`, the policy document at `policy_digest` marks `c` `POLICY_GRANTABLE`, and the evaluation is persisted | `grant_kind = POLICY`, `ref = policy evaluation id` |
+| `ROLE_DEFAULT` | §4.1 gives `c` a `G` cell for `worker_role`, or a `C` cell with `c ∈ capability_request` | `grant_kind = ROLE_DEFAULT`, `ref` absent |
+| `RUNTIME_KERNEL` | never for a run's grant: `KERNEL` capabilities are removed at step 5 and never appear in `granted_capabilities` (`AX-7`) | — |
+| `NOBODY` | never (`AX-6`) | — |
+
+`PROJECT_CEILING` is never an admissible grantor. It is the bound every other
+grantor is checked against, and membership in it grants nothing (`AX-11`).
+Likewise a `G` or `C` cell in §4.1 supplies a grant only where §2 names
+`ROLE_DEFAULT` as a grantor of that capability; for every other capability the
+cell only decides whether an otherwise-granted capability survives. So
+`roadmap.writeback`, whose §2 grantor is `HUMAN_PRINCIPAL` alone, is denied with
+`NO_GRANTOR` for a `PLANNER` in either governance mode unless a live human grant
+covers it — its `ORD` class, its presence in the ceiling, its `C` cell, and its
+presence in `capability_request` change nothing.
 
 ---
 
@@ -258,6 +285,9 @@ recorded rather than treated as an error, and raises
 | activation | §5 resolution; `AX-4` |
 | invocation dispatch | `WorkerInvocation.granted_capabilities ⊆ StageRun.effective_capabilities` |
 | syscall or tool mediation | requested capability present, and target inside the scope it was granted for |
-| receipt minting | `validation.attest` and `commit.apply` held by a `RUNTIME` actor only |
+| receipt minting | `validation.attest`, `review.attest`, `commit.apply` and `recovery.reconcile` held by a `RUNTIME` actor only; a receipt minted under `recovery.reconcile` carries `attribution = RECONCILED` |
+| decision freshness | every cited `HumanDecision` has `decision_state = VALID`; a decision with `snapshot_bound = true` whose `subject_snapshot_id` is no longer the newest `COMPLETE` snapshot over the subject's scope is `STALE` and discharges nothing (`HD-INV-4`) |
+| operation identity | no provider call before `request_ref` and its `idempotency_key` are durable; no repository mutation before `operation_token` is durable (`G-9`) |
+| controller recovery | before a run dispatches new work or applies a commit, every `WorkerInvocation` and `CommitIntent` of that run whose `controller_epoch` precedes `project.controller_epoch` has `reconciliation_state ∈ {NOT_REQUIRED, ADOPTED, ORPHANED}`, resolved by replaying `request_ref` under its original key or by scanning for `operation_token` under `recovery.reconcile`; an `UNRESOLVABLE` one raises `Escalation(RECOVERY_AMBIGUITY)` (`RUN-INV-3`) |
 | transition | `required_capability` from `transition-matrix.md` held at the moment of transition, plus `required_evidence` present |
 | audit append | every enforced denial emits an `AuditEvent` with `epistemic_class = AUTHORITY` |

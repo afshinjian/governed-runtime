@@ -68,10 +68,10 @@ The most restrictive axis wins.
 | `SNAP` | `RealitySnapshot` with `completeness = COMPLETE` over the relevant scope |
 | `VR(pass)` | `ValidationReceipt` with `outcome = PASS`, bound to current `SNAP` |
 | `VR(any)` | any `ValidationReceipt` for the op |
-| `RVW(v)` | `Review` with `verdict = v` satisfying its `ReviewSpec` quorum and independence |
+| `RVW(v)` | `ReviewAttestation` minted by the kernel under `review.attest` over a `Review` with `verdict = v`, recording that the `ReviewSpec` quorum and `independence_required` are met. The attestation is the EVIDENCE; the verdict inside the `Review` stays CLAIM (`G-1`, evidence-model §2.1) |
 | `WR` | `WorkerReceipt` |
 | `CR` | `CommitReceipt` with `verification = MATCHED` |
-| `DEC(K)` | `HumanDecision{kind: K}` with non-empty `evidence_shown` |
+| `DEC(K)` | `HumanDecision{kind: K}` with non-empty `evidence_shown` and `decision_state = VALID` at the moment of the transition (`HD-INV-4`) |
 | `ACT` | un-revoked, un-expired `ContractActivationRecord` |
 | `ESC(s)` | `Escalation` with `status = s` |
 
@@ -105,10 +105,17 @@ The most restrictive axis wins.
 Every row additionally requires `project.lifecycle ∈ {ACTIVE, SETTLING}` and
 `stage.suspension = NONE` and `project.suspension = NONE`, except where stated.
 
+**Startup exception.** The two materialization rows `∅ → PENDING` and
+`PENDING → READY` are additionally legal while `project.lifecycle = PLANNING`.
+Without this exception no stage could reach `READY` before the project is
+`ACTIVE`, while `PLANNING → ACTIVE` (§2) requires a `READY` stage — the project
+could never start. No other axis-2 row is legal during `PLANNING`: a stage may be
+materialized and made dependency-ready there, and nothing else.
+
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
-| `∅` | `PENDING` | stage present in `roadmap.stage_order` | — | `roadmap.import` | `AUTO` | `AUTO` | — |
-| `PENDING` | `READY` | every `depends_on` stage has `observed_satisfaction = SATISFIED` | `SNAP` plus each dependency's satisfying receipts current against it | `stage.lifecycle.advance` | `AUTO` | `AUTO` | — |
+| `∅` | `PENDING` | stage present in `roadmap.stage_order`; `project.lifecycle ∈ {PLANNING, ACTIVE, SETTLING}` per the startup exception | — | `roadmap.import` | `AUTO` | `AUTO` | — |
+| `PENDING` | `READY` | every `depends_on` stage has `observed_satisfaction = SATISFIED`, vacuously true for a stage with no dependencies; `project.lifecycle ∈ {PLANNING, ACTIVE, SETTLING}` per the startup exception | `SNAP` plus each dependency's satisfying receipts current against it | `stage.lifecycle.advance` | `AUTO` | `AUTO` | — |
 | `PENDING` | `ABANDONED` | none | — | `stage.abandon` | `DECIDE(ABANDON)` | `DECIDE(ABANDON)` | — |
 | `READY` | `PENDING` | some dependency's `observed_satisfaction` left `SATISFIED` | `SNAP` | `stage.lifecycle.advance` | `NOTIFY` | `AUTO` | — |
 | `READY` | `CONTRACTED` | a `StageContract` reached `ACTIVE` for this stage and `C-INV-1` holds | contract `contract_hash` verified | `contract.activate` | `CONFIRM` | `AUTO` | — |
@@ -151,7 +158,7 @@ for the two demotion rows above, each of which requires fresh evidence or a deci
 | `NONE` | `SUSPENDED_BY_ESCALATION` | `ESC(OPEN)` with `auto_resolvable = false` targets this holder | `ESC(OPEN)` | `suspension.set` | `AUTO` | `AUTO` | — |
 | `NONE` | `SUSPENDED_BY_BUDGET` | any `budget_used` field ≥ its `budget` ceiling | `WR` or `VR(any)` usage records | `suspension.set` | `AUTO` | `AUTO` | — |
 | `NONE` | `SUSPENDED_BY_DRIFT` | `SNAP.drift_summary.unattributed > 0` inside the holder's scope | `SNAP` with drift | `suspension.set` | `AUTO` | `AUTO` | — |
-| `NONE` | `SUSPENDED_BY_INTEGRITY` | hash-chain break, contract hash mismatch, forged receipt, or void `HumanDecision` detected | failing chain verification record | `suspension.set` | `AUTO` | `AUTO` | — |
+| `NONE` | `SUSPENDED_BY_INTEGRITY` | hash-chain break, contract hash mismatch, forged receipt, void `HumanDecision`, or a `reconciliation_state = UNRESOLVABLE` commit intent detected | failing chain verification record, or the `ESC(OPEN)` carrying `RECOVERY_AMBIGUITY` | `suspension.set` | `AUTO` | `AUTO` | — |
 | `QUIESCING` | `SUSPENDED_BY_HUMAN` | in-flight set empty | `DEC(SUSPEND)`, terminal receipt per drained operation | `suspension.set` | `AUTO` | `AUTO` | — |
 | `QUIESCING` | `SUSPENDED_BY_POLICY` | in-flight set empty | terminal receipt per drained operation | `suspension.set` | `AUTO` | `AUTO` | — |
 | `QUIESCING` | `SUSPENDED_BY_ESCALATION` | in-flight set empty | `ESC(OPEN)`, terminal receipt per drained operation | `suspension.set` | `AUTO` | `AUTO` | — |
@@ -200,8 +207,16 @@ re-evaluates the remainder; the holder returns to `NONE` only when none hold.
 | `AWAITING_DECISION` | `CLOSED_SATISFIED` | every shortfall waived and stage reached `SATISFIED` | `DEC(WAIVE)` per shortfall plus remaining `VR(pass)`/`RVW` set | `stage.satisfy` | `DECIDE(APPROVE)` | `DECIDE(APPROVE)` | — |
 | `AWAITING_DECISION` | `CLOSED_REJECTED` | `DEC(REJECT)` recorded | `DEC(REJECT)` | `stage.reject` | `DECIDE(REJECT)` | `DECIDE(REJECT)` | — |
 | `AWAITING_DECISION` | `CLOSED_ABORTED` | `DEC(ABANDON)` recorded, or escalation withdrawn with no path forward | `DEC(ABANDON)` | `run.abort` | `DECIDE(ABANDON)` | `DECIDE(ABANDON)` | — |
+| `DISPATCHED`, `WORKING`, `VALIDATING`, `REVIEWING` | `AWAITING_DECISION` | an operation of this run is `reconciliation_state = UNRESOLVABLE` after a controller restart: the provider cannot say whether an invocation ran, or a repository scan cannot decide whether the intent landed | `ESC(OPEN)` with trigger `RECOVERY_AMBIGUITY` | `escalation.raise` | `AUTO` | `AUTO` | — |
 
 `CLOSED_*` are terminal. A new attempt is a new `StageRun`.
+
+**RUN-INV-3 gate.** A run whose `controller_epoch` precedes
+`project.controller_epoch` performs no new work — no `WorkerInvocation`, no
+`CommitIntent` transition past `AUTHORIZED` — until every one of its
+`WorkerInvocation` and `CommitIntent` records has
+`reconciliation_state ∈ {NOT_REQUIRED, ADOPTED, ORPHANED}`. This is what makes a
+restart unable to produce a duplicate worker or a duplicate commit.
 
 ---
 
@@ -210,7 +225,7 @@ re-evaluates the remainder; the holder returns to `NONE` only when none hold.
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
 | `∅` | `DRAFT` | schema-valid; `contract_hash` recomputes; `C-INV-1` holds | — | `contract.author` | `AUTO` | `AUTO` | — |
-| `DRAFT` | `ACTIVE` | no other `ACTIVE` contract for the stage; `capability_request ⊆ project.capability_ceiling`; budget ceiling ≤ project remaining | `ContractActivationRecord` minted with non-empty `authority_chain` | `contract.activate` | `CONFIRM` | `AUTO` | — |
+| `DRAFT` | `ACTIVE` | no other `ACTIVE` contract for the stage; `capability_request ⊆ project.capability_ceiling`; budget ceiling ≤ project remaining | `ContractActivationRecord` minted with non-empty `authority_chain` and a `capability_grant_basis` entry per granted capability (`A-INV-3`) | `contract.activate` | `CONFIRM` | `AUTO` | — |
 | `DRAFT` | `REVOKED` | author withdrew before activation | — | `contract.revoke` | `AUTO` | `AUTO` | — |
 | `ACTIVE` | `FULFILLED` | bound stage reached `SATISFIED` | `CR`/`VR(pass)`/`RVW` set cited by the satisfying transition | `stage.satisfy` | `AUTO` | `AUTO` | — |
 | `ACTIVE` | `SUPERSEDED` | a successor contract with `supersedes = this` reached `ACTIVE`; no non-terminal run under this contract | successor `ContractActivationRecord` | `contract.supersede` | `CONFIRM` | `CONFIRM` | — |
@@ -219,6 +234,14 @@ re-evaluates the remainder; the holder returns to `NONE` only when none hold.
 
 `FULFILLED`, `SUPERSEDED`, `REVOKED`, `EXPIRED` are terminal. Reuse requires a new
 contract with a new `contract_hash`.
+
+**Status is outside the hash preimage.** `contract_hash` is computed over the
+document minus `contract_hash` **and** minus `status` (schema HASHING comment,
+`XC-12`, `C-INV-2`). Every row above therefore preserves the hash pinned into
+`StageRun.contract_hash` at activation, while `XC-13` still holds because status
+remains the only member that may differ between persisted documents sharing a
+`contract_id`. Any change to a member inside the preimage after `ACTIVE` remains
+an integrity violation (§9.3).
 
 ---
 
@@ -241,7 +264,7 @@ contract with a new `contract_hash`.
 
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
-| `∅` | `PENDING` | run `lifecycle = ALLOCATED` or `WORKING`; budget headroom | `ACT` | `worker.invoke` | `CONFIRM` first invocation of a run, else `AUTO` | `AUTO` | — |
+| `∅` | `PENDING` | run `lifecycle = ALLOCATED` or `WORKING`; budget headroom; every earlier invocation and commit intent of the run has `reconciliation_state ∈ {NOT_REQUIRED, ADOPTED, ORPHANED}` (`RUN-INV-3`) | `ACT`, and the `InvocationRequest` persisted as `request_ref` with its `idempotency_key` and `controller_epoch` **before** any provider call | `worker.invoke` | `CONFIRM` first invocation of a run, else `AUTO` | `AUTO` | — |
 | `PENDING` | `REJECTED_BY_POLICY` | requested capabilities exceed run's effective set, or provider not in registry | — | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `PENDING` | `DISPATCHED` | provider accepted; prompt bundle stored content-addressed | `prompt_bundle_ref` persisted | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `DISPATCHED` | `RUNNING` | provider reported start | — | `worker.invoke` | `AUTO` | `AUTO` | — |
@@ -249,6 +272,15 @@ contract with a new `contract_hash`.
 | `RUNNING` | `TIMED_OUT` | `deadline_at` passed | `WR` with `termination_reason = DEADLINE` | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `RUNNING` | `FAILED` | provider error | `WR` with `termination_reason = PROVIDER_ERROR` | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `PENDING`, `DISPATCHED`, `RUNNING` | `CANCELLED` | suspension, budget exhaustion, or human stop | `WR` with matching `termination_reason` | `run.abort` | `AUTO` | `AUTO` | — |
+| `PENDING`, `DISPATCHED`, `RUNNING` | `COMPLETED` | reconciliation: `controller_epoch < project.controller_epoch`; replaying the persisted `request_ref` under the same `idempotency_key` returned the provider's prior outcome (`WP-6`, `WP-15`) | `WR` attested by the runtime with `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `PENDING`, `DISPATCHED`, `RUNNING` | `FAILED` | reconciliation: the replay shows the provider holds no outcome and no live invocation under that `idempotency_key`, so the invocation never took effect | `WR` with `termination_reason = PROVIDER_ERROR` and `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+
+Reconciliation sets `reconciliation_state`: `ADOPTED` on the `COMPLETED` row,
+`ORPHANED` on the `FAILED` row. A replay the provider cannot answer leaves
+`UNRESOLVABLE`; the run then takes the §5 reconciliation row to
+`AWAITING_DECISION` and no further invocation may be created for it
+(`RUN-INV-3`). Rebuilding context, minting a new `idempotency_key`, or starting a
+new attempt in place of an unreconciled one is illegal (§9.3).
 
 ### 7.3 `Finding.status`
 
@@ -267,22 +299,58 @@ contract with a new `contract_hash`.
 
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
-| `∅` | `PROPOSED` | all `mutations[*].in_scope = true`; `base_revision_id` matches current `SNAP.vcs_state` | `WR` carrying the proposals, `SNAP` | `commit.propose` | `AUTO` | `AUTO` | — |
+| `∅` | `PROPOSED` | all `mutations[*].in_scope = true`; `base_revision_id` matches current `SNAP.vcs_state`; `operation_token` minted, unique, and carried in `trailers` | `WR` carrying the proposals, `SNAP` | `commit.propose` | `AUTO` | `AUTO` | — |
 | `PROPOSED` | `BLOCKED` | any precondition in `preconditions` unmet | — | `commit.propose` | `AUTO` | `AUTO` | — |
 | `BLOCKED` | `PROPOSED` | previously missing preconditions now met | the newly satisfied `VR(pass)`/`RVW`/`DEC` | `commit.propose` | `AUTO` | `AUTO` | — |
 | `PROPOSED` | `AUTHORIZED` | `preconditions_met = true`; workspace unchanged since `base_revision_id` | `SNAP` matching `base_revision_id`, cited `VR(pass)` and `RVW` sets | `commit.authorize` | `CONFIRM` | `AUTO` | — |
 | `PROPOSED` | `DENIED` | scope breach, capability absent, or policy prohibition | — | `commit.authorize` | `AUTO` | `AUTO` | — |
-| `AUTHORIZED` | `APPLYING` | write lock on the workspace acquired | — | `commit.apply` | `AUTO` | `AUTO` | — |
+| `AUTHORIZED` | `APPLYING` | write lock on the workspace acquired; the intent's `operation_token` and `controller_epoch` are durable **before** the first repository mutation, so a landed revision can always be matched back to this intent (evidence-model §3.2.1) | — | `commit.apply` | `AUTO` | `AUTO` | — |
 | `APPLYING` | `APPLIED` | application succeeded and `actual_tree_digest = expected_tree_digest` | `CR` with `verification = MATCHED`, `post_snapshot_id` | `commit.apply` | `AUTO` | `AUTO` | — |
 | `APPLYING` | `FAILED` | application error, or `verification = DIVERGED` | `CommitReceipt` with `verification = DIVERGED` plus `ESC(OPEN)` | `commit.apply` | `AUTO` | `AUTO` | — |
 | `APPLIED` | `ROLLED_BACK` | rollback policy invoked after a later failure | `CR` for the reverting change, `SNAP` after | `commit.apply` | `CONFIRM` | `AUTO` | — |
 | `FAILED` | `ROLLED_BACK` | partial application detected and reverted | `SNAP` matching `base_revision_id` | `commit.apply` | `AUTO` | `AUTO` | — |
+| `APPLYING` | `APPLIED` | reconciliation: `controller_epoch < project.controller_epoch`; a repository scan finds exactly one revision carrying this `operation_token`, and its tree digest equals `expected_tree_digest` | `CR` with `verification = MATCHED`, `attribution = RECONCILED`, `post_snapshot_id` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `APPLYING` | `FAILED` | reconciliation: no revision carries this `operation_token` and a fresh `SNAP` still matches `base_revision_id`, so nothing landed | `SNAP` matching `base_revision_id` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `APPLYING` | `FAILED` | reconciliation: exactly one revision carries this `operation_token` but its tree digest differs from `expected_tree_digest` | `CR` with `verification = DIVERGED`, `attribution = RECONCILED`, plus `ESC(OPEN)` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+
+Reconciliation sets `reconciliation_state` to `ADOPTED` on the first row above
+and `ORPHANED` on the second. The third row leaves it `ADOPTED` with a divergent
+receipt, which `CM-INV-1` turns into `SUSPENDED_BY_INTEGRITY`. Any other scan
+result — more than one revision carrying the token, or no such revision while the
+workspace no longer matches `base_revision_id` — is `UNRESOLVABLE`: the intent
+stays `APPLYING`, `Escalation(RECOVERY_AMBIGUITY)` is raised, and the holder
+takes `NONE → SUSPENDED_BY_INTEGRITY` (§4). Re-applying an intent that is not
+first reconciled is illegal (§9.3); this is what stops a blind retry from landing
+the same change twice.
 
 Publication beyond the local workspace is a distinct capability
 (`commit.publish`) and is `DECIDE(APPROVE)` in `SUPERVISED` and `CONFIRM` in
 `AUTONOMOUS`; it is never implied by `APPLIED`.
 
-### 7.5 `Escalation.status`
+### 7.5 `HumanDecision.decision_state`
+
+Derived, runtime-only. A decision is authority only while `VALID`. A
+snapshot-bound decision (`snapshot_bound = true`, domain-model §9.A) is bound to
+the `RealitySnapshot` whose evidence the human was shown.
+
+| from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
+|---|---|---|---|---|---|---|---|
+| `∅` | `VALID` | recorded per `HD-INV-1`/`HD-INV-2`; `snapshot_bound = true` ⇒ `subject_snapshot_id` is the newest `COMPLETE` snapshot covering the subject's scope and every `evidence_shown` artifact is current against it | `SNAP` as `subject_snapshot_id` | `decision.record` | `AUTO` | `AUTO` | — |
+| `VALID` | `CONSUMED` | the decision discharged the transition it was recorded for; `nonce` spent | the transition's own `AuditEvent` | `audit.append` | `AUTO` | `AUTO` | — |
+| `VALID` | `STALE` | `snapshot_bound = true` and a newer `COMPLETE` snapshot whose `drift_summary` touches the subject's scope superseded `subject_snapshot_id` | the newer `SNAP` | `audit.append` | `AUTO` | `AUTO` | — |
+| `VALID` | `EXPIRED` | `now > expires_at`, or the `scope` boundary was left | — | `audit.append` | `AUTO` | `AUTO` | — |
+| `VALID`, `STALE` | `VOID` | `HD-INV-1` violated, or the decision's own record fails verification | failing verification record | `suspension.set` | `AUTO` | `AUTO` | — |
+
+Recording is `AUTO` in both modes because the human act *is* the decision; the
+policy verdicts that require one live on the transition being decided, not here.
+`CONSUMED`, `EXPIRED` and `VOID` are terminal. `STALE` is terminal too: a stale
+decision is never revalidated by a later snapshot, because the human approved
+what they were shown and that is gone. The subject must be re-decided, which
+produces a new `HumanDecision` with a new nonce. Only `VALID` satisfies `DEC(K)`
+or `CONFIRM`; `STALE` and `EXPIRED` are retained as true records of an earlier
+choice, exactly as stale evidence is (evidence-model §5).
+
+### 7.6 `Escalation.status`
 
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
@@ -306,10 +374,23 @@ re-opens as a new `Escalation` with the same trigger.
 | `ACTIVE` | `AWAITING_VALIDATION` | no | no | yes | no | no |
 | `ACTIVE` | `AWAITING_REVIEW` | no | no | no | yes | yes |
 | `ACTIVE` | `AWAITING_DECISION` | no | no | no | no | only with `DEC` |
-| `ACTIVE` | `PENDING`, `READY`, `CONTRACTED` | no | no | no | no | no |
+| `ACTIVE` | `CONTRACTED` | no | yes, the first invocation of the run allocated under the active contract, and only that one | no | no | no |
+| `ACTIVE` | `PENDING`, `READY` | no | no | no | no | no |
 | `SETTLING` | any | no | no | yes (re-verification only) | no | no |
 | `PLANNING`, `DRAFT` | any | any | no | no | no | no |
 | `COMPLETED`, `ARCHIVED`, `ABANDONED` | any | any | no | no | no | no |
+
+The `CONTRACTED` row is what breaks the dispatch cycle: `CONTRACTED → RUNNING`
+(§3) requires a `DISPATCHED` run, `∅ → ALLOCATED` and `ALLOCATED → DISPATCHED`
+(§5) require a `WorkerInvocation` the provider accepted, and that first
+invocation is therefore dispatched while the stage is still `CONTRACTED`. Every
+later invocation of the run requires `RUNNING`. `READY → RUNNING` remains illegal
+(§9.1): the run is allocated against the `ACTIVE` contract, so the activation
+record and `effective_capabilities` exist before anything is dispatched.
+
+This table governs the hot-path operations only. Axis-2 lifecycle advancement
+during `PLANNING` is governed by the startup exception in §3 and is limited to
+`∅ → PENDING` and `PENDING → READY`.
 
 ---
 
@@ -375,3 +456,12 @@ or mode can authorize the action.
 | set `governance_mode = AUTONOMOUS` without a `HumanDecision` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | mode selection is the root of every policy relaxation in this document |
 | apply a `CommitIntent` whose `base_revision_id` no longer matches reality | any | `NONE_GRANTABLE` | `DENY` | `DENY` | the reviewed diff is not the diff that would land |
 | mark a stage `SATISFIED` from a snapshot with `completeness ≠ COMPLETE` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `RS-INV-1`; absence of observation is not observation of absence of defects |
+| grant a capability whose §2 `grantable by` column names no principal that produced an admissible grant record | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `AX-11`; ceiling membership, a role-table cell, and `capability_request` bound a grant, they never create one |
+| write a `ContractActivationRecord` whose `capability_grant_basis` does not cover every granted capability | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `A-INV-3`; an unattributed grant cannot be replayed, so the authority trace would not answer "what allowed this?" |
+| dispatch a `WorkerInvocation`, or advance a `CommitIntent` past `AUTHORIZED`, for a run holding an unreconciled operation | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `RUN-INV-3`; this is precisely how a restart produces a duplicate worker or a duplicate commit |
+| replace an unreconciled `WorkerInvocation` with a new `idempotency_key`, rebuilt context, or a new attempt | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | a new key defeats `WP-6`, so the provider would execute the work a second time and bill it a second time |
+| mutate the repository before the intent's `operation_token` is durable | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | a landed revision with no recorded identity can never be matched to the intent that produced it; the commit becomes permanently unreceipted |
+| re-apply a `CommitIntent` in `APPLYING` without reconciling it first | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | the first application may have landed; blind retry is not idempotent and would duplicate the change |
+| cite a `HumanDecision` with `decision_state ≠ VALID` as `DEC(K)` or `CONFIRM` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `HD-INV-4`; a consumed, expired, void, or stale approval no longer describes the reality it was granted against |
+| mint a `ReviewAttestation` | `WORKER`, `ADAPTER`, `HUMAN` | `NONE_GRANTABLE` | `DENY` | `DENY` | `review.attest` is `KERNEL`; a self-attested review would promote a CLAIM to EVIDENCE by assertion |
+| cite a `Review` directly as `required_evidence` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `G-1`; the `Review` is the judgement, the `ReviewAttestation` is the kernel's measurement of it |

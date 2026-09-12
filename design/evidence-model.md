@@ -60,7 +60,7 @@ only three of them can make a stage satisfied.**
 | class | answers | produced by | verifiable by | can gate a transition | can be fabricated by a worker |
 |---|---|---|---|---|---|
 | `CLAIM` | "what does someone say is true?" | any actor, typically a worker | no — only its provenance is verifiable | **never** | yes, trivially |
-| `EVIDENCE` | "what was measured about reality?" | runtime kernel, or an attested external executor | yes — replay or re-observation | yes, as `required_evidence` | no — minting requires `validation.attest`, `commit.apply`, or `snapshot.take` |
+| `EVIDENCE` | "what was measured about reality?" | runtime kernel, or an attested external executor | yes — replay or re-observation | yes, as `required_evidence` | no — minting requires `validation.attest`, `review.attest`, `commit.apply`, `recovery.reconcile`, or `snapshot.take`, all `KERNEL` |
 | `DECISION` | "what did an authenticated human choose?" | `HUMAN` actor only | yes — signature and nonce | yes, as `DECIDE(K)`/`CONFIRM` | no — `HD-INV-1` |
 | `AUTHORITY` | "what was someone permitted to attempt?" | `ContractActivationRecord`, `HumanDecision.grants` | yes — grant chain replay | yes, as `required_capability` | no — `AX-5`, `AX-7` |
 
@@ -73,6 +73,7 @@ only three of them can make a stage satisfied.**
 | `MutationProposal` | `CLAIM` | a proposed change, not an applied one |
 | `Finding` | `CLAIM` about a defect | promoted only when its `evidence_refs` are themselves EVIDENCE |
 | `Review` verdict | `CLAIM` when `reviewer_kind = AUTOMATED` or `PEER_WORKER`; `DECISION`-adjacent when `HUMAN` | a reviewer states a judgement; independence is what gives it weight |
+| `ReviewAttestation` | `EVIDENCE` that a qualifying review **exists** | the runtime measured the review's spec, quorum, independence and bound snapshot — not the judgement inside it, exactly as `WorkerReceipt` measures the invocation and not the assertion |
 | `WorkerReceipt` | `EVIDENCE` that a worker **said** something | the runtime measured the invocation, not the assertion |
 | `ValidationReceipt` | `EVIDENCE` | runtime executed a pinned command and observed the result |
 | `CommitReceipt` | `EVIDENCE` | runtime applied and re-observed the tree |
@@ -89,6 +90,7 @@ only three of them can make a stage satisfied.**
 | from | to | requires |
 |---|---|---|
 | `CLAIM` → `EVIDENCE` | never directly | a claim is corroborated by *separate* evidence; the claim itself stays a claim, and `Claim.corroboration` records the outcome |
+| `Review` verdict → `EVIDENCE` | never; the kernel mints a `ReviewAttestation` | the attestation is EVIDENCE of a *different proposition* — that a review meeting the spec's quorum and independence was performed over a stated snapshot and returned verdict `v`. The verdict's substance stays CLAIM, which is why `RA-INV-3` forbids treating the reviewer's reasoning as fact and why an attestation over a `FAIL` is as much EVIDENCE as one over a `PASS`. This is the only route by which a judgmental criterion is discharged, and it requires `review.attest`, a `KERNEL` capability |
 | `EVIDENCE` → current | `EVIDENCE` bound to the newest `RealitySnapshot` covering its scope | a receipt goes stale, it does not become false |
 | `DECISION` → `AUTHORITY` | a `HumanDecision` with non-empty `grants` | the grant is realized only through an activation record |
 | `AUTHORITY` → satisfaction | never | `AX-9`: permission to attempt is not proof of outcome |
@@ -105,6 +107,10 @@ only three of them can make a stage satisfied.**
 | one approval authorizing an unbounded series of actions | `HD-INV-3`; single-use nonce plus `scope` |
 | a runtime resolving its own escalation | illegal-section row; `auto_resolvable = false` requires a `DECISION` |
 | grant creep across attempts | `AX-3`, `RUN-INV-2`; capabilities freeze at activation |
+| a peer worker's review verdict counting as measurement | `G-1`, `RA-INV-1`; `RVW(v)` resolves to a kernel-minted `ReviewAttestation`, never to the `Review` |
+| a capability appearing because it was in the ceiling and the role table | `AX-11`, `A-INV-3`; the register names who may grant it, and the grant record is cited per capability |
+| an approval from before the workspace changed still discharging `CONFIRM` | `HD-INV-4`; a snapshot-bound decision goes `STALE` with its snapshot |
+| a restart re-running a worker or re-landing a commit | `G-9`, `RUN-INV-3`, `CM-INV-2`; identity is durable before the effect and the effect is adopted, not repeated |
 
 ---
 
@@ -131,6 +137,34 @@ only three of them can make a stage satisfied.**
 | 4 | compute `event_hash` | — |
 | 5 | atomically persist the event and advance `event_head`, `event_seq` | on partial failure the reservation is rolled back and the artifact becomes unreferenced (`refcount = 0`) |
 | 6 | only now is the state change observable to any reader | `AE-INV-2` |
+
+### 3.2.1 External side effects
+
+The §3.2 transaction is atomic over the event and the log head. It is not atomic
+with anything outside the store — a provider invocation and a repository
+mutation both happen outside it, and a controller can die between the effect and
+the receipt. The ordering rule that makes such a gap recoverable rather than
+permanent:
+
+| step | rule |
+|---|---|
+| 1 | before any external effect, its durable identity is appended: `idempotency_key` with `request_ref` for an invocation, `operation_token` for a commit intent, each carrying the `controller_epoch` |
+| 2 | the effect carries that identity outward — the key on the provider call, the token in the revision's trailers — so the external world holds the same identifier the log does |
+| 3 | the effect is performed |
+| 4 | the receipt is appended per §3.2 |
+
+A crash between 1 and 4 leaves an operation whose identity is durable and whose
+outcome is not. Recovery reads those operations, queries the outside world by
+that identity, and appends either an adopting receipt
+(`attribution = RECONCILED`) or a record that nothing happened — under
+`recovery.reconcile`, never by repeating the effect. An effect performed before
+its identity is durable is unrecoverable by construction and is illegal
+(transition-matrix §9.3); `G-9` states the rule.
+
+| verification check added by this ordering | procedure | failure |
+|---|---|---|
+| effect attribution | every `WorkerReceipt` and `CommitReceipt` resolves to an earlier event carrying its `idempotency_key` or `operation_token` | `INTEGRITY_VIOLATION` |
+| reconciliation closure | no non-terminal operation with `controller_epoch < project.controller_epoch` precedes a later dispatch or apply on the same run | `INTEGRITY_VIOLATION`; `RUN-INV-3` |
 
 ### 3.3 Verification
 
@@ -166,7 +200,7 @@ Pure function, runtime-only, recomputed rather than stored as opinion.
 | `S` | newest `RealitySnapshot` with `completeness = COMPLETE` covering `contract.scope_include` |
 | `C` | `contract.acceptance_criteria` from the pinned `contract_hash` |
 | `V` | `ValidationReceipt` set with `input_snapshot_id = S.snapshot_id` |
-| `R` | `Review` set with `input_snapshot_id = S.snapshot_id` meeting spec quorum and independence |
+| `R` | `ReviewAttestation` set with `input_snapshot_id = S.snapshot_id`, one per mandatory judgmental criterion's spec; each attests quorum and independence were met (`RA-INV-2`). The evaluator reads attestations, never `Review` records directly — `G-1` |
 | `W` | waivers: `HumanDecision{kind ∈ {WAIVE, ACCEPT_RISK}}`, unexpired |
 
 | condition, evaluated in order | result |
@@ -198,6 +232,26 @@ anything better.
 
 Only *current* evidence satisfies `required_evidence`. Stale evidence is never
 deleted; it remains a true statement about an earlier state of the world.
+
+### 5.1 Decision currency
+
+Currency applies to decisions on the same terms, because an approval is a
+statement about what the human was shown.
+
+| term | definition |
+|---|---|
+| snapshot-bound | `HumanDecision.snapshot_bound = true`: the decision speaks about the state of the workspace |
+| bound | such a decision names `subject_snapshot_id`, the `COMPLETE` snapshot its `evidence_shown` artifacts were measured against |
+| current | `subject_snapshot_id` is still the newest `COMPLETE` snapshot covering the subject's scope; `decision_state = VALID` |
+| stale | superseded by a newer snapshot whose `drift_summary` touches that scope ⇒ `decision_state = STALE` |
+| renewal | a stale decision is never revived. The subject is re-decided, producing a new `HumanDecision` with a new nonce over the new snapshot |
+
+An unconsumed approval therefore cannot outlive the reality it was granted
+against. Re-running validations and reviews over the new workspace produces
+current EVIDENCE but no current DECISION, so `CONFIRM` and `DECIDE(K)` are
+unmet until the human sees the changed artifacts and decides again
+(`HD-INV-4`). Evidence invalidation alone was never enough: the two classes go
+stale independently and both are checked.
 
 ---
 
