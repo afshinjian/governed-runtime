@@ -212,11 +212,49 @@ re-evaluates the remainder; the holder returns to `NONE` only when none hold.
 `CLOSED_*` are terminal. A new attempt is a new `StageRun`.
 
 **RUN-INV-3 gate.** A run whose `controller_epoch` precedes
-`project.controller_epoch` performs no new work — no `WorkerInvocation`, no
-`CommitIntent` transition past `AUTHORIZED` — until every one of its
-`WorkerInvocation` and `CommitIntent` records has
+`project.controller_epoch` **initiates no new external effect** — no provider
+`invoke`, no repository mutation, and therefore no `WorkerInvocation` dispatch and
+no `CommitIntent` transition past `AUTHORIZED` under `commit.apply` — until every
+one of its `WorkerInvocation` and `CommitIntent` records has
 `reconciliation_state ∈ {NOT_REQUIRED, ADOPTED, ORPHANED}`. This is what makes a
 restart unable to produce a duplicate worker or a duplicate commit.
+
+The gate forbids *initiating* effects. It does not forbid the reconciliation
+transition itself, which initiates nothing and exists precisely to clear the gate:
+
+| scope | status under the gate |
+|---|---|
+| dispatching a `WorkerInvocation`, calling `invoke`, mutating the repository, or advancing a `CommitIntent` past `AUTHORIZED` under `commit.apply` | **forbidden** while any record of the run is `PENDING` or `UNRESOLVABLE` |
+| **exemption** — any transition whose `required_capability` is `recovery.reconcile`: `lookup` on a persisted `idempotency_key`, a repository scan for an `operation_token`, and the state change that records the result (including `APPLYING → APPLIED` and `APPLYING → FAILED` in §7.4) | **permitted**, and permitted *only* to the operation being reconciled. `recovery.reconcile` cannot call `invoke`, cannot mutate the repository, and cannot create an operation; it can only write down what already happened |
+
+Without this exemption the gate is unsatisfiable: the only transitions that move a
+record out of `PENDING` are the ones the gate would otherwise block, so a run
+could never leave the barrier it entered at restart.
+
+### 5.1 Reconciliation-state derivation
+
+`WorkerInvocation.reconciliation_state` and `CommitIntent.reconciliation_state`
+are derived, never asserted. This is the **single** derivation for both; §7.2,
+§7.4, `worker_provider.md` §6.1 and `authority-matrix.md` §6 refer here rather
+than restating it.
+
+| condition on the record | `reconciliation_state` |
+|---|---|
+| `controller_epoch = project.controller_epoch` | `NOT_REQUIRED` |
+| `controller_epoch < project.controller_epoch` **and** `status` is non-terminal | `PENDING` — for **every** non-terminal status of either entity, with no exception: `WorkerInvocation` in `PENDING`, `DISPATCHED`, `RUNNING`; `CommitIntent` in `PROPOSED`, `BLOCKED`, `AUTHORIZED`, `APPLYING` |
+| `controller_epoch < project.controller_epoch` **and** `status` is terminal | `NOT_REQUIRED` |
+| recovery executed under `recovery.reconcile` | `ADOPTED`, `ORPHANED`, or `UNRESOLVABLE` per the outcome it observed — **terminal**, and takes precedence over `NOT_REQUIRED`; a record that was reconciled never reverts to `NOT_REQUIRED`, whatever its epoch or status becomes afterwards |
+
+Two consequences the two sites share:
+
+| case | result |
+|---|---|
+| an old-epoch record that never initiated its effect — a `WorkerInvocation` still `PENDING` (no provider call made), a `CommitIntent` in `PROPOSED`, `BLOCKED` or `AUTHORIZED` (no repository mutation made, so no revision carries its `operation_token`) | reconciles to `ORPHANED` once recovery confirms no effect token exists outside the kernel. `ORPHANED` here is the positive finding that nothing landed, not an error |
+| an old-epoch record whose effect is still running — `lookup` answered `LIVE` | stays `PENDING` until the outcome arrives, then `ADOPTED`. `PENDING` is a state of this table like any other; it is not the absence of one |
+
+`ADOPTED` means the outcome was **established**, not that it succeeded. Both sites
+adopt failure as failure: a reconciled `FAILED`/`TIMED_OUT`/`CANCELLED`/`REFUSED`
+invocation and a reconciled `DIVERGED` commit receipt are `ADOPTED`.
 
 ---
 
@@ -272,21 +310,27 @@ an integrity violation (§9.3).
 | `RUNNING` | `TIMED_OUT` | `deadline_at` passed | `WR` with `termination_reason = DEADLINE` | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `RUNNING` | `FAILED` | provider error | `WR` with `termination_reason = PROVIDER_ERROR` | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `PENDING`, `DISPATCHED`, `RUNNING` | `CANCELLED` | suspension, budget exhaustion, or human stop | `WR` with matching `termination_reason` | `run.abort` | `AUTO` | `AUTO` | — |
-| `PENDING`, `DISPATCHED`, `RUNNING` | `COMPLETED` | reconciliation: `controller_epoch < project.controller_epoch`; replaying the persisted `request_ref` under the same `idempotency_key` returned the provider's prior outcome (`WP-6`, `WP-15`) | `WR` attested by the runtime with `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
-| `PENDING`, `DISPATCHED`, `RUNNING` | `FAILED` | reconciliation: the replay shows the provider holds no outcome and no live invocation under that `idempotency_key`, so the invocation never took effect | `WR` with `termination_reason = PROVIDER_ERROR` and `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `PENDING`, `DISPATCHED`, `RUNNING` | `COMPLETED`, `FAILED`, `TIMED_OUT`, `CANCELLED` | reconciliation: `controller_epoch < project.controller_epoch`; `lookup(idempotency_key)` returned `FINISHED(outcome)` (`WP-16`). The invocation takes the status `outcome.status` maps to — `COMPLETED → COMPLETED`, `FAILED → FAILED`, `TIMED_OUT → TIMED_OUT`, `CANCELLED → CANCELLED`, `REFUSED → FAILED` — and never `COMPLETED` for a non-`COMPLETED` outcome | `WR` attested by the runtime carrying `outcome.termination_reason`, with `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `PENDING`, `DISPATCHED`, `RUNNING` | `FAILED` | reconciliation: `lookup(idempotency_key)` returned `ABSENT` — the provider holds no outcome and no live invocation under that key, so the invocation never took effect | `WR` with `termination_reason = PROVIDER_ERROR` and `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
 
-Reconciliation sets `reconciliation_state`: `ADOPTED` on the `COMPLETED` row,
-`ORPHANED` on the `FAILED` row. A replay the provider cannot answer leaves
-`UNRESOLVABLE`; the run then takes the §5 reconciliation row to
-`AWAITING_DECISION` and no further invocation may be created for it
-(`RUN-INV-3`). Rebuilding context, minting a new `idempotency_key`, or starting a
-new attempt in place of an unreconciled one is illegal (§9.3).
+Reconciliation sets `reconciliation_state` per §5.1: `ADOPTED` on the
+`FINISHED(outcome)` row — **for every outcome status, not only `COMPLETED`** —
+and `ORPHANED` on the `ABSENT` row. `ADOPTED` states that the outcome was
+established, not that it succeeded; a reconciled `FAILED`, `TIMED_OUT`,
+`CANCELLED` or `REFUSED` outcome is preserved as that outcome with
+`attribution = RECONCILED`, exactly as the commit side preserves a `DIVERGED`
+receipt (§7.4). A `LIVE` answer keeps the invocation `PENDING` and tracked under
+the same key (§5.1). A `lookup` the provider cannot answer leaves `UNRESOLVABLE`;
+the run then takes the §5 reconciliation row to `AWAITING_DECISION` and no
+further invocation may be created for it (`RUN-INV-3`). Resubmitting `request_ref`
+bytes, rebuilding context, minting a new `idempotency_key`, or starting a new
+attempt in place of an unreconciled one is illegal (§9.3).
 
 ### 7.3 `Finding.status`
 
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
-| `∅` | `OPEN` | raised within a `Review` | `Review` record | `finding.raise` | `AUTO` | `AUTO` | — |
+| `∅` | `OPEN` | raised within a `Review` that a `ReviewAttestation` counts in its `review_ids` | `RVW(v)` — the attestation covering that `Review`; the `Review` itself is never cited (`G-1`, §9.3) | `finding.raise` | `AUTO` | `AUTO` | — |
 | `OPEN` | `ACKNOWLEDGED` | an actor accepted it for remediation | — | `finding.resolve` | `AUTO` | `AUTO` | — |
 | `OPEN`, `ACKNOWLEDGED` | `FIXED` | a later run produced evidence the defect is gone | `VR(pass)` or `RVW(PASS)` over a `SNAP` newer than the finding | `finding.resolve` | `AUTO` | `AUTO` | — |
 | `OPEN`, `ACKNOWLEDGED`, `DISPUTED` | `WAIVED` | bound criterion has `waivable = true` | `DEC(WAIVE)` with non-empty `justification` and `evidence_shown` | `finding.waive` | `DECIDE(WAIVE)` | `DECIDE(WAIVE)` | — |
@@ -312,10 +356,21 @@ new attempt in place of an unreconciled one is illegal (§9.3).
 | `APPLYING` | `APPLIED` | reconciliation: `controller_epoch < project.controller_epoch`; a repository scan finds exactly one revision carrying this `operation_token`, and its tree digest equals `expected_tree_digest` | `CR` with `verification = MATCHED`, `attribution = RECONCILED`, `post_snapshot_id` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
 | `APPLYING` | `FAILED` | reconciliation: no revision carries this `operation_token` and a fresh `SNAP` still matches `base_revision_id`, so nothing landed | `SNAP` matching `base_revision_id` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
 | `APPLYING` | `FAILED` | reconciliation: exactly one revision carries this `operation_token` but its tree digest differs from `expected_tree_digest` | `CR` with `verification = DIVERGED`, `attribution = RECONCILED`, plus `ESC(OPEN)` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `PROPOSED`, `BLOCKED`, `AUTHORIZED` | *status unchanged* | reconciliation: `controller_epoch < project.controller_epoch` and the intent never reached `APPLYING`, so no repository mutation was ever initiated under its `operation_token`; a scan finds no revision carrying the token and a fresh `SNAP` still matches `base_revision_id` | `SNAP` matching `base_revision_id` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
 
-Reconciliation sets `reconciliation_state` to `ADOPTED` on the first row above
-and `ORPHANED` on the second. The third row leaves it `ADOPTED` with a divergent
-receipt, which `CM-INV-1` turns into `SUSPENDED_BY_INTEGRITY`. Any other scan
+These four rows are the only transitions permitted to a run under the
+`RUN-INV-3` barrier, by the §5 exemption; each initiates nothing and only records
+what the scan observed.
+
+Reconciliation sets `reconciliation_state` per §5.1: `ADOPTED` on the first row
+above and `ORPHANED` on the second. The third row leaves it `ADOPTED` with a
+divergent receipt — the outcome was established, and it was a failure — which
+`CM-INV-1` turns into `SUSPENDED_BY_INTEGRITY`. The fourth row covers the
+old-epoch intents that had not yet reached `APPLYING`: they are `PENDING` like
+every other non-terminal old-epoch record (§5.1), they carry no effect token in
+the repository, and the scan resolves them `ORPHANED` without touching `status` —
+the positive finding that nothing landed, which is what clears the barrier. Any
+other scan
 result — more than one revision carrying the token, or no such revision while the
 workspace no longer matches `base_revision_id` — is `UNRESOLVABLE`: the intent
 stays `APPLYING`, `Escalation(RECOVERY_AMBIGUITY)` is raised, and the holder
@@ -458,8 +513,10 @@ or mode can authorize the action.
 | mark a stage `SATISFIED` from a snapshot with `completeness ≠ COMPLETE` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `RS-INV-1`; absence of observation is not observation of absence of defects |
 | grant a capability whose §2 `grantable by` column names no principal that produced an admissible grant record | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `AX-11`; ceiling membership, a role-table cell, and `capability_request` bound a grant, they never create one |
 | write a `ContractActivationRecord` whose `capability_grant_basis` does not cover every granted capability | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `A-INV-3`; an unattributed grant cannot be replayed, so the authority trace would not answer "what allowed this?" |
-| dispatch a `WorkerInvocation`, or advance a `CommitIntent` past `AUTHORIZED`, for a run holding an unreconciled operation | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `RUN-INV-3`; this is precisely how a restart produces a duplicate worker or a duplicate commit |
+| dispatch a `WorkerInvocation`, or advance a `CommitIntent` past `AUTHORIZED` **under `commit.apply`**, for a run holding an unreconciled operation | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `RUN-INV-3`; this is precisely how a restart produces a duplicate worker or a duplicate commit. The bar is on *initiating* an effect: transitions taken under `recovery.reconcile`, including the §7.4 reconciliation rows out of `APPLYING`, are exempt by the §5 gate and are the only way the barrier is ever cleared |
 | replace an unreconciled `WorkerInvocation` with a new `idempotency_key`, rebuilt context, or a new attempt | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | a new key defeats `WP-6`, so the provider would execute the work a second time and bill it a second time |
+| resubmit a persisted `request_ref` to `invoke` as a means of reconciling an invocation | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `WP-16`; against an `ABSENT` key a resubmission *performs* the work instead of reporting that nothing happened, so the one branch recovery exists to detect is the branch it would destroy. Reconciliation reads by `lookup` only |
+| dispatch a governed mutation to a provider that does not implement `lookup` | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `WP-17`; an effect whose outcome the kernel can never learn is unreconcilable by construction, so `G-9` would be satisfied in form and empty in fact |
 | mutate the repository before the intent's `operation_token` is durable | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | a landed revision with no recorded identity can never be matched to the intent that produced it; the commit becomes permanently unreceipted |
 | re-apply a `CommitIntent` in `APPLYING` without reconciling it first | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | the first application may have landed; blind retry is not idempotent and would duplicate the change |
 | cite a `HumanDecision` with `decision_state ≠ VALID` as `DEC(K)` or `CONFIRM` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `HD-INV-4`; a consumed, expired, void, or stale approval no longer describes the reality it was granted against |

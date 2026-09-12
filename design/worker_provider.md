@@ -31,6 +31,7 @@ Interface only. No implementation, no vendor, no model identifiers. Core treats
 | `ToolCall` | `{call_id: Id, tool_id: Str, arguments_ref: ArtifactRef, requested_at: Ts}` |
 | `ToolResult` | `{call_id: Id, outcome: Enum<OK,DENIED,ERROR,TIMEOUT>, result_ref: ArtifactRef?, denial_capability: CapabilityId?, latency_ms: Ms}` |
 | `InvocationOutcome` | `{invocation_id: Id, status: Enum<COMPLETED,FAILED,TIMED_OUT,CANCELLED,REFUSED>, output_ref: ArtifactRef, claims: [Claim], proposed_mutations: [MutationProposal], requested_validations: [ValidationRequestDraft], usage: Usage, termination_reason: Enum<COMPLETED,DEADLINE,BUDGET,POLICY_STOP,PROVIDER_ERROR,HUMAN_STOP,REFUSAL>, diagnostics: [Opaque]}` |
+| `LookupResult` | exactly one of `LIVE{handle: Opaque}`, `FINISHED{outcome: InvocationOutcome}`, `ABSENT` — the only three answers `lookup` may give. `handle` is opaque to core and serves only to resume tracking an execution already running under that key |
 | `ValidationRequestDraft` | `{validation_spec_id: Str(1..64), criterion_refs: Set<Str(1..64)>}` |
 | `Usage` | `{input_units: Unit, output_units: Unit, tool_calls: uint32, cost_units: Unit, wall_clock_ms: Ms}` |
 | `ProviderError` | `{code: ErrorCode, message: Opaque, retryable: bool, retry_after_ms: Ms?}` |
@@ -57,8 +58,15 @@ Interface only. No implementation, no vendor, no model identifiers. Core treats
 | `describe` | `() -> ProviderDescriptor` | none | yes | no | `UNAVAILABLE` |
 | `preflight` | `(InvocationRequest) -> {accepted: bool, estimated: Usage, diagnostics: [Opaque]}` | `worker.invoke` | yes | no | `UNSUPPORTED_ROLE`, `UNKNOWN_BINDING`, `CONTEXT_TOO_LARGE` |
 | `invoke` | `(InvocationRequest, ToolBridge) -> InvocationOutcome` | `worker.invoke` | yes, keyed on `idempotency_key` | yes | all of §2.1 |
+| `lookup` | `(idempotency_key: Hash) -> LookupResult` | `recovery.reconcile` | yes | no | `UNAVAILABLE` |
 | `cancel` | `(invocation_id: Id, reason: Enum<SUSPENSION,BUDGET,DEADLINE,HUMAN_STOP>) -> {acknowledged: bool}` | `run.abort` | yes | no | `UNAVAILABLE` |
 | `health` | `() -> {status: Enum<UP,DEGRADED,DOWN>, checked_at: Ts}` | none | yes | no | none |
+
+`lookup` is a distinct operation from `invoke`, not a mode of it. It takes an
+`idempotency_key` and nothing else — no `InvocationRequest`, no `ToolBridge`, no
+request bytes — so it cannot start, resume, extend, or bill an execution. It is
+the only operation the kernel uses to resolve an unreconciled invocation, and it
+is the only provider operation reachable under `recovery.reconcile`.
 
 ### 3.1 `ToolBridge` — the only channel to the outside
 
@@ -91,8 +99,9 @@ recorded with `capability_violations_attempted`.
 | `WP-12` | Provenance for independence (`RC-2`) is the tuple `(provider_id, binding_id, context_digest, session continuity)`. The provider must report session continuity truthfully in `diagnostics`; the kernel additionally computes it from `context_digest` overlap and takes the stricter result. |
 | `WP-13` | `REFUSED` is a legitimate terminal outcome, recorded as such. It is never retried against the same binding within the same run, and never converted into a validation failure. |
 | `WP-14` | The provider is stateless across invocations from core's perspective. Any provider-side session is invisible to core and must not change the meaning of `idempotency_key`. |
-| `WP-15` | **Request-before-call.** The kernel persists the full `InvocationRequest` as `WorkerInvocation.request_ref`, with its `idempotency_key` and `controller_epoch`, and appends that event, *before* calling `invoke`. Recovery replays those stored bytes; it never rebuilds context, because a rebuilt bundle yields a different `context_digest`, a different `idempotency_key`, and therefore a second execution (`G-9`, transition-matrix §9.3). |
-| `WP-16` | **Answerable by key.** `lookup(idempotency_key)` — served by `invoke` with the same request, or by `preflight`-equivalent inspection — tells the kernel one of three things: the outcome, that an invocation under that key is still live, or that the provider holds nothing under it. A provider that cannot answer leaves the invocation `reconciliation_state = UNRESOLVABLE`, which stops the run and raises `Escalation(RECOVERY_AMBIGUITY)` rather than permitting a replacement dispatch. |
+| `WP-15` | **Request-before-call.** The kernel persists the full `InvocationRequest` as `WorkerInvocation.request_ref`, with its `idempotency_key` and `controller_epoch`, and appends that event, *before* calling `invoke`. The persisted bytes are the durable, auditable record of exactly what was sent and the reason the `idempotency_key` survives a restart; recovery reads them but never re-sends them (`WP-16`). Recovery equally never rebuilds context, because a rebuilt bundle yields a different `context_digest`, a different `idempotency_key`, and therefore a second execution (`G-9`, transition-matrix §9.3). |
+| `WP-16` | **Answerable by key, without executing.** `lookup(idempotency_key)` is an operation in its own right (§3), distinct from `invoke` and gated by `recovery.reconcile` rather than `worker.invoke`. It returns `FINISHED(outcome)`, `LIVE(handle)`, or `ABSENT`, and performs no execution in any of the three cases. Recovery resolves an unreconciled invocation by `lookup` alone; it never resubmits `request_ref` bytes to `invoke`, because an `ABSENT` key would then execute the work rather than report that nothing happened. An implemented `lookup` that cannot answer for a given key leaves that invocation `reconciliation_state = UNRESOLVABLE`, which stops the run and raises `Escalation(RECOVERY_AMBIGUITY)` rather than permitting a replacement dispatch. |
+| `WP-17` | **Lookup is an admissibility condition.** A provider that cannot implement `lookup` is inadmissible for governed mutation: it may not be registered for, or dispatched under, any run whose contract can reach a `CommitIntent` or any capability that mutates state outside the kernel's own store. Without `lookup` the `G-9` ordering has no reader, so a crashed invocation is unresolvable by construction — an operation the kernel can start and can never learn the outcome of is not governable, whatever its receipts say afterwards. |
 
 ---
 
@@ -111,6 +120,7 @@ computed by `authority-matrix.md` §5 and frozen for the run.
 | kernel-side capability | used when |
 |---|---|
 | `worker.invoke` | `preflight`, `invoke` |
+| `recovery.reconcile` | `lookup` — never `invoke`; recovery holds no capability that can execute (`WP-16`) |
 | `run.abort` | `cancel` |
 | `audit.append` | recording invocation, tool calls, and receipt |
 
@@ -143,15 +153,22 @@ before any dispatch on the affected runs.
 
 | step | actor | action | record |
 |---|---|---|---|
-| 1 | kernel | select every `WorkerInvocation` with non-terminal `status` and `controller_epoch < project.controller_epoch`; mark `reconciliation_state = PENDING` | `AuditEvent` |
-| 2 | kernel | for each, re-submit the stored `request_ref` bytes under the original `idempotency_key` (`WP-15`, `WP-16`) | `AuditEvent` |
-| 3 | kernel | prior outcome returned ⇒ mint `WorkerReceipt` with `attribution = RECONCILED`, invocation → `COMPLETED`, state `ADOPTED` | `WorkerReceipt` (EVIDENCE) |
-| 4 | kernel | provider holds nothing under the key ⇒ mint `WorkerReceipt` with `termination_reason = PROVIDER_ERROR`, `attribution = RECONCILED`, invocation → `FAILED`, state `ORPHANED` | `WorkerReceipt` (EVIDENCE) |
-| 5 | kernel | invocation still live ⇒ resume tracking it under the same key; state returns to `NOT_REQUIRED` on its terminal receipt | `AuditEvent` |
-| 6 | kernel | provider cannot answer ⇒ state `UNRESOLVABLE`, run → `AWAITING_DECISION` | `Escalation(RECOVERY_AMBIGUITY)` |
+| 1 | kernel | select every `WorkerInvocation` with `controller_epoch < project.controller_epoch`; derive `reconciliation_state` per the single derivation table (transition-matrix §5.1) — non-terminal `status` ⇒ `PENDING`, terminal `status` ⇒ `NOT_REQUIRED` | `AuditEvent` |
+| 2 | kernel | for each `PENDING` one, call `lookup(idempotency_key)` under `recovery.reconcile` (`WP-16`). The stored `request_ref` bytes are never re-sent and context is never rebuilt (`WP-15`) | `AuditEvent` |
+| 3 | kernel | `FINISHED(outcome)` ⇒ mint `WorkerReceipt` with `attribution = RECONCILED` carrying `outcome.termination_reason`; invocation takes the status `outcome.status` maps to — `COMPLETED`, `FAILED`, `TIMED_OUT`, `CANCELLED`, and `REFUSED ⇒ FAILED` — never `COMPLETED` for a non-`COMPLETED` outcome; state `ADOPTED` | `WorkerReceipt` (EVIDENCE) |
+| 4 | kernel | `ABSENT` ⇒ the provider holds nothing under the key and never did; mint `WorkerReceipt` with `termination_reason = PROVIDER_ERROR`, `attribution = RECONCILED`, invocation → `FAILED`, state `ORPHANED` | `WorkerReceipt` (EVIDENCE) |
+| 5 | kernel | `LIVE(handle)` ⇒ resume tracking that execution under the same key; state stays `PENDING` until its terminal outcome arrives, and that outcome is then adopted per step 3 (`ADOPTED`). It never falls back to `NOT_REQUIRED` (§5.1) | `AuditEvent` |
+| 6 | kernel | `lookup` errors or cannot decide for this key ⇒ state `UNRESOLVABLE`, run → `AWAITING_DECISION` | `Escalation(RECOVERY_AMBIGUITY)` |
 
-No step here creates an invocation, a key, or an attempt. The whole sequence only
-decides what already happened.
+`ADOPTED` at step 3 means the outcome was **established**, not that it succeeded.
+A reconciled `FAILED`, `TIMED_OUT`, `CANCELLED` or `REFUSED` outcome is adopted as
+that outcome; collapsing it into `COMPLETED` would manufacture a success no
+provider reported. This is the same rule the commit side applies when it adopts a
+`DIVERGED` receipt (transition-matrix §7.4).
+
+No step here creates an invocation, a key, an attempt, or a provider execution.
+`lookup` is the only provider call the sequence makes, and it executes nothing.
+The whole sequence only decides what already happened.
 
 ---
 
@@ -169,5 +186,8 @@ decides what already happened.
 | `CF-8` | outputs contain no secret values, verified against the salted digests of resolved secrets |
 | `CF-9` | provider-reported `usage` is within tolerance of kernel measurement |
 | `CF-10` | a `REFUSED` outcome produces a receipt and does not advance any stage state |
-| `CF-11` | `invoke` killed mid-execution and replayed under the same `idempotency_key` after a controller restart returns the original outcome and bills once (`WP-6`, `WP-15`) |
-| `CF-12` | a key the provider never received returns "nothing held" rather than starting an execution, so recovery can orphan the invocation safely (`WP-16`) |
+| `CF-11` | `invoke` killed mid-execution and re-issued under the same `idempotency_key` returns the original outcome and bills once (`WP-6`, `WP-15`) |
+| `CF-12` | `lookup` on a key the provider never received returns `ABSENT` rather than starting an execution, so recovery can orphan the invocation safely (`WP-16`) |
+| `CF-13` | `lookup` on a key whose execution finished returns `FINISHED` with that outcome, on a key still executing returns `LIVE`, and in neither case starts, resumes, extends, or bills an execution — verified by usage metering showing no delta across the call (`WP-16`) |
+| `CF-14` | `lookup` on a `FAILED`, `TIMED_OUT`, `CANCELLED` or `REFUSED` execution returns that status, not `COMPLETED` (`WP-16`, transition-matrix §7.2) |
+| `CF-15` | a provider that does not implement `lookup` is refused registration for governed mutation rather than accepted with recovery degraded (`WP-17`) |

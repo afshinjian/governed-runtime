@@ -292,14 +292,17 @@ separate writers. No code path derives one from the other.
 **RUN-INV-1** Exactly one `StageRun` per stage may be non-terminal.
 **RUN-INV-2** `effective_capabilities` is immutable for the run's life; widening
 requires abort + new activation.
-**RUN-INV-3** A run may create no new `WorkerInvocation`, and may advance no
-`CommitIntent` past `AUTHORIZED`, while any of its `WorkerInvocation` or
-`CommitIntent` records has `reconciliation_state ∈ {PENDING, UNRESOLVABLE}`.
-Every such record is reconciled first, by replaying the persisted request under
-its original `idempotency_key` or by matching the repository against
-`operation_token`. This is the guarantee that a controller restart cannot produce
-a duplicate worker or a duplicate commit: the effect is adopted, or proven not to
-have happened, never repeated.
+**RUN-INV-3** A run initiates no new external effect — it may create no new
+`WorkerInvocation`, and may advance no `CommitIntent` past `AUTHORIZED` under
+`commit.apply` — while any of its `WorkerInvocation` or `CommitIntent` records has
+`reconciliation_state ∈ {PENDING, UNRESOLVABLE}`. Every such record is reconciled
+first, by `lookup` on its persisted `idempotency_key` or by matching the
+repository against `operation_token`. Transitions taken under
+`recovery.reconcile` are exempt from the bar: they initiate nothing and are the
+only way a record leaves `PENDING` (transition-matrix §5, §5.1). This is the
+guarantee that a controller restart cannot produce a duplicate worker or a
+duplicate commit: the effect is adopted, or proven not to have happened, never
+repeated.
 
 ---
 
@@ -574,9 +577,9 @@ superseded within the stage's scope.
 | `sandbox_profile_id` | `Str(1..64)` | Y | I | R | |
 | `budget_allocated` | `Budget` | Y | I | R | |
 | `idempotency_key` | `Hash` | Y | I | R | `H(context_digest ‖ role ‖ attempt)`; stable for the life of the invocation, including across controller restarts |
-| `request_ref` | `ArtifactRef` | Y | I | R | the exact `InvocationRequest`, persisted **before** the first provider call so a restart can replay it rather than rebuild it |
+| `request_ref` | `ArtifactRef` | Y | I | R | the exact `InvocationRequest`, persisted **before** the first provider call; it makes the `idempotency_key` durable and the request auditable. Recovery reads it and never re-sends it — resolution is by `lookup(idempotency_key)` alone (`WP-16`) |
 | `controller_epoch` | `uint64` | Y | I | R | `project.controller_epoch` at creation |
-| `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | `NOT_REQUIRED` while the invocation is terminal or its epoch is current; `PENDING` once it outlives its controller; `ADOPTED`/`ORPHANED` after the replay resolved it; `UNRESOLVABLE` when the provider cannot say |
+| `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | derived solely by the reconciliation-state derivation table, transition-matrix §5.1 — the one derivation shared with `CommitIntent`. `ADOPTED` there means the outcome was established, not that it succeeded |
 | `dispatched_at` | `Ts` | Y | I | R | |
 | `deadline_at` | `Ts` | Y | I | R | |
 | `status` | `Enum<PENDING,DISPATCHED,RUNNING,COMPLETED,FAILED,TIMED_OUT,CANCELLED,REJECTED_BY_POLICY>` | Y | M | R | |
@@ -599,7 +602,7 @@ superseded within the stage's scope.
 | `scope_breaches_attempted` | `[{path: Path, at: Ts}]` | Y | I | R | |
 | `termination_reason` | `Enum<COMPLETED,DEADLINE,BUDGET,POLICY_STOP,PROVIDER_ERROR,HUMAN_STOP,INTEGRITY>` | Y | I | R | |
 | `attested_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
-| `attribution` | `Enum<DIRECT,RECONCILED>` | Y | I | R | `RECONCILED` iff minted under `recovery.reconcile` from a replayed outcome rather than from a live invocation |
+| `attribution` | `Enum<DIRECT,RECONCILED>` | Y | I | R | `DIRECT` iff minted under `worker.invoke` from an invocation this controller ran; `RECONCILED` iff minted under `recovery.reconcile` from what `lookup` reported, including a reported `FAILED`, `TIMED_OUT`, `CANCELLED` or `REFUSED` outcome, and including the `ABSENT` case where the receipt records that nothing ran |
 | `receipt_hash` | `Hash` | D | I | R | |
 | `prev_event_hash` | `Hash` | D | I | R | |
 
@@ -608,10 +611,14 @@ superseded within the stage's scope.
 **W-INV-2** `proposed_mutations` do not touch the workspace. Only an applied
 `CommitIntent` does.
 **W-INV-3** A receipt with `attribution = RECONCILED` is the same EVIDENCE class
-as a direct one and is never re-executed for. Replay under the original
-`idempotency_key` returns the provider's prior outcome (`WP-6`); a second
-execution would be a duplicate worker and is illegal
-(transition-matrix §9.3).
+as a direct one and is never re-executed for. `lookup` on the original
+`idempotency_key` reports the provider's prior outcome without executing
+(`WP-16`); a second execution would be a duplicate worker and is illegal, as is
+resubmitting `request_ref` to obtain the outcome (transition-matrix §9.3).
+**W-INV-4** A `RECONCILED` receipt carries the outcome that was found, not a
+better one. `ADOPTED` records that the outcome is now established; a prior
+`FAILED`, `TIMED_OUT`, `CANCELLED` or `REFUSED` outcome is preserved as such and
+is never recorded as `COMPLETED` (transition-matrix §5.1, §7.2).
 
 ### 8.3 `CommitIntent`
 
@@ -629,8 +636,8 @@ execution would be a duplicate worker and is illegal
 | `trailers` | `{Str: Str}` | Y | I | R | includes evidence back-references **and `operation_token`**, so the landed revision carries its own identity |
 | `operation_token` | `Str(32..128)` | Y | I | R | durable, globally unique identity of this application attempt, minted at `PROPOSED` and written into `trailers`; the key a restart scans the repository by |
 | `controller_epoch` | `uint64` | Y | I | R | `project.controller_epoch` at creation |
-| `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | `PENDING` once an `APPLYING` intent outlives its controller; `ADOPTED` when a revision carrying `operation_token` is found, `ORPHANED` when none is and the base revision is intact, `UNRESOLVABLE` otherwise |
-| `preconditions` | `{validations: Set<Hash>, reviews: Set<Ref<Review>>, decisions: Set<Ref<HumanDecision>>}` | Y | I | R | |
+| `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | derived solely by the reconciliation-state derivation table, transition-matrix §5.1 — the one derivation shared with `WorkerInvocation`. `PENDING` covers **every** non-terminal old-epoch status, `PROPOSED`, `BLOCKED` and `AUTHORIZED` included, not only `APPLYING` |
+| `preconditions` | `{validations: Set<Hash>, reviews: Set<Ref<ReviewAttestation>>, decisions: Set<Ref<HumanDecision>>}` | Y | I | R | `reviews` holds kernel-minted attestations, never `Review` records: a precondition is discharged by the kernel's measurement of a review, not by the reviewer's own verdict (`G-1`) |
 | `preconditions_met` | `bool` | D | M | R | |
 | `status` | `Enum<PROPOSED,BLOCKED,AUTHORIZED,DENIED,APPLYING,APPLIED,FAILED,ROLLED_BACK>` | Y | M | R | §9.7 |
 | `authorized_by` | `ActorRef?` | N | I | R | |

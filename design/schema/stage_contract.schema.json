@@ -266,7 +266,8 @@
         "REALITY_DRIFT",
         "ROADMAP_DIVERGED",
         "POLICY_CONFLICT",
-        "INTEGRITY_VIOLATION"
+        "INTEGRITY_VIOLATION",
+        "RECOVERY_AMBIGUITY"
       ]
     },
 
