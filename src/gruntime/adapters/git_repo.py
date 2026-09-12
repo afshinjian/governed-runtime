@@ -13,9 +13,11 @@ only by a blind retry, which is not idempotent (`CM-INV-2`, `CM-INV-3`).
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
+from ..canonical import canonical_json, digest_bytes
 from ..models import Hash
 
 #: Trailer key the `operation_token` is written under.
@@ -28,19 +30,45 @@ class GitRepository:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
 
+    def _git(self, *args: str, text: bool = True):
+        return subprocess.run(
+            ["git", *args],
+            cwd=str(self.root),
+            check=True,
+            capture_output=True,
+            text=text,
+        ).stdout
+
     # -- observation -------------------------------------------------------
 
     def head_revision(self) -> str:
         """Current `HEAD` revision id."""
-        raise NotImplementedError
+        return self._git("rev-parse", "HEAD").strip()
 
     def revision_count(self) -> int:
         """Number of revisions reachable from `HEAD`."""
-        raise NotImplementedError
+        return int(self._git("rev-list", "--count", "HEAD").strip())
+
+    def file_index(self, revision_id: Optional[str] = None) -> dict[str, Hash]:
+        """Path to content digest for every tracked file at `revision_id`.
+
+        The index, not git's own tree object, is what core compares: a commit
+        intent predicts an index and the adapter re-observes one, so `MATCHED`
+        means the workspace holds the authorized content and nothing else.
+        """
+        revision = revision_id or "HEAD"
+        listing = self._git("ls-tree", "-r", "--name-only", "-z", revision, text=True)
+        index: dict[str, Hash] = {}
+        for name in listing.split("\0"):
+            if not name:
+                continue
+            blob = self._git("show", f"{revision}:{name}", text=False)
+            index[name] = digest_bytes(blob)
+        return index
 
     def tree_digest(self, revision_id: Optional[str] = None) -> Hash:
         """Digest of the tree at `revision_id`, defaulting to `HEAD`."""
-        raise NotImplementedError
+        return digest_bytes(canonical_json(self.file_index(revision_id)))
 
     def find_by_token(self, operation_token: str) -> list[str]:
         """Every revision whose trailers carry `operation_token`.
@@ -51,17 +79,34 @@ class GitRepository:
         equality alone never establishes which revision fulfilled which
         intent (`CM-INV-3`).
         """
-        raise NotImplementedError
+        output = self._git(
+            "log",
+            "--all",
+            "--format=%H%x00%(trailers:key=" + OPERATION_TOKEN_TRAILER + ",valueonly)%x00%x00",
+        )
+        found: list[str] = []
+        for entry in output.split("\0\0"):
+            entry = entry.strip("\n")
+            if not entry:
+                continue
+            revision, _, trailer = entry.partition("\0")
+            if operation_token in trailer.split():
+                found.append(revision.strip())
+        return found
 
     def is_dirty(self) -> bool:
         """True iff the working tree has uncommitted changes."""
-        raise NotImplementedError
+        return bool(self._git("status", "--porcelain").strip())
 
     # -- mutation ----------------------------------------------------------
 
     def write_file(self, path: str, content: str) -> None:
         """Write one file inside the repository root."""
-        raise NotImplementedError
+        target = self.root / path
+        if not target.resolve().is_relative_to(self.root.resolve()):
+            raise ValueError(f"{path!r} escapes the repository root")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
 
     def commit(
         self,
@@ -76,12 +121,22 @@ class GitRepository:
         the revision, so there is no window in which a revision exists without
         its identity (evidence-model §3.2.1 step 2).
         """
-        raise NotImplementedError
+        if paths:
+            self._git("add", "--", *paths)
+        else:
+            self._git("add", "-A")
+        body = [message, ""]
+        body.extend(f"{key}: {value}" for key, value in trailers.items())
+        self._git("commit", "-q", "-m", "\n".join(body))
+        return self.head_revision()
 
     def diff(self, revision_id: str) -> bytes:
         """Raw diff introduced by `revision_id`."""
-        raise NotImplementedError
+        return self._git(
+            "show", "--format=", "--patch", revision_id, text=False
+        )
 
     def parents(self, revision_id: str) -> list[str]:
         """Parent revision ids of `revision_id`."""
-        raise NotImplementedError
+        output = self._git("rev-list", "--parents", "-n", "1", revision_id).split()
+        return output[1:]

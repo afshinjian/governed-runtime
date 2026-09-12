@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Sequence, Union
 
+from .errors import CapabilityDenied, IntegrityViolation
 from .models import (
     ArtifactRef,
     Budget,
@@ -266,6 +267,16 @@ class WorkerProvider:
         """
         raise NotImplementedError
 
+    def fetch(self, ref: ArtifactRef) -> bytes:
+        """Hand over the bytes behind an `ArtifactRef` the provider produced.
+
+        The kernel content-addresses a worker's output into its *own* artifact
+        store before a receipt can cite it, and the provider's storage is its
+        own. This is a read of bytes that already exist: like `lookup` it
+        starts, resumes, extends and bills nothing.
+        """
+        raise NotImplementedError
+
     def cancel(self, invocation_id: Id, reason: str) -> CancelResult:
         """Requires `run.abort`."""
         raise NotImplementedError
@@ -293,26 +304,62 @@ class GovernedProvider:
         self.capabilities: frozenset[CapabilityId] = frozenset(capabilities)
 
     def _require(self, capability: CapabilityId) -> None:
-        """Raise `CapabilityDenied` unless `capability` is held."""
-        raise NotImplementedError
+        """Raise `CapabilityDenied` unless `capability` is held.
+
+        Checked before the arguments are so much as inspected, so a gate
+        holding `RECOVERY_CAPABILITIES` cannot reach the provider by any
+        executable route regardless of what it is handed.
+        """
+        if capability not in self.capabilities:
+            raise CapabilityDenied(
+                f"{capability!r} is not held by this gate; it holds "
+                f"{sorted(self.capabilities)}"
+            )
+
+    def _require_any(self, *capabilities: CapabilityId) -> None:
+        if not any(capability in self.capabilities for capability in capabilities):
+            raise CapabilityDenied(
+                f"none of {sorted(capabilities)} is held by this gate"
+            )
 
     def describe(self) -> ProviderDescriptor:
-        raise NotImplementedError
+        return self.provider.describe()
 
     def preflight(self, request: InvocationRequest) -> PreflightResult:
-        raise NotImplementedError
+        self._require(INVOKE_CAPABILITY)
+        return self.provider.preflight(request)
 
     def invoke(self, request: InvocationRequest, bridge: Optional[ToolBridge] = None) -> InvocationOutcome:
-        raise NotImplementedError
+        self._require(INVOKE_CAPABILITY)
+        return self.provider.invoke(request, bridge)
 
     def lookup(self, idempotency_key: Hash) -> LookupResult:
-        raise NotImplementedError
+        self._require(RECONCILE_CAPABILITY)
+        return self.provider.lookup(idempotency_key)
+
+    def fetch(self, ref: ArtifactRef) -> bytes:
+        self._require_any(RECONCILE_CAPABILITY, INVOKE_CAPABILITY)
+        return self.provider.fetch(ref)
 
     def cancel(self, invocation_id: Id, reason: str) -> CancelResult:
-        raise NotImplementedError
+        self._require(ABORT_CAPABILITY)
+        return self.provider.cancel(invocation_id, reason)
 
     def health(self) -> ProviderHealth:
-        raise NotImplementedError
+        return self.provider.health()
+
+
+#: worker_provider §6.1 step 3. `REFUSED` is a terminal outcome the worker
+#: chose, not an error to be retried and not a success: it is adopted as
+#: `FAILED`, which is the strictest status that preserves "it did not do the
+#: work" without claiming the provider malfunctioned.
+_OUTCOME_STATUS: dict[OutcomeStatus, InvocationStatus] = {
+    OutcomeStatus.COMPLETED: InvocationStatus.COMPLETED,
+    OutcomeStatus.FAILED: InvocationStatus.FAILED,
+    OutcomeStatus.TIMED_OUT: InvocationStatus.TIMED_OUT,
+    OutcomeStatus.CANCELLED: InvocationStatus.CANCELLED,
+    OutcomeStatus.REFUSED: InvocationStatus.FAILED,
+}
 
 
 def status_for_outcome(status: OutcomeStatus) -> InvocationStatus:
@@ -321,4 +368,7 @@ def status_for_outcome(status: OutcomeStatus) -> InvocationStatus:
     `REFUSED` maps to `FAILED`; no non-`COMPLETED` outcome ever becomes
     `COMPLETED` (`W-INV-4`, worker_provider §6.1 step 3).
     """
-    raise NotImplementedError
+    try:
+        return _OUTCOME_STATUS[status]
+    except KeyError:
+        raise IntegrityViolation(f"unmappable provider outcome: {status!r}") from None

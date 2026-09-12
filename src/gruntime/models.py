@@ -14,6 +14,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Mapping, Optional, Sequence
 
+from .errors import IntegrityViolation
+
 # --- scalar aliases (domain-model §0.1) ----------------------------------
 
 Id = str
@@ -316,8 +318,15 @@ def is_terminal_status(status: InvocationStatus | CommitIntentStatus) -> bool:
 
     The reconciliation derivation (transition-matrix §5.1) reads status only
     through this predicate, so both entities share one notion of terminal.
+
+    Both enumerations are `str` enums and some members share a value, so the
+    entity is selected by type rather than by membership alone.
     """
-    raise NotImplementedError
+    if isinstance(status, InvocationStatus):
+        return status in TERMINAL_INVOCATION_STATUSES
+    if isinstance(status, CommitIntentStatus):
+        return status in TERMINAL_INTENT_STATUSES
+    raise IntegrityViolation(f"not a governed status: {status!r}")
 
 
 # --- shared value types (domain-model §1) ---------------------------------
@@ -420,6 +429,12 @@ class Claim:
     corroboration: str = "UNCHECKED"
 
 
+#: The only `Ref.kind` a review precondition may carry (`G-1`). The judgement
+#: record's own kind never appears here: it is recorded and attested, never
+#: consumed.
+ATTESTATION_KIND = "ReviewAttestation"
+
+
 @dataclass(frozen=True)
 class CommitPreconditions:
     """`CommitIntent.preconditions` (domain-model §8.3).
@@ -436,7 +451,17 @@ class CommitPreconditions:
 
     def __post_init__(self) -> None:
         """Reject anything in `reviews` that is not a `ReviewAttestation` ref."""
-        raise NotImplementedError
+        for entry in self.reviews:
+            if not isinstance(entry, Ref):
+                raise IntegrityViolation(
+                    "a review precondition must be a typed reference, not "
+                    f"{type(entry).__name__}: {entry!r}"
+                )
+            if entry.kind != ATTESTATION_KIND:
+                raise IntegrityViolation(
+                    "a review precondition is discharged by a kernel-minted "
+                    f"{ATTESTATION_KIND}; got a reference to {entry.kind!r}"
+                )
 
 
 # --- action entities (domain-model §8) ------------------------------------

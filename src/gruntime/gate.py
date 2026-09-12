@@ -12,6 +12,8 @@ same code path runs unchanged in production.
 
 from __future__ import annotations
 
+import os
+import time
 from pathlib import Path
 from typing import Mapping, Optional
 
@@ -45,12 +47,20 @@ GATE_POINTS: frozenset[str] = frozenset(
 
 def active_gate(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
     """The gate point named by `GRUNTIME_GATE`, or `None`."""
-    raise NotImplementedError
+    source = os.environ if env is None else env
+    name = source.get(GATE_ENV)
+    if not name:
+        return None
+    if name not in GATE_POINTS:
+        raise ValueError(f"{GATE_ENV}={name!r} names no declared gate point")
+    return name
 
 
 def gate_dir(env: Optional[Mapping[str, str]] = None) -> Optional[Path]:
     """The directory named by `GRUNTIME_GATE_DIR`, or `None`."""
-    raise NotImplementedError
+    source = os.environ if env is None else env
+    value = source.get(GATE_DIR_ENV)
+    return None if not value else Path(value)
 
 
 def gate(name: str) -> None:
@@ -58,5 +68,33 @@ def gate(name: str) -> None:
 
     Returns immediately unless `GRUNTIME_GATE` names this point. When it does,
     write `<name>.ready` durably, then block until the process is killed.
+
+    The readiness file is fsynced, and so is the directory entry naming it,
+    before the block begins: the watcher must not be able to see the file
+    before the process has genuinely reached this point.
     """
-    raise NotImplementedError
+    if active_gate() != name:
+        return
+    directory = gate_dir()
+    if directory is None:
+        raise ValueError(f"{GATE_ENV}={name!r} set without {GATE_DIR_ENV}")
+    directory.mkdir(parents=True, exist_ok=True)
+
+    ready = directory / f"{name}.ready"
+    temporary = ready.with_suffix(f".ready.{os.getpid()}.partial")
+    with open(temporary, "wb") as handle:
+        handle.write(f"{name} {os.getpid()}\n".encode("utf-8"))
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, ready)
+    fd = os.open(str(directory), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+    # Nothing after this point runs. The process is terminated from outside,
+    # with no handler and no cleanup, which is the whole point: the next step
+    # must be recoverable from durable state alone.
+    while True:  # pragma: no cover
+        time.sleep(3600)

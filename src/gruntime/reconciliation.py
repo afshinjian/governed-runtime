@@ -12,6 +12,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
+from .errors import IntegrityViolation
 from .models import ReconciliationState
 
 
@@ -39,6 +40,36 @@ class Observation(Enum):
     NO_TOKEN_BASE_UNCHANGED = "NO_TOKEN_BASE_UNCHANGED"
     #: More than one revision carries the token, or none while the base moved.
     AMBIGUOUS = "AMBIGUOUS"
+
+
+#: What each observation of row 4 settles the record to. `ADOPTED` states that
+#: the outcome was *established*, not that it succeeded: a refused invocation
+#: and a divergent commit are adopted exactly as a successful one is.
+_OBSERVED_STATE: dict[Observation, ReconciliationState] = {
+    Observation.FINISHED: ReconciliationState.ADOPTED,
+    Observation.ABSENT: ReconciliationState.ORPHANED,
+    Observation.LIVE: ReconciliationState.PENDING,
+    Observation.UNANSWERABLE: ReconciliationState.UNRESOLVABLE,
+    Observation.TOKEN_MATCHED: ReconciliationState.ADOPTED,
+    Observation.TOKEN_MATCHED_DIVERGED: ReconciliationState.ADOPTED,
+    Observation.NO_TOKEN_BASE_UNCHANGED: ReconciliationState.ORPHANED,
+    Observation.AMBIGUOUS: ReconciliationState.UNRESOLVABLE,
+}
+
+#: The row-4 outcomes. Terminal: a record that reached one of these never
+#: reverts, whatever its epoch or status becomes afterwards.
+_RECOVERY_OUTCOMES: frozenset[ReconciliationState] = frozenset(
+    {
+        ReconciliationState.ADOPTED,
+        ReconciliationState.ORPHANED,
+        ReconciliationState.UNRESOLVABLE,
+    }
+)
+
+#: States that hold the `RUN-INV-3` barrier shut (transition-matrix §5).
+_BLOCKING: frozenset[ReconciliationState] = frozenset(
+    {ReconciliationState.PENDING, ReconciliationState.UNRESOLVABLE}
+)
 
 
 def derive_reconciliation_state(
@@ -70,8 +101,28 @@ def derive_reconciliation_state(
 
     A `record_epoch` greater than `project_epoch` is a record from the future:
     `IntegrityViolation`, never a state.
+
+    `prior` may be any previously stored state; only the row-4 outcomes take
+    precedence, so a caller can hand back whatever the record carries without
+    first classifying it.
     """
-    raise NotImplementedError
+    if record_epoch > project_epoch:
+        raise IntegrityViolation(
+            f"record epoch {record_epoch} exceeds project epoch {project_epoch}"
+        )
+    # Row 1 — a row-4 outcome is terminal and outranks everything below.
+    if prior is not None and prior in _RECOVERY_OUTCOMES:
+        return prior
+    # Row 2 — recovery ran and observed what happened.
+    if observation is not None:
+        return _OBSERVED_STATE[observation]
+    # Row 3 — the record belongs to this controller.
+    if record_epoch == project_epoch:
+        return ReconciliationState.NOT_REQUIRED
+    # Row 4 — an older epoch: non-terminal is PENDING, without exception.
+    if status_terminal:
+        return ReconciliationState.NOT_REQUIRED
+    return ReconciliationState.PENDING
 
 
 def clears_barrier(state: ReconciliationState) -> bool:
@@ -80,7 +131,7 @@ def clears_barrier(state: ReconciliationState) -> bool:
     `RUN-INV-3` (transition-matrix §5): `NOT_REQUIRED`, `ADOPTED` and
     `ORPHANED` clear the barrier; `PENDING` and `UNRESOLVABLE` hold it.
     """
-    raise NotImplementedError
+    return state not in _BLOCKING
 
 
 def requires_lookup(state: ReconciliationState) -> bool:
@@ -89,4 +140,4 @@ def requires_lookup(state: ReconciliationState) -> bool:
     Only `PENDING`. `UNRESOLVABLE` is not retried by lookup — it escalates
     (`Escalation(RECOVERY_AMBIGUITY)`) — and the other three are settled.
     """
-    raise NotImplementedError
+    return state is ReconciliationState.PENDING
