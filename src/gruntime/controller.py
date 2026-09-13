@@ -153,6 +153,7 @@ from .reconciliation import (
 from .recovery import RecoveryOutcome, Resolution, Settlement, run_recovery
 from .review import ATTEST_CAPABILITY, mint_attestation
 from .store import SCHEMA_VERSION, StateStore, now_ts
+from .validation_controller import ValidationController
 
 #: The binding the reference controller asks every provider for. Opaque to
 #: core; the adapter decides what it means.
@@ -178,7 +179,7 @@ def _runtime_actor(component: str) -> ActorRef:
     )
 
 
-class Controller:
+class Controller(ValidationController):
     """Owns every state transition for one store."""
 
     def __init__(
@@ -296,6 +297,7 @@ class Controller:
         project_id = self._project_of_run(run_id)
         project_epoch = self.store.get_project(project_id).controller_epoch
         held: list[str] = []
+        held.extend(self._pending_validations(run_id))  # guard:validation_barrier
         for invocation in self.store.list_invocations(run_id):
             if not clears_barrier(self._state_of(invocation, project_epoch)):
                 held.append(invocation.invocation_id)
@@ -1621,7 +1623,7 @@ class Controller:
         and a worktree that does not exist proves no governed commit was ever
         proposed against it.
         """
-        return run_recovery(
+        result = run_recovery(
             project_id,
             store=self.store,
             provider=self.recovery_provider(),
@@ -1632,6 +1634,10 @@ class Controller:
                 project_id, record, resolution
             ),
         )
+        settled, unresolved = self.recover_validations(project_id)
+        result.validations_reconciled = tuple(settled)
+        result.unresolved = tuple(result.unresolved) + tuple(unresolved)
+        return result
 
     def _settle(
         self, project_id: Id, record, resolution: Resolution
@@ -1804,6 +1810,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     invoke_parser.add_argument("--run", required=True)
     invoke_parser.add_argument("--prompt", default="work")
 
+    validate_parser = subparsers.add_parser("validate")
+    validate_parser.add_argument("--run", required=True)
+    validate_parser.add_argument("--spec", required=True)
+
     commit_parser = subparsers.add_parser("commit")
     commit_parser.add_argument("--run", required=True)
     commit_parser.add_argument("--path", required=True)
@@ -1840,7 +1850,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "intents": list(outcome.intents_reconciled),
                 "escalations": list(outcome.escalations_raised),
                 "unresolved": list(outcome.unresolved),
+                "validations": list(outcome.validations_reconciled),
             }
+        elif args.command == "validate":
+            controller.recover(project_id)
+            receipt = controller.execute_validation(args.run, args.spec)
+            result["receipt_id"] = receipt.receipt_id
+            result["verdict"] = receipt.verdict
         elif args.command == "invoke":
             controller.recover(project_id)
             invocation = controller.create_invocation(

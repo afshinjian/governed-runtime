@@ -40,6 +40,9 @@ AFTER_COMMIT_BEFORE_RECEIPT = "after_commit_before_receipt"
 #: second controller must honour (`lease.py`, `CM-INV-3`).
 INSIDE_REPOSITORY_LEASE = "inside_repository_lease"
 
+#: A validator exited; its runtime receipt has not yet been appended.
+AFTER_VALIDATION_BEFORE_RECEIPT = "after_validation_before_receipt"
+
 #: Every gate point the runtime declares.
 GATE_POINTS: frozenset[str] = frozenset(
     {
@@ -47,6 +50,7 @@ GATE_POINTS: frozenset[str] = frozenset(
         AFTER_LOOKUP_BEFORE_RECEIPT,
         AFTER_COMMIT_BEFORE_RECEIPT,
         INSIDE_REPOSITORY_LEASE,
+        AFTER_VALIDATION_BEFORE_RECEIPT,
     }
 )
 

@@ -1,0 +1,358 @@
+{
+  "final_tests": {
+    "passed": 415,
+    "existing": 310,
+    "new": 105
+  },
+  "guards_killed": 44,
+  "frozen_design_unchanged": true,
+  "results": [
+    {
+      "guard": "policy_refusal",
+      "passed": true,
+      "evidence": "primary.log",
+      "file": "src/gruntime/validation_catalog.py",
+      "source": "    if not condition:  # guard:policy_refusal\n        raise PolicyDenied(reason)"
+    },
+    {
+      "guard": "path_syntax",
+      "passed": true,
+      "evidence": "primary.log",
+      "file": "src/gruntime/validation_catalog.py",
+      "source": "    require(relative_path(value), \"path must be relative without traversal\")  # guard:path_syntax"
+    },
+    {
+      "guard": "path_containment",
+      "passed": true,
+      "evidence": "primary.log",
+      "file": "src/gruntime/validation_catalog.py",
+      "source": "    require(target.is_relative_to(root.resolve()), \"canonical path escapes declared root\")  # guard:path_containment"
+    },
+    {
+      "guard": "parameter_schema",
+      "passed": true,
+      "evidence": "primary.log",
+      "file": "src/gruntime/validation_catalog.py",
+      "source": "        require(valid, \"invalid typed parameter schema\")  # guard:parameter_schema"
+    },
+    {
+      "guard": "parameter_type",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 65,
+      "passed": true,
+      "evidence": "group0/20260913T192133.102240870Z-mutate.log",
+      "source": "        require(valid_type, \"parameter has wrong type\")  # guard:parameter_type"
+    },
+    {
+      "guard": "parameter_constraints",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 72,
+      "passed": true,
+      "evidence": "group1/20260913T192133.175897914Z-mutate.log",
+      "source": "        require(valid, \"parameter violates constraints\")  # guard:parameter_constraints"
+    },
+    {
+      "guard": "parameter_path",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 74,
+      "passed": true,
+      "evidence": "group2/20260913T192133.153859025Z-mutate.log",
+      "source": "            require(relative_path(value), \"path parameter contains traversal\")  # guard:parameter_path"
+    },
+    {
+      "guard": "operation_reference",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 107,
+      "passed": true,
+      "evidence": "group3/20260913T192133.136106537Z-mutate.log",
+      "source": "        require(type(self.operation_id) is str and type(self.version) is str and REFERENCE.fullmatch(self.reference), \"operation requires id@SemVer\")  # guard:operation_reference"
+    },
+    {
+      "guard": "argv_schema",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 111,
+      "passed": true,
+      "evidence": "group0/20260913T192211.540891622Z-mutate.log",
+      "source": "        require(valid_argv, \"argv requires a fixed absolute executable and declared parameter refs\")  # guard:argv_schema"
+    },
+    {
+      "guard": "parameter_names",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 116,
+      "passed": true,
+      "evidence": "group1/20260913T192211.541143001Z-mutate.log",
+      "source": "        require(valid_parameters, \"invalid parameter names or schemas\")  # guard:parameter_names"
+    },
+    {
+      "guard": "execution_policy",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 127,
+      "passed": true,
+      "evidence": "group2/20260913T192211.535361027Z-mutate.log",
+      "source": "        require(valid_policy, \"invalid catalog execution policy\")  # guard:execution_policy"
+    },
+    {
+      "guard": "side_effect_policy",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 130,
+      "passed": true,
+      "evidence": "group3/20260913T192211.521509046Z-mutate.log",
+      "source": "        require(consistent, \"side effect declaration understates execution policy\")  # guard:side_effect_policy"
+    },
+    {
+      "guard": "parameter_set",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 157,
+      "passed": true,
+      "evidence": "group0/20260913T192249.945598755Z-mutate.log",
+      "source": "        require(set(values) == set(self.parameters), \"missing or unknown parameters\")  # guard:parameter_set"
+    },
+    {
+      "guard": "catalog_immutable",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 175,
+      "passed": true,
+      "evidence": "group1/20260913T192249.966021394Z-mutate.log",
+      "source": "            require(row is None or row[0] == document, \"catalog versions are immutable\")  # guard:catalog_immutable"
+    },
+    {
+      "guard": "resolve_version",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 180,
+      "passed": true,
+      "evidence": "group2/20260913T192250.017427186Z-mutate.log",
+      "source": "        require(type(reference) is str and REFERENCE.fullmatch(reference), \"explicit id@version required; latest is forbidden\")  # guard:resolve_version"
+    },
+    {
+      "guard": "resolve_known",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 183,
+      "passed": true,
+      "evidence": "group3/20260913T192249.984510781Z-mutate.log",
+      "source": "        require(row is not None, \"unknown validation operation\")  # guard:resolve_known"
+    },
+    {
+      "guard": "catalog_identity",
+      "file": "src/gruntime/validation_catalog.py",
+      "line": 185,
+      "passed": true,
+      "evidence": "group0/20260913T192328.420183460Z-mutate.log",
+      "source": "        require(operation.reference == reference, \"catalog identity mismatch\")  # guard:catalog_identity"
+    },
+    {
+      "guard": "executor_complete",
+      "file": "src/gruntime/validation.py",
+      "line": 92,
+      "passed": true,
+      "evidence": "group1/20260913T192328.450343932Z-mutate.log",
+      "source": "        require(snapshot.completeness is Completeness.COMPLETE, 'validation requires COMPLETE observation')  # guard:executor_complete"
+    },
+    {
+      "guard": "snapshot_document",
+      "file": "src/gruntime/validation.py",
+      "line": 93,
+      "passed": true,
+      "evidence": "group2/20260913T192328.425503290Z-mutate.log",
+      "source": "        require(digest_json(snapshot_document) == snapshot.file_index_ref.digest, 'snapshot document is not bound to observation')  # guard:snapshot_document"
+    },
+    {
+      "guard": "cwd_directory",
+      "file": "src/gruntime/validation.py",
+      "line": 97,
+      "passed": true,
+      "evidence": "group3/20260913T192328.433075791Z-mutate.log",
+      "source": "        require(cwd.is_dir(), 'catalog cwd is not an existing directory')  # guard:cwd_directory"
+    },
+    {
+      "guard": "environment_allowlist",
+      "file": "src/gruntime/validation.py",
+      "line": 101,
+      "passed": true,
+      "evidence": "group0/20260913T192406.890044038Z-mutate.log",
+      "source": "        environment = {key: value for key, value in environment.items() if key in operation.env_allowlist}  # guard:environment_allowlist"
+    },
+    {
+      "guard": "snapshot_content",
+      "file": "src/gruntime/validation.py",
+      "line": 113,
+      "passed": true,
+      "evidence": "group1/20260913T192406.852871337Z-mutate.log",
+      "source": "                require(digest_bytes(content) == expected, 'workspace changed since input snapshot')  # guard:snapshot_content"
+    },
+    {
+      "guard": "network_allowlist",
+      "file": "src/gruntime/validation.py",
+      "line": 121,
+      "passed": true,
+      "evidence": "group2/20260913T192406.889731361Z-mutate.log",
+      "source": "                require(operation.network != 'ALLOWLIST', 'network ALLOWLIST requires an enforcing adapter; unavailable')  # guard:network_allowlist"
+    },
+    {
+      "guard": "sandbox_isolation",
+      "file": "src/gruntime/validation.py",
+      "line": 123,
+      "passed": true,
+      "evidence": "group3/20260913T192407.225858881Z-mutate.log",
+      "source": "                command += ['--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL']  # guard:sandbox_isolation"
+    },
+    {
+      "guard": "readonly_temporary",
+      "file": "src/gruntime/validation.py",
+      "line": 130,
+      "passed": true,
+      "evidence": "group0/20260913T192446.393989616Z-mutate.log",
+      "source": "                command += ['--remount-ro', '/tmp', '--remount-ro', '/dev', '--remount-ro', '/proc']  # guard:readonly_temporary"
+    },
+    {
+      "guard": "workspace_readonly",
+      "file": "src/gruntime/validation.py",
+      "line": 132,
+      "passed": true,
+      "evidence": "group1/20260913T192445.633875574Z-mutate.log",
+      "source": "                if operation.write_policy != 'WORKSPACE_COPY':\n                    mount = '--ro-bind'  # guard:workspace_readonly"
+    },
+    {
+      "guard": "sandbox_context",
+      "file": "src/gruntime/validation.py",
+      "line": 137,
+      "passed": true,
+      "evidence": "group2/20260913T192445.877516772Z-mutate.log",
+      "source": "                command += ['--clearenv', '--chdir', '/workspace/' + relative_cwd.as_posix()]  # guard:sandbox_context"
+    },
+    {
+      "guard": "no_shell",
+      "file": "src/gruntime/validation.py",
+      "line": 143,
+      "passed": true,
+      "evidence": "group3/20260913T192445.638108063Z-mutate.log",
+      "source": "                                      shell=False,  # guard:no_shell"
+    },
+    {
+      "guard": "process_timeout",
+      "file": "src/gruntime/validation.py",
+      "line": 148,
+      "passed": true,
+      "evidence": "group0/20260913T192525.002087370Z-mutate.log",
+      "source": "                            timeout=operation.timeout_ms / 1000,  # guard:process_timeout"
+    },
+    {
+      "guard": "spec_fields",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 43,
+      "passed": true,
+      "evidence": "group1/20260913T192524.532430321Z-mutate.log",
+      "source": "            require(set(spec) == {'operation', 'parameters'}, 'validation spec accepts operation and parameters only')  # guard:spec_fields"
+    },
+    {
+      "guard": "contract_immutable",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 51,
+      "passed": true,
+      "evidence": "group2/20260913T192524.527350457Z-mutate.log",
+      "source": "        require(not existing or existing[0] == document, 'validation contract is immutable')  # guard:contract_immutable"
+    },
+    {
+      "guard": "contract_spec",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 62,
+      "passed": true,
+      "evidence": "group3/20260913T192524.516449429Z-mutate.log",
+      "source": "        require(bool(contracts) and spec_id in contracts[0], 'validation spec is absent from pinned contract')  # guard:contract_spec"
+    },
+    {
+      "guard": "contract_digest",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 65,
+      "passed": true,
+      "evidence": "group0/20260913T192634.246774544Z-mutate.log",
+      "source": "        require(operation.digest == spec['operation_digest'], 'catalog differs from pinned contract')  # guard:contract_digest"
+    },
+    {
+      "guard": "execute_barrier",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 83,
+      "passed": true,
+      "evidence": "group1/20260913T192602.927019805Z-mutate.log",
+      "source": "        self._assert_barrier_clear(run_id, 'executing validation')  # guard:execute_barrier"
+    },
+    {
+      "guard": "effect_gate",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 84,
+      "passed": true,
+      "evidence": "group2/20260913T192602.933098077Z-mutate.log",
+      "source": "        self._assert_may_initiate_effect(run.project_id, 'executing validation')  # guard:effect_gate"
+    },
+    {
+      "guard": "controller_snapshot",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 87,
+      "passed": true,
+      "evidence": "group3/20260913T192603.190277536Z-mutate.log",
+      "source": "        require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE, 'validation needs a COMPLETE snapshot')  # guard:controller_snapshot"
+    },
+    {
+      "guard": "snapshot_scope",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 88,
+      "passed": true,
+      "evidence": "group0/20260913T192713.776929432Z-mutate.log",
+      "source": "        require(tuple(snapshot.scope) == WHOLE_WORKSPACE, 'validator requires a whole-workspace observation')  # guard:snapshot_scope"
+    },
+    {
+      "guard": "receipt_head_binding",
+      "passed": true,
+      "evidence": "receipt-head.log",
+      "file": "src/gruntime/validation_controller.py",
+      "source": "        receipt = replace(receipt, prev_event_hash=self.store.get_project(run.project_id).event_head)  # guard:receipt_head_binding"
+    },
+    {
+      "guard": "recovery_eligibility",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 125,
+      "passed": true,
+      "evidence": "group1/20260913T192642.290211407Z-mutate.log",
+      "source": "            if attempt['status'] != 'EXECUTING' or attempt['controller_epoch'] >= project.controller_epoch:  # guard:recovery_eligibility\n                continue"
+    },
+    {
+      "guard": "retry_status",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 147,
+      "passed": true,
+      "evidence": "group2/20260913T192642.306628647Z-mutate.log",
+      "source": "        require(op_id in attempts and attempts[op_id]['status'] == 'CANCELLED', 'only reconciled interrupted validations may retry')  # guard:retry_status"
+    },
+    {
+      "guard": "retry_policy",
+      "file": "src/gruntime/validation_controller.py",
+      "line": 150,
+      "passed": true,
+      "evidence": "group3/20260913T192642.799325415Z-mutate.log",
+      "source": "        require(validation_rerun_permitted(operation), 'recovery forbids rerunning this operation')  # guard:retry_policy"
+    },
+    {
+      "guard": "validation_barrier",
+      "file": "src/gruntime/controller.py",
+      "line": 300,
+      "passed": true,
+      "evidence": "group0/20260913T192752.966211977Z-mutate.log",
+      "source": "        held.extend(self._pending_validations(run_id))  # guard:validation_barrier"
+    },
+    {
+      "guard": "rerun_flag",
+      "file": "src/gruntime/recovery.py",
+      "line": 59,
+      "passed": true,
+      "evidence": "group1/20260913T192721.683029951Z-mutate.log",
+      "source": "    if not operation.safe_to_rerun:  # guard:rerun_flag\n        return False"
+    },
+    {
+      "guard": "rerun_class",
+      "file": "src/gruntime/recovery.py",
+      "line": 61,
+      "passed": true,
+      "evidence": "group2/20260913T192721.153066689Z-mutate.log",
+      "source": "    if operation.side_effect_class not in ('READ_ONLY', 'SANDBOX_WRITE'):  # guard:rerun_class\n        return False"
+    }
+  ]
+}

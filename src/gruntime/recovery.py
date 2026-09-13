@@ -46,6 +46,21 @@ class RecoveryOutcome:
     intents_reconciled: Sequence[Id] = ()
     escalations_raised: Sequence[Id] = ()
     unresolved: Sequence[Id] = field(default_factory=tuple)
+    validations_reconciled: Sequence[Id] = ()
+
+
+def validation_rerun_permitted(operation) -> bool:
+    """Only explicitly repeatable, confined operations can be retried.
+
+    This classifies an interrupted validation; recovery itself never executes
+    it. Network effects are external even if a catalog author claims they are
+    repeatable, so EXTERNAL always requires reconciliation by an operator.
+    """
+    if not operation.safe_to_rerun:  # guard:rerun_flag
+        return False
+    if operation.side_effect_class not in ('READ_ONLY', 'SANDBOX_WRITE'):  # guard:rerun_class
+        return False
+    return True
 
 
 @dataclass(frozen=True)

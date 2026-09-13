@@ -11,3 +11,5 @@ Rules:
 - GR-03: only drift suspension writes project.suspension. Other escalations
   record suspension_applied without applying it. Must close before GR-07
   (real workers) — a recorded-but-unapplied suspension is a false evidence claim.
+- GR-09: network ALLOWLIST fails closed (declared, not implemented). Any
+  validation needing network egress is currently impossible, not merely denied.
