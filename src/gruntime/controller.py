@@ -310,13 +310,26 @@ class Controller:
                 "thing permitted under the barrier."
             )
 
-    def _assert_not_suspended(self, project_id: Id, what: str) -> None:
-        """Axis-3 gate (transition-matrix §0.1): suspension is a hard gate.
+    def _assert_may_initiate_effect(self, project_id: Id, what: str) -> None:
+        """The gate in front of every new external effect.
 
-        Every non-`NONE` suspension denies new worker invocations, new
-        validations and new commits. Snapshots are not gated here and never
-        should be: a suspension raised by drift is cleared by observing that
-        the drift is gone, so forbidding observation would make it permanent.
+        Two conditions, both hard, neither of which gates observation:
+
+        1. **Suspension** (transition-matrix §0.1). Every non-`NONE` value
+           denies new worker invocations, new validations and new commits.
+        2. **Completeness.** If the last look at the workspace did not succeed,
+           the runtime does not know what it would be acting on. "Cannot
+           observe" and "observed no change" are different claims, and only
+           the second one licenses an effect.
+
+        Condition 2 reads the *latest* snapshot, not `snapshot_current`, which
+        by construction names the newest `COMPLETE` one — a failed observation
+        would otherwise be invisible to the gate that exists to notice it.
+
+        A single failure does not suspend the project: it is a fact about one
+        observation, not a finding about the workspace, and the next successful
+        snapshot lifts the gate with no human in the loop. Snapshots are never
+        gated here, which is what makes that recovery possible.
         """
         suspension = self.store.get_project(project_id).suspension
         if suspension in EFFECT_BARRING_SUSPENSIONS:
@@ -324,6 +337,14 @@ class Controller:
                 f"{what} refused: project {project_id} is {suspension.value}. "
                 "Suspension is a hard gate; allowing progress would make it "
                 "advisory (transition-matrix §0.1, §9.1 last row)."
+            )
+        latest = self.store.latest_snapshot(project_id)
+        if latest is not None and latest.completeness is not Completeness.COMPLETE:
+            raise PolicyDenied(
+                f"{what} refused: the last observation of the workspace "
+                f"({latest.snapshot_id}) is {latest.completeness.value}, so "
+                "the runtime cannot say what it would be acting on. Take a "
+                "COMPLETE snapshot first (RS-INV-1)."
             )
 
     def _set_suspension(
@@ -647,7 +668,12 @@ class Controller:
             component="snapshot",
         )
         self.store.put_snapshot(snapshot)
-        self.store.set_project_snapshot_current(project_id, snapshot_id)
+        # A failed observation is recorded as evidence — it is a true fact
+        # about a moment — but it never becomes the current reality. Pointing
+        # `snapshot_current` at a snapshot that saw nothing would make "the
+        # workspace as the runtime last knew it" mean "nothing is there".
+        if snapshot.completeness is Completeness.COMPLETE:
+            self.store.set_project_snapshot_current(project_id, snapshot_id)
 
         if comparable:
             self._stale_decisions_against(project_id, previous, snapshot)
@@ -844,7 +870,7 @@ class Controller:
         """
         self._assert_barrier_clear(run_id, "creating an invocation")
         run = self.store.get_run(run_id)
-        self._assert_not_suspended(run.project_id, "creating an invocation")
+        self._assert_may_initiate_effect(run.project_id, "creating an invocation")
         project = self.store.get_project(run.project_id)
 
         invocation_id = f"inv-{uuid.uuid4().hex}"
@@ -1050,7 +1076,7 @@ class Controller:
         would make every `expected_tree_digest` wrong after the first commit.
         """
         run = self.store.get_run(run_id)
-        self._assert_not_suspended(run.project_id, "proposing a commit")
+        self._assert_may_initiate_effect(run.project_id, "proposing a commit")
         project = self.store.get_project(run.project_id)
         if self.repo is None:
             raise IntegrityViolation("no repository adapter is configured")
@@ -1323,7 +1349,7 @@ class Controller:
         intent = self.store.get_commit_intent(intent_id)
         project_id = self.store.intent_project(intent_id)
         self._assert_barrier_clear(intent.run_id, "applying a commit")
-        self._assert_not_suspended(project_id, "applying a commit")
+        self._assert_may_initiate_effect(project_id, "applying a commit")
         if intent.status is CommitIntentStatus.AUTHORIZED:
             self.mark_applying(intent_id)
             intent = self.store.get_commit_intent(intent_id)

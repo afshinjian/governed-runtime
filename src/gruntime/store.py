@@ -30,7 +30,7 @@ from typing import Any, Optional, Sequence
 
 from .artifacts import ArtifactStore
 from .canonical import canonical_json, digest_bytes
-from .errors import IntegrityViolation
+from .errors import IntegrityViolation, SchemaTooOld
 from .models import (
     ActorRef,
     ActorKind,
@@ -98,8 +98,29 @@ PRAGMAS: tuple[tuple[str, str], ...] = (
 #: `PRAGMA synchronous` value for FULL, as SQLite reports it.
 SYNCHRONOUS_FULL = 2
 
-#: Domain-model version stamped on every project row.
+#: Domain-model version stamped on every project row (domain-model §2), and
+#: the anchor of every chain's genesis hash (evidence-model §3.1 step 5). It
+#: tracks `design-01-frozen`, which GR-03 did not change: `suspension_ref` and
+#: `drift_summary` were always in the model, this build merely began persisting
+#: them. It must not move for a storage-only reason, or a physical change would
+#: silently re-anchor every new project's chain.
 SCHEMA_VERSION = "0.1.0"
+
+#: Physical layout version, kept in `PRAGMA user_version` — the place SQLite
+#: provides for exactly this, and separate from `SCHEMA_VERSION` because the
+#: two answer different questions: which domain model this database speaks,
+#: and which columns it actually has. GR-03 is version 2.
+STORAGE_VERSION = 2
+
+#: Columns this build reads that a pre-`STORAGE_VERSION` database lacks.
+#: Checked structurally as well as by version, because `user_version` defaults
+#: to 0 on any database that never set it: the number names the refusal, the
+#: columns are what make it true, and a structural check cannot drift out of
+#: step with the schema above.
+REQUIRED_COLUMNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("projects", ("suspension_ref",)),
+    ("snapshots", ("scope", "drift_vs", "drift_summary")),
+)
 
 #: Name of the append-only table the authorizer protects.
 EVENT_TABLE = "audit_events"
@@ -451,8 +472,13 @@ class StateStore:
     def open(cls, db_path: Path) -> "StateStore":
         """Open (creating if absent) the store at `db_path`.
 
-        Applies :data:`PRAGMAS`, creates the STRICT schema, and installs the
-        append-only guard on `audit_events`.
+        Applies :data:`PRAGMAS`, creates the STRICT schema, installs the
+        append-only guard on `audit_events`, and refuses a database this build
+        cannot read.
+
+        `CREATE TABLE IF NOT EXISTS` is a no-op on a table that already exists,
+        so an older database opens with its old columns and no complaint. The
+        staleness check is what turns that silence into a refusal.
         """
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -464,7 +490,62 @@ class StateStore:
             connection.execute(statement)
         store = cls(connection, db_path)
         store._install_append_only_guard()
+        try:
+            store._refuse_stale_schema()
+        except BaseException:
+            connection.close()
+            raise
         return store
+
+    def _refuse_stale_schema(self) -> None:
+        """Refuse a database written before :data:`STORAGE_VERSION`.
+
+        There is no `ALTER TABLE` path while the storage layout is
+        pre-release. A loud refusal naming the version and the missing column
+        is the whole contract: the alternative is opening cleanly and failing
+        on the first `get_project` with an error that mentions neither.
+
+        A database that is missing nothing is stamped current on the way out,
+        so the version travels with the file rather than being re-derived from
+        its columns on every open.
+        """
+        missing: list[str] = []
+        for table, columns in REQUIRED_COLUMNS:
+            present = {
+                row[1]
+                for row in self.connection.execute(f"PRAGMA table_info({table})")
+            }
+            if not present:
+                continue
+            missing += [
+                f"{table}.{column}" for column in columns if column not in present
+            ]
+        if missing:
+            raise SchemaTooOld(
+                f"database storage version {self.storage_version()} "
+                f"(domain model {self._persisted_schema_version()}) predates "
+                + ", ".join(missing)
+                + f"; no migration path to storage version {STORAGE_VERSION}"
+            )
+        self.connection.execute(f"PRAGMA user_version={STORAGE_VERSION}")
+
+    def storage_version(self) -> int:
+        """This database's physical layout version. `0` if never stamped."""
+        return int(self.pragma("user_version") or 0)
+
+    def _persisted_schema_version(self) -> str:
+        """The domain-model version this database's projects were written under.
+
+        Reported alongside the storage version so the refusal says which model
+        the data speaks, not only which columns are absent.
+        """
+        try:
+            row = self.connection.execute(
+                "SELECT schema_version FROM projects ORDER BY rowid LIMIT 1"
+            ).fetchone()
+        except sqlite3.DatabaseError:  # pragma: no cover - table shape unknown
+            return "unknown"
+        return "unknown" if row is None else row["schema_version"]
 
     def _install_append_only_guard(self) -> None:
         """Deny UPDATE and DELETE of `audit_events` on this connection."""
@@ -1537,6 +1618,21 @@ class StateStore:
             (project_id,),
         ).fetchall()
         return [self._snapshot_from_row(row) for row in rows]
+
+    def latest_snapshot(self, project_id: Id) -> Optional[RealitySnapshot]:
+        """The most recent observation, whatever it managed to see.
+
+        Distinct from :meth:`newest_complete_snapshot` and from
+        `Project.snapshot_current`, which are both the newest *`COMPLETE`*
+        snapshot: this one answers "what happened the last time the runtime
+        looked?", which is the question a gate on new effects has to ask. A
+        failed observation would otherwise be invisible to every caller.
+        """
+        row = self.connection.execute(
+            "SELECT * FROM snapshots WHERE project_id=? ORDER BY ordinal DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        return None if row is None else self._snapshot_from_row(row)
 
     def newest_complete_snapshot(self, project_id: Id) -> Optional[RealitySnapshot]:
         """The newest `COMPLETE` snapshot, or `None`.

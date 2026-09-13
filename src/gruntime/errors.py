@@ -49,6 +49,16 @@ class ProviderUnavailable(GovernedRuntimeError):
     """A provider operation failed transiently (worker_provider §2.1)."""
 
 
+class SchemaTooOld(GovernedRuntimeError):
+    """The database predates this build and has no migration path.
+
+    Raised at `StateStore.open`, by name, rather than letting the read that
+    needs the missing column fail later with a `KeyError` from the row factory.
+    A store that opens cleanly and then cannot be read is worse than one that
+    refuses: the first error the operator sees should name the cause.
+    """
+
+
 class LeaseUnavailable(GovernedRuntimeError):
     """The repository lease is held by another controller and is not expired.
 
