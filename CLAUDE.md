@@ -15,3 +15,5 @@ Rules:
   validation needing network egress is currently impossible, not merely denied.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
   exercises the ERROR receipt. Verify before running on another host.
+- Storage v1→v2→v3 all refuse older schemas with no migration path. Acceptable
+  while pre-release; must be resolved before the first persistent pilot database.
