@@ -13,3 +13,5 @@ Rules:
   (real workers) — a recorded-but-unapplied suspension is a false evidence claim.
 - GR-09: network ALLOWLIST fails closed (declared, not implemented). Any
   validation needing network egress is currently impossible, not merely denied.
+- GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
+  exercises the ERROR receipt. Verify before running on another host.
