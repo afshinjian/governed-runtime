@@ -1,0 +1,1172 @@
+[
+  {
+    "guard": "gr06_role_table",
+    "file": "src/gruntime/authority.py",
+    "line": 64,
+    "guard_sha256": "250e02e30560a5ecfc2018e87c7a77684366ec0b7e7997626e1bfa5b0aef4f6a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_resolution_denials_are_recorded[fs.write-ANALYST-kwargs2-ROLE_FORBIDDEN]"
+    ],
+    "mutant_summary": "1 failed, 44 passed in 0.30s",
+    "restored_summary": "282 passed in 8.38s",
+    "mutant_log": ".evidence/gr06/gr06_role_table-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_role_table-restored.log"
+  },
+  {
+    "guard": "gr06_human_admissible",
+    "file": "src/gruntime/authority.py",
+    "line": 80,
+    "guard_sha256": "aa54cc51af71e21fa467cc4111962f6c88fa590b085708f41b65f342a3cdd23c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[PROJECT]"
+    ],
+    "mutant_summary": "1 failed, 52 passed in 0.61s",
+    "restored_summary": "282 passed in 7.98s",
+    "mutant_log": ".evidence/gr06/gr06_human_admissible-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_human_admissible-restored.log"
+  },
+  {
+    "guard": "gr06_mode",
+    "file": "src/gruntime/authority.py",
+    "line": 94,
+    "guard_sha256": "d5ff193c9743587836caa9bd6c7312132e345335b10616aad6a7c32fa94e0d82",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_unknown_mode_fails_closed"
+    ],
+    "mutant_summary": "1 failed, 49 passed in 0.40s",
+    "restored_summary": "282 passed in 8.39s",
+    "mutant_log": ".evidence/gr06/gr06_mode-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_mode-restored.log"
+  },
+  {
+    "guard": "gr06_resolve_ceiling",
+    "file": "src/gruntime/authority.py",
+    "line": 99,
+    "guard_sha256": "0a6f29f4a13e3abcbe67d456e756420dabf29d2ca10937499d6c12104a4b66a0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_resolution_denials_are_recorded[fs.write-IMPLEMENTER-kwargs0-NOT_IN_CEILING]"
+    ],
+    "mutant_summary": "1 failed, 42 passed in 0.39s",
+    "restored_summary": "282 passed in 8.22s",
+    "mutant_log": ".evidence/gr06/gr06_resolve_ceiling-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_resolve_ceiling-restored.log"
+  },
+  {
+    "guard": "gr06_resolve_nondelegable",
+    "file": "src/gruntime/authority.py",
+    "line": 101,
+    "guard_sha256": "c80ac414e3717f0ad91265fc7818c00aa624dc67b9fe247b5c71110dfdc5a08e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_resolution_denials_are_recorded[worker.invoke-IMPLEMENTER-kwargs3-NEVER_GRANTABLE]"
+    ],
+    "mutant_summary": "1 failed, 45 passed in 0.41s",
+    "restored_summary": "282 passed in 8.09s",
+    "mutant_log": ".evidence/gr06/gr06_resolve_nondelegable-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_resolve_nondelegable-restored.log"
+  },
+  {
+    "guard": "gr06_resolve_mode",
+    "file": "src/gruntime/authority.py",
+    "line": 103,
+    "guard_sha256": "30a068e3a797fa4c040304d7952a88539e947dcfcaf41e5ddf161d93216aa0ce",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_resolution_denials_are_recorded[fs.read.outside_scope-ANALYST-kwargs1-MODE_FORBIDDEN]"
+    ],
+    "mutant_summary": "1 failed, 43 passed in 0.39s",
+    "restored_summary": "282 passed in 7.91s",
+    "mutant_log": ".evidence/gr06/gr06_resolve_mode-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_resolve_mode-restored.log"
+  },
+  {
+    "guard": "gr06_resolve_role",
+    "file": "src/gruntime/authority.py",
+    "line": 105,
+    "guard_sha256": "9b715ea3c63c33ec9edab608b976f6b20a0f63fd1fce97a41aa9dea2cdba256f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_resolution_denials_are_recorded[fs.write-ANALYST-kwargs2-ROLE_FORBIDDEN]"
+    ],
+    "mutant_summary": "1 failed, 44 passed in 0.39s",
+    "restored_summary": "282 passed in 8.39s",
+    "mutant_log": ".evidence/gr06/gr06_resolve_role-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_resolve_role-restored.log"
+  },
+  {
+    "guard": "gr06_human_grantor",
+    "file": "src/gruntime/authority.py",
+    "line": 109,
+    "guard_sha256": "3d003b5a1e49eee6913874953de130595801a7a51bb9e217bfaf139b12eeb394",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[PROJECT]"
+    ],
+    "mutant_summary": "1 failed, 52 passed in 0.60s",
+    "restored_summary": "282 passed in 8.33s",
+    "mutant_log": ".evidence/gr06/gr06_human_grantor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_human_grantor-restored.log"
+  },
+  {
+    "guard": "gr06_policy_grantor",
+    "file": "src/gruntime/authority.py",
+    "line": 116,
+    "guard_sha256": "3496490c82c56a770d8cbe901536baa873c698f7282f030fe96923a3b6ecc2c6",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persisted_policy_can_only_grant_registered_capabilities"
+    ],
+    "mutant_summary": "1 failed, 71 passed in 1.70s",
+    "restored_summary": "282 passed in 8.20s",
+    "mutant_log": ".evidence/gr06/gr06_policy_grantor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_policy_grantor-restored.log"
+  },
+  {
+    "guard": "gr06_role_grantor",
+    "file": "src/gruntime/authority.py",
+    "line": 121,
+    "guard_sha256": "63a9902f41383a97032754f22134fb78f1b5a41d52f43751f1fd49a9be30d294",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_ceiling_role_and_request_are_not_grantors[roadmap.writeback-PLANNER-AUTONOMOUS]"
+    ],
+    "mutant_summary": "1 failed, 32 passed in 0.39s",
+    "restored_summary": "282 passed in 7.93s",
+    "mutant_log": ".evidence/gr06/gr06_role_grantor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_role_grantor-restored.log"
+  },
+  {
+    "guard": "gr06_no_grantor",
+    "file": "src/gruntime/authority.py",
+    "line": 123,
+    "guard_sha256": "182a72b4c98fc399c8097e94b758f97f17ce463ceac6c96fd5112482ee07f3ba",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_ceiling_role_and_request_are_not_grantors[roadmap.writeback-PLANNER-AUTONOMOUS]"
+    ],
+    "mutant_summary": "1 failed, 32 passed in 0.37s",
+    "restored_summary": "282 passed in 8.21s",
+    "mutant_log": ".evidence/gr06/gr06_no_grantor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_no_grantor-restored.log"
+  },
+  {
+    "guard": "gr06_budget_exhausted",
+    "file": "src/gruntime/authority.py",
+    "line": 125,
+    "guard_sha256": "e69ea6fe52045eb12a1fa917d04f49c5f88eb9feefaae96b2837fb3802326592",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_resolution_denials_are_recorded[fs.write-IMPLEMENTER-kwargs6-BUDGET]"
+    ],
+    "mutant_summary": "1 failed, 48 passed in 0.41s",
+    "restored_summary": "282 passed in 8.24s",
+    "mutant_log": ".evidence/gr06/gr06_budget_exhausted-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_budget_exhausted-restored.log"
+  },
+  {
+    "guard": "gr06_activation_hash",
+    "file": "src/gruntime/authority.py",
+    "line": 159,
+    "guard_sha256": "5b48290d1457aaf024121335b866797b4fe0a3837b9c7d7467a08d8bc8e077c1",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_hash_is_verified"
+    ],
+    "mutant_summary": "1 failed, 94 passed in 3.61s",
+    "restored_summary": "282 passed in 8.37s",
+    "mutant_log": ".evidence/gr06/gr06_activation_hash-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_hash-restored.log"
+  },
+  {
+    "guard": "gr06_activation_actor",
+    "file": "src/gruntime/authority.py",
+    "line": 160,
+    "guard_sha256": "35fe1e0a5a841bd760b801e441ae00c502504ac70af5ef6e4713bb428e2a690d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_structure_refuses_incomplete_authority[change2]"
+    ],
+    "mutant_summary": "1 failed, 89 passed in 3.19s",
+    "restored_summary": "282 passed in 8.25s",
+    "mutant_log": ".evidence/gr06/gr06_activation_actor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_actor-restored.log"
+  },
+  {
+    "guard": "gr06_authority_chain",
+    "file": "src/gruntime/authority.py",
+    "line": 161,
+    "guard_sha256": "537633131c771c0ce21e27429a71cdf34dfc29065ecb9b97f986fb8ed636ef85",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_even_an_empty_grant_needs_an_authority_chain"
+    ],
+    "mutant_summary": "1 failed, 282 passed in 8.34s",
+    "restored_summary": "286 passed in 8.63s",
+    "mutant_log": ".evidence/gr06/gr06_authority_chain-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_authority_chain-restored.log"
+  },
+  {
+    "guard": "gr06_basis_coverage",
+    "file": "src/gruntime/authority.py",
+    "line": 163,
+    "guard_sha256": "054c306fece65f6578013aeb64cad44b6ef9ff349914ffc30e98cfe87c5dde3a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_structure_refuses_incomplete_authority[change0]"
+    ],
+    "mutant_summary": "1 failed, 87 passed in 3.05s",
+    "restored_summary": "286 passed in 8.60s",
+    "mutant_log": ".evidence/gr06/gr06_basis_coverage-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_basis_coverage-restored.log"
+  },
+  {
+    "guard": "gr06_basis_grantor",
+    "file": "src/gruntime/authority.py",
+    "line": 174,
+    "guard_sha256": "5a6ddd0f3095af1f4b9e02c7bc911bff2a53be8153cf19702e5ea623364de4bd",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_basis_cannot_claim_inadmissible_grantor[CEILING-actor0-None]"
+    ],
+    "mutant_summary": "1 failed, 90 passed in 3.30s",
+    "restored_summary": "286 passed in 8.44s",
+    "mutant_log": ".evidence/gr06/gr06_basis_grantor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_basis_grantor-restored.log"
+  },
+  {
+    "guard": "gr06_activation_required",
+    "file": "src/gruntime/authority.py",
+    "line": 184,
+    "guard_sha256": "c95a93e9354d424a90b05c09b48a71182d0f69ec66d7f010a38c78c9ba0efca0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_unactivated_contract_has_no_authority_even_with_active_label"
+    ],
+    "mutant_summary": "1 failed, 31 passed in 0.38s",
+    "restored_summary": "286 passed in 8.93s",
+    "mutant_log": ".evidence/gr06/gr06_activation_required-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_required-restored.log"
+  },
+  {
+    "guard": "gr06_activation_binding",
+    "file": "src/gruntime/authority.py",
+    "line": 189,
+    "guard_sha256": "b64cdaf47b20ed8e2e92fe2b2eee20c7efd1f4a2b3ae42a14b627d465626e724",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_binding_is_verified[change0]"
+    ],
+    "mutant_summary": "1 failed, 95 passed in 4.06s",
+    "restored_summary": "286 passed in 9.10s",
+    "mutant_log": ".evidence/gr06/gr06_activation_binding-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_binding-restored.log"
+  },
+  {
+    "guard": "gr06_activation_live",
+    "file": "src/gruntime/authority.py",
+    "line": 190,
+    "guard_sha256": "83f80b9326a6bec6d153ad2be6092d9f97197b1b034dd3c02fb64d8617df4eec",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persisted_status_transition_preserves_hash_and_revokes_immediately"
+    ],
+    "mutant_summary": "1 failed, 85 passed in 2.96s",
+    "restored_summary": "286 passed in 9.22s",
+    "mutant_log": ".evidence/gr06/gr06_activation_live-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_live-restored.log"
+  },
+  {
+    "guard": "gr06_capability_required",
+    "file": "src/gruntime/authority.py",
+    "line": 191,
+    "guard_sha256": "8102e0cf69476f0f2db037514c218027a93e8d84938d2e6e6a6b2c0ccaa2833e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_default_deny_operations[None]"
+    ],
+    "mutant_summary": "1 failed, 99 passed in 4.30s",
+    "restored_summary": "286 passed in 9.31s",
+    "mutant_log": ".evidence/gr06/gr06_capability_required-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_capability_required-restored.log"
+  },
+  {
+    "guard": "gr06_grant_bounds",
+    "file": "src/gruntime/authority.py",
+    "line": 192,
+    "guard_sha256": "7700631588bef17388fa7403befc690e70d67b7e78f07a7f5f79e295f98bb86e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_valid_record_cannot_expand_request_or_role"
+    ],
+    "mutant_summary": "1 failed, 270 passed in 7.97s",
+    "restored_summary": "286 passed in 9.24s",
+    "mutant_log": ".evidence/gr06/gr06_grant_bounds-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_grant_bounds-restored.log"
+  },
+  {
+    "guard": "gr06_denial_coverage",
+    "file": "src/gruntime/authority.py",
+    "line": 193,
+    "guard_sha256": "98ae901aa8bd7b6ece7bf273be42aadb3a4242cf2c7913ccf5f87f650426f078",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_must_record_denials_for_every_ungranted_request"
+    ],
+    "mutant_summary": "1 failed, 275 passed in 8.52s",
+    "restored_summary": "286 passed in 8.99s",
+    "mutant_log": ".evidence/gr06/gr06_denial_coverage-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_denial_coverage-restored.log"
+  },
+  {
+    "guard": "gr06_activation_deadline",
+    "file": "src/gruntime/authority.py",
+    "line": 194,
+    "guard_sha256": "088ba12cbba0b502404b04f9f704dd113872826be4af66a6d2b02353ee370ea8",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_deadline_cannot_expand_frozen_contract"
+    ],
+    "mutant_summary": "1 failed, 276 passed in 8.71s",
+    "restored_summary": "286 passed in 9.18s",
+    "mutant_log": ".evidence/gr06/gr06_activation_deadline-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_deadline-restored.log"
+  },
+  {
+    "guard": "gr06_prohibited_action",
+    "file": "src/gruntime/authority.py",
+    "line": 195,
+    "guard_sha256": "750697742434b2394bc1714e65209e87108b3cdb2650d604dddf76a27c25915a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_prohibited_action_is_not_permitted_by_grant"
+    ],
+    "mutant_summary": "1 failed, 268 passed in 7.89s",
+    "restored_summary": "286 passed in 9.14s",
+    "mutant_log": ".evidence/gr06/gr06_prohibited_action-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_prohibited_action-restored.log"
+  },
+  {
+    "guard": "gr06_exercise_decision",
+    "file": "src/gruntime/authority.py",
+    "line": 209,
+    "guard_sha256": "d76901671ea4edd7d51874ffbec03d46bad8606f7ccd122fa84e7fa55d5e3924",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_human_class_grant_does_not_replace_exercise_decision"
+    ],
+    "mutant_summary": "1 failed, 280 passed in 8.76s",
+    "restored_summary": "286 passed in 9.28s",
+    "mutant_log": ".evidence/gr06/gr06_exercise_decision-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_exercise_decision-restored.log"
+  },
+  {
+    "guard": "gr06_target_required",
+    "file": "src/gruntime/authority.py",
+    "line": 211,
+    "guard_sha256": "96d34fe7597a183c44e7ebe1363d44ff47ce720916471b119f48cf32ad08b073",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_fs_capability_requires_path"
+    ],
+    "mutant_summary": "1 failed, 269 passed in 7.95s",
+    "restored_summary": "286 passed in 9.22s",
+    "mutant_log": ".evidence/gr06/gr06_target_required-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_target_required-restored.log"
+  },
+  {
+    "guard": "gr06_policy_document",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 50,
+    "guard_sha256": "17188f405da6bb4d6c9a85e7aa90056c1c505e01db7b7d2e4e8883107b74597a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_policy_document_requires_human_author"
+    ],
+    "mutant_summary": "1 failed, 262 passed in 7.38s",
+    "restored_summary": "286 passed in 9.41s",
+    "mutant_log": ".evidence/gr06/gr06_policy_document-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_policy_document-restored.log"
+  },
+  {
+    "guard": "gr06_decision_integrity",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 57,
+    "guard_sha256": "b8f88b6dee52503d869b4d06102df98bb869e35c950277e34ea7c5ab9e79e831",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persisted_human_grant_tampering_is_refused[grants-[\"roadmap.writeback\"]]"
+    ],
+    "mutant_summary": "1 failed, 283 passed in 9.08s",
+    "restored_summary": "286 passed in 9.15s",
+    "mutant_log": ".evidence/gr06/gr06_decision_integrity-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_decision_integrity-restored.log"
+  },
+  {
+    "guard": "gr06_nonce",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 59,
+    "guard_sha256": "f29f7c71839b0cb3e77a4ab9f8f5606c4f932775bb825bb01ef5536174e35e9e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_nonce_cannot_activate_a_second_run"
+    ],
+    "mutant_summary": "1 failed, 70 passed in 1.81s",
+    "restored_summary": "286 passed in 9.30s",
+    "mutant_log": ".evidence/gr06/gr06_nonce-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_nonce-restored.log"
+  },
+  {
+    "guard": "gr06_policy_binding",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 65,
+    "guard_sha256": "77e0024dc9e11032e4b042120b26af6cde44fd52835aa68da75d7599ea208e98",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_policy_evaluation_is_immutable_and_replayed_against_document"
+    ],
+    "mutant_summary": "1 failed, 263 passed in 7.38s",
+    "restored_summary": "286 passed in 9.19s",
+    "mutant_log": ".evidence/gr06/gr06_policy_binding-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_policy_binding-restored.log"
+  },
+  {
+    "guard": "gr06_activate_once",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 87,
+    "guard_sha256": "75b2a0809c9223ecdffd049a701249569d3a8e1d4e9540a49322743a52205d2f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_refuses_reuse"
+    ],
+    "mutant_summary": "1 failed, 248 passed in 6.51s",
+    "restored_summary": "286 passed in 9.32s",
+    "mutant_log": ".evidence/gr06/gr06_activate_once-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activate_once-restored.log"
+  },
+  {
+    "guard": "gr06_run_identity",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 88,
+    "guard_sha256": "9cc87b79542048a4abb6df7fa877e8652ac19cfed731e8df193cf0ddb33e1843",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_refuses_run_from_different_stage"
+    ],
+    "mutant_summary": "1 failed, 249 passed in 6.44s",
+    "restored_summary": "286 passed in 9.08s",
+    "mutant_log": ".evidence/gr06/gr06_run_identity-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_run_identity-restored.log"
+  },
+  {
+    "guard": "gr06_activation_snapshot",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 90,
+    "guard_sha256": "6037d861b092a223261a29b1ad30384ac3af8182aab3b867f1ee08f536d95d70",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_needs_complete_snapshot"
+    ],
+    "mutant_summary": "1 failed, 251 passed in 6.49s",
+    "restored_summary": "286 passed in 9.19s",
+    "mutant_log": ".evidence/gr06/gr06_activation_snapshot-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_snapshot-restored.log"
+  },
+  {
+    "guard": "gr06_budget_ceiling",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 92,
+    "guard_sha256": "7d54f1bc79d6d9de1bbd188a5ae6f3fb24f3db96449596b964e8499a828e0d4e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_cross_constraints_refuse[budget]"
+    ],
+    "mutant_summary": "1 failed, 252 passed in 6.74s",
+    "restored_summary": "286 passed in 9.23s",
+    "mutant_log": ".evidence/gr06/gr06_budget_ceiling-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_budget_ceiling-restored.log"
+  },
+  {
+    "guard": "gr06_activation_ceiling",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 93,
+    "guard_sha256": "6ec5b5595a3dcfeb4ae9664693546573ac7404e9c0de80a9ef0371d845109c02",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_cross_constraints_refuse[ceiling]"
+    ],
+    "mutant_summary": "1 failed, 253 passed in 6.66s",
+    "restored_summary": "286 passed in 9.18s",
+    "mutant_log": ".evidence/gr06/gr06_activation_ceiling-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_ceiling-restored.log"
+  },
+  {
+    "guard": "gr06_validation_cwd",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 99,
+    "guard_sha256": "e6e493a80d4bb77c14de19a87e22d6d63407c6ff20676797f7f5b844b04868c2",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_cross_constraints_refuse[cwd]"
+    ],
+    "mutant_summary": "1 failed, 257 passed in 6.78s",
+    "restored_summary": "286 passed in 9.07s",
+    "mutant_log": ".evidence/gr06/gr06_validation_cwd-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_validation_cwd-restored.log"
+  },
+  {
+    "guard": "gr06_validation_deadline",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 100,
+    "guard_sha256": "f5a4b5f57e2f25df661d02519a0641ee954b309ff0832544ac4e1ca13dbc0109",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_cross_constraints_refuse[timeout]"
+    ],
+    "mutant_summary": "1 failed, 258 passed in 6.98s",
+    "restored_summary": "286 passed in 9.12s",
+    "mutant_log": ".evidence/gr06/gr06_validation_deadline-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_validation_deadline-restored.log"
+  },
+  {
+    "guard": "gr06_validation_network",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 102,
+    "guard_sha256": "3b40bd371efc6b798acc9928b4248e07fb96fd756684aa889bedbce0d0ae36f1",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_cross_constraints_refuse[network]"
+    ],
+    "mutant_summary": "1 failed, 259 passed in 7.04s",
+    "restored_summary": "286 passed in 9.19s",
+    "mutant_log": ".evidence/gr06/gr06_validation_network-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_validation_network-restored.log"
+  },
+  {
+    "guard": "gr06_successor",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 105,
+    "guard_sha256": "8c359394095567f3cc9fa12947188a995eadcdf461418d57e0bdacad90c137b8",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_cross_constraints_refuse[supersedes]"
+    ],
+    "mutant_summary": "1 failed, 260 passed in 7.30s",
+    "restored_summary": "286 passed in 9.16s",
+    "mutant_log": ".evidence/gr06/gr06_successor-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_successor-restored.log"
+  },
+  {
+    "guard": "gr06_activation_confirmation",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 116,
+    "guard_sha256": "b33e4984352e137610ac97f431e54527e7a931b495329a84db48f68ba20a53a0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_supervised_activation_requires_live_approval"
+    ],
+    "mutant_summary": "1 failed, 261 passed in 7.14s",
+    "restored_summary": "286 passed in 9.04s",
+    "mutant_log": ".evidence/gr06/gr06_activation_confirmation-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_confirmation-restored.log"
+  },
+  {
+    "guard": "gr06_run_activation",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 152,
+    "guard_sha256": "b925e31388b7b2488560284d632e16151fc6ae0e18dce1014502d8f8158ad2ad",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_unactivated_contract_has_no_authority_even_with_active_label"
+    ],
+    "mutant_summary": "1 failed, 31 passed in 0.38s",
+    "restored_summary": "286 passed in 9.23s",
+    "mutant_log": ".evidence/gr06/gr06_run_activation-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_run_activation-restored.log"
+  },
+  {
+    "guard": "gr06_live_governance",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 156,
+    "guard_sha256": "c0a9058f7f997846b2e07862f670ba4277d1f522045bb09eeb85cb0c97b62a24",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_live_authority_rechecks_project_bounds[mode]"
+    ],
+    "mutant_summary": "1 failed, 264 passed in 7.54s",
+    "restored_summary": "286 passed in 9.27s",
+    "mutant_log": ".evidence/gr06/gr06_live_governance-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_live_governance-restored.log"
+  },
+  {
+    "guard": "gr06_live_basis",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 171,
+    "guard_sha256": "8d6b9dd24a032f640bfe764261745fad12dffeeee9799419be4000d4cea80fc8",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[PROJECT]"
+    ],
+    "mutant_summary": "1 failed, 52 passed in 0.60s",
+    "restored_summary": "286 passed in 9.23s",
+    "mutant_log": ".evidence/gr06/gr06_live_basis-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_live_basis-restored.log"
+  },
+  {
+    "guard": "gr06_commit_intent_grant",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 186,
+    "guard_sha256": "9aa685479a21dd18d6a5d07a4b832ec7a6590240712b07f38c2ee1d9d6f087a4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persisted_intent_cannot_bypass_missing_propose_capability"
+    ],
+    "mutant_summary": "1 failed, 272 passed in 8.17s",
+    "restored_summary": "286 passed in 8.97s",
+    "mutant_log": ".evidence/gr06/gr06_commit_intent_grant-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_intent_grant-restored.log"
+  },
+  {
+    "guard": "gr06_commit_source_scope",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 188,
+    "guard_sha256": "e76e192d75b5f65916cae7133fcf2bd6fdd0e27e0b5e3765a1ec8c81d8cfa5d9",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply"
+    ],
+    "mutant_summary": "1 failed, 131 passed in 5.32s",
+    "restored_summary": "286 passed in 9.12s",
+    "mutant_log": ".evidence/gr06/gr06_commit_source_scope-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_source_scope-restored.log"
+  },
+  {
+    "guard": "gr06_commit_destination_scope",
+    "file": "src/gruntime/contract_controller.py",
+    "line": 190,
+    "guard_sha256": "332eff74a81554c8a8b58331251cf6d283ca90bbe01a8f98de021604b1027517",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_commit_checks_rename_destination"
+    ],
+    "mutant_summary": "1 failed, 132 passed in 5.69s",
+    "restored_summary": "286 passed in 9.16s",
+    "mutant_log": ".evidence/gr06/gr06_commit_destination_scope-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_destination_scope-restored.log"
+  },
+  {
+    "guard": "gr06_contract_immutable",
+    "file": "src/gruntime/contract_store.py",
+    "line": 26,
+    "guard_sha256": "4139f6d14532406172231fd2fd98f866dd6ccfd217088f847eac829423d87d6c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_frozen_content_cannot_be_replaced_even_with_recomputed_hash[objective-expanded]"
+    ],
+    "mutant_summary": "1 failed, 74 passed in 1.93s",
+    "restored_summary": "286 passed in 9.18s",
+    "mutant_log": ".evidence/gr06/gr06_contract_immutable-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_contract_immutable-restored.log"
+  },
+  {
+    "guard": "gr06_contract_lifecycle",
+    "file": "src/gruntime/contract_store.py",
+    "line": 28,
+    "guard_sha256": "bea4cc0c374322329bd361efcd52d84e8b640532f10fd196e89c141b1ec87aa5",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persisted_status_transition_preserves_hash_and_revokes_immediately"
+    ],
+    "mutant_summary": "1 failed, 85 passed in 3.02s",
+    "restored_summary": "286 passed in 9.15s",
+    "mutant_log": ".evidence/gr06/gr06_contract_lifecycle-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_contract_lifecycle-restored.log"
+  },
+  {
+    "guard": "gr06_persist_draft",
+    "file": "src/gruntime/contract_store.py",
+    "line": 30,
+    "guard_sha256": "bfd87c3ad1debeaeabb5df9ca9201804696b009996d213491b2186e8b54c086b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_direct_persistence_does_not_activate_document"
+    ],
+    "mutant_summary": "1 failed, 245 passed in 6.03s",
+    "restored_summary": "286 passed in 9.28s",
+    "mutant_log": ".evidence/gr06/gr06_persist_draft-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_persist_draft-restored.log"
+  },
+  {
+    "guard": "gr06_active_record",
+    "file": "src/gruntime/contract_store.py",
+    "line": 33,
+    "guard_sha256": "272e286cbbf33c22df05aa7ad917bceff24a6f0a221fce02fe2802d8bab23b3a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_direct_persistence_does_not_activate_document"
+    ],
+    "mutant_summary": "1 failed, 245 passed in 6.17s",
+    "restored_summary": "286 passed in 9.30s",
+    "mutant_log": ".evidence/gr06/gr06_active_record-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_active_record-restored.log"
+  },
+  {
+    "guard": "gr06_single_active",
+    "file": "src/gruntime/contract_store.py",
+    "line": 35,
+    "guard_sha256": "6704908be4e9a6400548033d779b8a1996399fdd6c4ee3a078a6035178ef2bf3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_only_one_active_contract_per_stage"
+    ],
+    "mutant_summary": "1 failed, 250 passed in 6.54s",
+    "restored_summary": "286 passed in 9.25s",
+    "mutant_log": ".evidence/gr06/gr06_single_active-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_single_active-restored.log"
+  },
+  {
+    "guard": "gr06_contract_storage_binding",
+    "file": "src/gruntime/contract_store.py",
+    "line": 44,
+    "guard_sha256": "f777bc300c4f0650d2d4105ab50864e4e6b1658e715aa72445679703aa5986e4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persistence_checks_stored_contract_bindings"
+    ],
+    "mutant_summary": "1 failed, 246 passed in 6.27s",
+    "restored_summary": "286 passed in 9.14s",
+    "mutant_log": ".evidence/gr06/gr06_contract_storage_binding-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_contract_storage_binding-restored.log"
+  },
+  {
+    "guard": "gr06_persist_activation_binding",
+    "file": "src/gruntime/contract_store.py",
+    "line": 51,
+    "guard_sha256": "de267bdb3be05df10e604005998d8f9687897d1a928908355650eb1fc48f62ad",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persistence_checks_activation_bindings"
+    ],
+    "mutant_summary": "1 failed, 247 passed in 6.28s",
+    "restored_summary": "286 passed in 9.08s",
+    "mutant_log": ".evidence/gr06/gr06_persist_activation_binding-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_persist_activation_binding-restored.log"
+  },
+  {
+    "guard": "gr06_activation_immutable",
+    "file": "src/gruntime/contract_store.py",
+    "line": 53,
+    "guard_sha256": "56b4714dfe02368ba86755ef19893211136bea7863a7388e48caed0e483a8bf4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_activation_and_run_grants_are_immutable"
+    ],
+    "mutant_summary": "1 failed, 86 passed in 3.05s",
+    "restored_summary": "286 passed in 9.16s",
+    "mutant_log": ".evidence/gr06/gr06_activation_immutable-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_immutable-restored.log"
+  },
+  {
+    "guard": "gr06_activation_storage_binding",
+    "file": "src/gruntime/contract_store.py",
+    "line": 61,
+    "guard_sha256": "decb25bf4be283b6c5e259da6d15e7a4bfd4be83f3f5e2ea598969a9b7dab135",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_persistence_checks_activation_bindings"
+    ],
+    "mutant_summary": "1 failed, 247 passed in 6.17s",
+    "restored_summary": "286 passed in 9.21s",
+    "mutant_log": ".evidence/gr06/gr06_activation_storage_binding-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_activation_storage_binding-restored.log"
+  },
+  {
+    "guard": "gr06_policy_immutable",
+    "file": "src/gruntime/contract_store.py",
+    "line": 71,
+    "guard_sha256": "d12b45a879d7312ef9923d472b5ec269a595ea7e201936533f010750b7375a6a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_policy_evaluation_is_immutable_and_replayed_against_document"
+    ],
+    "mutant_summary": "1 failed, 263 passed in 7.36s",
+    "restored_summary": "286 passed in 9.24s",
+    "mutant_log": ".evidence/gr06/gr06_policy_immutable-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_policy_immutable-restored.log"
+  },
+  {
+    "guard": "gr06_refusal",
+    "file": "src/gruntime/contracts.py",
+    "line": 37,
+    "guard_sha256": "ed79dad8bcfde60b816d4eff1880a7143bd4f67d73aa0d4b56450e5e3e4e152e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_schema_and_authoring_constraints[change0]"
+    ],
+    "mutant_summary": "1 failed, 8 passed in 0.13s",
+    "restored_summary": "286 passed in 9.24s",
+    "mutant_log": ".evidence/gr06/gr06_refusal-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_refusal-restored.log"
+  },
+  {
+    "guard": "gr06_schema",
+    "file": "src/gruntime/contracts.py",
+    "line": 68,
+    "guard_sha256": "e9c9b76c9a9200c5a76998cfe658495dab1269301c076dc0df6e05087f392f66",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_schema_and_authoring_constraints[change0]"
+    ],
+    "mutant_summary": "1 failed, 8 passed in 0.13s",
+    "restored_summary": "286 passed in 9.13s",
+    "mutant_log": ".evidence/gr06/gr06_schema-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_schema-restored.log"
+  },
+  {
+    "guard": "gr06_controls",
+    "file": "src/gruntime/contracts.py",
+    "line": 69,
+    "guard_sha256": "6b41d27d50a616a3a2ba612f6e21f50e46aaee8aca97d123bf164998fa5e152e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_schema_and_authoring_constraints[change1]"
+    ],
+    "mutant_summary": "1 failed, 9 passed in 0.13s",
+    "restored_summary": "286 passed in 9.17s",
+    "mutant_log": ".evidence/gr06/gr06_controls-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_controls-restored.log"
+  },
+  {
+    "guard": "gr06_nfc",
+    "file": "src/gruntime/contracts.py",
+    "line": 70,
+    "guard_sha256": "b639f648dab96ea8e570c6b7e3f0bf1e99b661439dc303a5b952738dd35ecee0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_schema_and_authoring_constraints[change2]"
+    ],
+    "mutant_summary": "1 failed, 10 passed in 0.14s",
+    "restored_summary": "286 passed in 9.34s",
+    "mutant_log": ".evidence/gr06/gr06_nfc-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_nfc-restored.log"
+  },
+  {
+    "guard": "gr06_criterion_ids",
+    "file": "src/gruntime/contracts.py",
+    "line": 74,
+    "guard_sha256": "d8078597f8055215a793127c0eb040c4b88536557c5317e95fd589e6e37e60b1",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_cross_constraints[criteria]"
+    ],
+    "mutant_summary": "1 failed, 25 passed in 0.16s",
+    "restored_summary": "286 passed in 9.21s",
+    "mutant_log": ".evidence/gr06/gr06_criterion_ids-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_criterion_ids-restored.log"
+  },
+  {
+    "guard": "gr06_spec_ids",
+    "file": "src/gruntime/contracts.py",
+    "line": 75,
+    "guard_sha256": "bc380695c1c3306fff6bd776e916a35f064cddfc4866171d3c0ef74171987193",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_cross_constraints[reviews]"
+    ],
+    "mutant_summary": "1 failed, 26 passed in 0.17s",
+    "restored_summary": "286 passed in 9.34s",
+    "mutant_log": ".evidence/gr06/gr06_spec_ids-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_spec_ids-restored.log"
+  },
+  {
+    "guard": "gr06_verifiers",
+    "file": "src/gruntime/contracts.py",
+    "line": 76,
+    "guard_sha256": "9e96f53da0c16f96f48bdcf07150bbe287eef157e49e514e273810b5014a1ffc",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_cross_constraints[unbound]"
+    ],
+    "mutant_summary": "1 failed, 28 passed in 0.17s",
+    "restored_summary": "286 passed in 9.12s",
+    "mutant_log": ".evidence/gr06/gr06_verifiers-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_verifiers-restored.log"
+  },
+  {
+    "guard": "gr06_mandatory",
+    "file": "src/gruntime/contracts.py",
+    "line": 77,
+    "guard_sha256": "d9e1ba8d93ff9167a5fe3a9d5282d5fa972f567191cd9e366eca32dd14a45aff",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_cross_constraints[mandatory]"
+    ],
+    "mutant_summary": "1 failed, 29 passed in 0.17s",
+    "restored_summary": "286 passed in 9.10s",
+    "mutant_log": ".evidence/gr06/gr06_mandatory-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_mandatory-restored.log"
+  },
+  {
+    "guard": "gr06_contract_hash",
+    "file": "src/gruntime/contracts.py",
+    "line": 82,
+    "guard_sha256": "10f42f0ea09ad960279fb128e471c0e823745c2a5041218e2b5de55131ce2ca3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_integrity_mismatch_is_not_schema_error"
+    ],
+    "mutant_summary": "1 failed, 24 passed in 0.16s",
+    "restored_summary": "286 passed in 9.37s",
+    "mutant_log": ".evidence/gr06/gr06_contract_hash-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_contract_hash-restored.log"
+  },
+  {
+    "guard": "gr06_validate_document",
+    "file": "src/gruntime/contracts.py",
+    "line": 90,
+    "guard_sha256": "3d650a9a705ac5d6fdf6022041bfa5ff7a34efec7ea820afa8e0400b7a00bd61",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_schema_and_authoring_constraints[change0]"
+    ],
+    "mutant_summary": "1 failed, 8 passed in 0.11s",
+    "restored_summary": "286 passed in 9.14s",
+    "mutant_log": ".evidence/gr06/gr06_validate_document-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_validate_document-restored.log"
+  },
+  {
+    "guard": "gr06_author_draft",
+    "file": "src/gruntime/contracts.py",
+    "line": 96,
+    "guard_sha256": "815019f796b6a6a8a8f643a3aefe12e8b70d39e2c1f5742178d9171acab2e73f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_author_cannot_mint_active_document"
+    ],
+    "mutant_summary": "1 failed, 23 passed in 0.16s",
+    "restored_summary": "286 passed in 9.21s",
+    "mutant_log": ".evidence/gr06/gr06_author_draft-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_author_draft-restored.log"
+  },
+  {
+    "guard": "gr06_commit_propose_grant",
+    "file": "src/gruntime/controller.py",
+    "line": 1103,
+    "guard_sha256": "628977ae334f950bbbbe15ff1bfbbd86978b40012b4e62ccd5123da5aacf6847",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_unactivated_contract_has_no_authority_even_with_active_label"
+    ],
+    "mutant_summary": "1 failed, 31 passed in 0.40s",
+    "restored_summary": "286 passed in 9.30s",
+    "mutant_log": ".evidence/gr06/gr06_commit_propose_grant-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_propose_grant-restored.log"
+  },
+  {
+    "guard": "gr06_commit_propose_path",
+    "file": "src/gruntime/controller.py",
+    "line": 1105,
+    "guard_sha256": "d3ef2141263d3fa0e7bc0192cf18712e381ee53f68e5c242278c37d60de7dc46",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply"
+    ],
+    "mutant_summary": "1 failed, 131 passed in 5.22s",
+    "restored_summary": "286 passed in 9.15s",
+    "mutant_log": ".evidence/gr06/gr06_commit_propose_path-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_propose_path-restored.log"
+  },
+  {
+    "guard": "gr06_commit_authorize",
+    "file": "src/gruntime/controller.py",
+    "line": 1209,
+    "guard_sha256": "2b125510e7ce242e34551df69984aa7e9968aca3bf40bc57d7b4315910721748",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply"
+    ],
+    "mutant_summary": "1 failed, 131 passed in 5.37s",
+    "restored_summary": "286 passed in 9.19s",
+    "mutant_log": ".evidence/gr06/gr06_commit_authorize-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_authorize-restored.log"
+  },
+  {
+    "guard": "gr06_commit_apply",
+    "file": "src/gruntime/controller.py",
+    "line": 1407,
+    "guard_sha256": "864e085a831a9565043419fa8de3295c9907891fe83628c285369f891a9e6a2a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply"
+    ],
+    "mutant_summary": "1 failed, 131 passed in 5.46s",
+    "restored_summary": "286 passed in 9.26s",
+    "mutant_log": ".evidence/gr06/gr06_commit_apply-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_commit_apply-restored.log"
+  },
+  {
+    "guard": "gr06_path_syntax",
+    "file": "src/gruntime/scope.py",
+    "line": 24,
+    "guard_sha256": "6fe19e93b5c95f7a16b3f6fc0621c932abc96f8e866552e2f71be24ee3a51805",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_schema_and_authoring_constraints[change14]"
+    ],
+    "mutant_summary": "1 failed, 22 passed in 0.16s",
+    "restored_summary": "286 passed in 9.15s",
+    "mutant_log": ".evidence/gr06/gr06_path_syntax-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_path_syntax-restored.log"
+  },
+  {
+    "guard": "gr06_symlink_escape",
+    "file": "src/gruntime/scope.py",
+    "line": 53,
+    "guard_sha256": "4844ce7d5667036f67eb721cd55bbf2315b44bb902356db997c0d5a7ace3f316",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_symlink_escape_and_exclusion_alias_are_refused"
+    ],
+    "mutant_summary": "1 failed, 127 passed in 5.11s",
+    "restored_summary": "286 passed in 9.49s",
+    "mutant_log": ".evidence/gr06/gr06_symlink_escape-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_symlink_escape-restored.log"
+  },
+  {
+    "guard": "gr06_submodule_escape",
+    "file": "src/gruntime/scope.py",
+    "line": 59,
+    "guard_sha256": "a1fadd7c868a348c0bcd5b6ed650c31d2697fd625b5d3f7c851bde9bf8b4ebef",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_submodule_escape_is_refused_including_uninitialized[True]"
+    ],
+    "mutant_summary": "1 failed, 128 passed in 5.13s",
+    "restored_summary": "286 passed in 9.25s",
+    "mutant_log": ".evidence/gr06/gr06_submodule_escape-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_submodule_escape-restored.log"
+  },
+  {
+    "guard": "gr06_lexical_protection",
+    "file": "src/gruntime/scope.py",
+    "line": 66,
+    "guard_sha256": "02886f30f8de70367e080c40569c0abe4030f75dde7a52166181165781d0fbb6",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_protected_paths_cannot_use_symlink_aliases[lexical]"
+    ],
+    "mutant_summary": "1 failed, 277 passed in 8.65s",
+    "restored_summary": "286 passed in 8.77s",
+    "mutant_log": ".evidence/gr06/gr06_lexical_protection-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_lexical_protection-restored.log"
+  },
+  {
+    "guard": "gr06_resolved_protection",
+    "file": "src/gruntime/scope.py",
+    "line": 67,
+    "guard_sha256": "568ad9a218d823748d845da951f3be6454c7c4e8d772cebcf515f273ac896c61",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_protected_paths_cannot_use_symlink_aliases[resolved]"
+    ],
+    "mutant_summary": "1 failed, 278 passed in 8.17s",
+    "restored_summary": "286 passed in 8.97s",
+    "mutant_log": ".evidence/gr06/gr06_resolved_protection-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_resolved_protection-restored.log"
+  },
+  {
+    "guard": "gr06_scope",
+    "file": "src/gruntime/scope.py",
+    "line": 69,
+    "guard_sha256": "6a3dfbcce17be35554fe64c71d4514cf039e31498e8265948037374cff12bb11",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr06_contract_authority.py::test_symlink_escape_and_exclusion_alias_are_refused"
+    ],
+    "mutant_summary": "1 failed, 127 passed in 4.80s",
+    "restored_summary": "286 passed in 8.63s",
+    "mutant_log": ".evidence/gr06/gr06_scope-mutant.log",
+    "restored_log": ".evidence/gr06/gr06_scope-restored.log"
+  }
+]

@@ -183,7 +183,12 @@ def _runtime_actor(component: str) -> ActorRef:
     )
 
 
-class Controller(ValidationController):
+from .contract_controller import ContractController
+from .contracts import new_id
+from .decision import decision_content_hash
+
+
+class Controller(ContractController, ValidationController):
     """Owns every state transition for one store."""
 
     def __init__(
@@ -438,7 +443,7 @@ class Controller(ValidationController):
 
     def create_project(self, *, name: str, slug: str, workspace_root: str) -> Id:
         """Create a project and anchor its chain with the genesis event."""
-        project_id = f"prj-{uuid.uuid4().hex}"
+        project_id = new_id()
         created_at = now_ts()
         event = self._append(
             project_id,
@@ -525,11 +530,11 @@ class Controller(ValidationController):
     def open_run(self, project_id: Id) -> Id:
         """Allocate a `StageRun` under the current epoch."""
         project = self.store.get_project(project_id)
-        run_id = f"run-{uuid.uuid4().hex}"
+        run_id = new_id()
         run = StageRun(
             run_id=run_id,
             project_id=project_id,
-            stage_id=f"stage-{run_id[4:12]}",
+            stage_id=new_id(),
             lifecycle=RunLifecycle.ALLOCATED,
             suspension=SuspensionState.NONE,
             controller_epoch=project.controller_epoch,
@@ -783,6 +788,8 @@ class Controller(ValidationController):
         options_offered: Sequence[str] = (),
         scope: DecisionScope = DecisionScope.PROJECT,
         expires_at: Optional[datetime] = None,
+        grants: frozenset[str] = frozenset(),
+        revokes: frozenset[str] = frozenset(),
     ) -> HumanDecision:
         """Record a human's decision. `∅ → VALID` (transition-matrix §7.5-1).
 
@@ -829,6 +836,8 @@ class Controller(ValidationController):
             "decided_at": decided_at.isoformat(),
             "subject_snapshot_id": subject_snapshot_id,
             "evidence_shown": [ref.digest for ref in evidence_shown],
+            "grants": sorted(grants),
+            "revokes": sorted(revokes),
         }
         decision = HumanDecision(
             decision_id=decision_id,
@@ -848,11 +857,13 @@ class Controller(ValidationController):
             decision_state=DecisionState.VALID,
             options_offered=tuple(options_offered),
             evidence_shown=tuple(evidence_shown),
+            grants=frozenset(grants),
+            revokes=frozenset(revokes),
             subject_snapshot_id=subject_snapshot_id,
             expires_at=expires_at,
-            decision_hash=digest_json(preimage),
             prev_event_hash=self.store.get_project(project_id).event_head,
         )
+        decision.decision_hash = decision_content_hash(decision)
         self._append(
             project_id,
             event_type="decision.recorded",
@@ -1089,9 +1100,10 @@ class Controller(ValidationController):
 
         # Refused before anything is stored: no capability, decision or mode
         # makes repository metadata or an escaping path writable.
-        path = assert_unprotected(path)
-
+        self.require_authority(run_id, "commit.propose")  # guard:gr06_commit_propose_grant
         governed = self.governed_repo(run.project_id)
+        self.require_authority(run_id, "fs.write", path=path, repo=governed)  # guard:gr06_commit_propose_path
+        path = assert_unprotected(path)
         payload = content.encode("utf-8")
         after_ref = self.store.store_artifact(
             payload, media_type="application/octet-stream"
@@ -1194,6 +1206,7 @@ class Controller(ValidationController):
         if intent.status is not CommitIntentStatus.PROPOSED:  # guard:commit_authorize_status
             raise IntegrityViolation("only a proposed intent can be authorized")
         governed = self.governed_repo(project_id)
+        self._require_commit_authority(intent, governed)  # guard:gr06_commit_authorize
         head = verify_head(governed, expected_revision=intent.base_revision_id,
                            expected_ref=intent.target_ref)
         if not head.matches:  # guard:commit_authorize_base
@@ -1391,6 +1404,7 @@ class Controller(ValidationController):
             # Re-read state under the write lease, including the barrier and
             # observation gate. Persist APPLYING before any mutation.
             intent = self.store.get_commit_intent(intent_id)
+            self._require_commit_authority(intent, governed)  # guard:gr06_commit_apply
             self.mark_applying(intent_id)
             head = verify_head(governed, expected_revision=intent.base_revision_id,
                                expected_ref=intent.target_ref)

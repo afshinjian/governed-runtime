@@ -15,6 +15,7 @@ import signal
 import subprocess
 import sys
 import time
+from types import MethodType
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -115,12 +116,15 @@ class Harness:
     def controller(self, *, with_repo: bool = False):
         store = StateStore.open(self.db_path)
         try:
-            yield Controller(
+            controller = Controller(
                 store=store,
                 artifacts=ArtifactStore(self.artifacts_dir),
                 provider=self.provider(),
                 repo=self.repo() if with_repo else None,
             )
+            from gr06_support import provision_legacy_run
+            controller.open_run = MethodType(provision_legacy_run, controller)
+            yield controller
         finally:
             store.close()
 

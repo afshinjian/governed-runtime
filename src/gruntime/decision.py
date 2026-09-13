@@ -23,9 +23,11 @@ invalidated approvals, nothing could ever be approved.
 from __future__ import annotations
 
 from datetime import datetime
+from dataclasses import asdict
 from typing import Mapping, Optional, Sequence
 
 from .errors import IntegrityViolation
+from .canonical import digest_json
 from .models import (
     DecisionKind,
     DecisionState,
@@ -166,6 +168,25 @@ def is_authority(decision: HumanDecision) -> bool:
     a second state later.
     """
     return decision.decision_state is DecisionState.VALID
+
+
+def decision_content_hash(decision: HumanDecision) -> str:
+    """Pin immutable authority-bearing fields; lifecycle state stays outside.
+
+    Evidence is identified by content digest, as in the persisted decision.
+    This prevents editing a grant's actor, nonce, scope or capabilities before
+    presenting its ID to activation.
+    """
+    body = asdict(decision)
+    body.pop("decision_hash")
+    body.pop("decision_state")
+    body["evidence_shown"] = [ref.digest for ref in decision.evidence_shown]
+    body["grants"] = sorted(decision.grants)
+    body["revokes"] = sorted(decision.revokes)
+    body["options_offered"] = list(decision.options_offered)
+    body["decided_at"] = decision.decided_at.isoformat()
+    body["expires_at"] = decision.expires_at.isoformat() if decision.expires_at else None
+    return digest_json(body)
 
 
 def refuse_unless_authority(decision: Optional[HumanDecision], what: str) -> HumanDecision:

@@ -24,12 +24,14 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
 from .artifacts import ArtifactStore
 from .canonical import canonical_json, digest_bytes
+from .contract_store import ContractStore, CONTRACT_SCHEMA
 from .errors import IntegrityViolation, SchemaTooOld
 from .models import (
     ActorRef,
@@ -109,8 +111,8 @@ SCHEMA_VERSION = "0.1.0"
 #: Physical layout version, kept in `PRAGMA user_version` — the place SQLite
 #: provides for exactly this, and separate from `SCHEMA_VERSION` because the
 #: two answer different questions: which domain model this database speaks,
-#: and which columns it actually has. GR-10 is version 3.
-STORAGE_VERSION = 3
+#: and which columns it actually has. GR-06 is version 4.
+STORAGE_VERSION = 4
 
 #: Columns this build reads that a pre-`STORAGE_VERSION` database lacks.
 #: Checked structurally as well as by version, because `user_version` defaults
@@ -118,6 +120,8 @@ STORAGE_VERSION = 3
 #: columns are what make it true, and a structural check cannot drift out of
 #: step with the schema above.
 REQUIRED_COLUMNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("projects", ("capability_ceiling", "budget", "budget_used")),
+    ("decisions", ("grants", "revokes", "signature")),
     ("commit_receipts", ("tree_id", "subject", "body_hash", "committed_paths", "files_changed")),
     ("projects", ("suspension_ref",)),
     ("snapshots", ("scope", "drift_vs", "drift_summary")),
@@ -144,6 +148,9 @@ SCHEMA: tuple[str, ...] = (
         event_seq INTEGER NOT NULL,
         controller_epoch INTEGER NOT NULL,
         policy_digest TEXT,
+        capability_ceiling TEXT NOT NULL,
+        budget TEXT NOT NULL,
+        budget_used TEXT NOT NULL,
         snapshot_current TEXT,
         suspension_ref TEXT
     ) STRICT
@@ -361,6 +368,9 @@ SCHEMA: tuple[str, ...] = (
         subject_snapshot_id TEXT,
         decision_state TEXT NOT NULL,
         evidence_shown TEXT NOT NULL,
+        grants TEXT NOT NULL,
+        revokes TEXT NOT NULL,
+        signature TEXT,
         expires_at TEXT,
         decision_hash TEXT,
         prev_event_hash TEXT,
@@ -464,7 +474,7 @@ def mutation_from_dict(data: dict) -> MutationProposal:
     )
 
 
-class StateStore:
+class StateStore(ContractStore):
     """The project's durable state and its per-project event chain."""
 
     def __init__(self, connection: Any, db_path: Path) -> None:
@@ -492,7 +502,7 @@ class StateStore:
         connection.row_factory = sqlite3.Row
         for name, value in PRAGMAS:
             connection.execute(f"PRAGMA {name}={value}")
-        for statement in SCHEMA:
+        for statement in SCHEMA + CONTRACT_SCHEMA:
             connection.execute(statement)
         store = cls(connection, db_path)
         store._install_append_only_guard()
@@ -895,8 +905,9 @@ class StateStore:
             event_seq=int(row["event_seq"]),
             controller_epoch=int(row["controller_epoch"]),
             policy_digest=row["policy_digest"],
-            budget=Budget(),
-            budget_used=BudgetUsage(),
+            capability_ceiling=frozenset(json.loads(row["capability_ceiling"])),
+            budget=Budget(**json.loads(row["budget"])),
+            budget_used=BudgetUsage(**json.loads(row["budget_used"])),
             snapshot_current=row["snapshot_current"],
             suspension_ref=row["suspension_ref"],
         )
@@ -906,8 +917,8 @@ class StateStore:
             "INSERT INTO projects (project_id, name, slug, schema_version, lifecycle,"
             " suspension, governance_mode, workspace_root, created_at, updated_at,"
             " created_by, event_head, event_seq, controller_epoch, policy_digest,"
-            " snapshot_current, suspension_ref)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            " snapshot_current, suspension_ref, capability_ceiling, budget, budget_used)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(project_id) DO UPDATE SET"
             " name=excluded.name, slug=excluded.slug, lifecycle=excluded.lifecycle,"
             " suspension=excluded.suspension,"
@@ -918,7 +929,9 @@ class StateStore:
             " controller_epoch=excluded.controller_epoch,"
             " policy_digest=excluded.policy_digest,"
             " snapshot_current=excluded.snapshot_current,"
-            " suspension_ref=excluded.suspension_ref",
+            " suspension_ref=excluded.suspension_ref,"
+            " capability_ceiling=excluded.capability_ceiling,"
+            " budget=excluded.budget, budget_used=excluded.budget_used",
             (
                 project.project_id,
                 project.name,
@@ -937,6 +950,9 @@ class StateStore:
                 project.policy_digest,
                 project.snapshot_current,
                 project.suspension_ref,
+                canonical_json(sorted(project.capability_ceiling)).decode(),
+                canonical_json(asdict(project.budget)).decode(),
+                canonical_json(asdict(project.budget_used)).decode(),
             ),
         )
 
@@ -1027,6 +1043,7 @@ class StateStore:
         )
 
     def _run_from_row(self, row: sqlite3.Row) -> StageRun:
+        activation = self.activation_for_run(row["run_id"])
         return StageRun(
             run_id=row["run_id"],
             project_id=row["project_id"],
@@ -1039,6 +1056,10 @@ class StateStore:
             output_snapshot_id=row["output_snapshot_id"],
             deadline_at=_parse_ts(row["deadline_at"]),
             attempt=int(row["attempt"]),
+            contract_id=activation.contract_id if activation else None,
+            contract_hash=activation.contract_hash if activation else None,
+            activation_id=activation.activation_id if activation else None,
+            effective_capabilities=frozenset(activation.granted_capabilities) if activation else frozenset(),
         )
 
     def get_run(self, run_id: Id) -> StageRun:
@@ -1687,8 +1708,8 @@ class StateStore:
             " subject_id, decision_kind, question, options_offered, chosen,"
             " justification, scope, decided_by, auth_method, decided_at, nonce,"
             " snapshot_bound, subject_snapshot_id, decision_state, evidence_shown,"
-            " expires_at, decision_hash, prev_event_hash, ordinal)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+            " expires_at, decision_hash, prev_event_hash, grants, revokes, signature, ordinal)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
             "(SELECT COUNT(*) FROM decisions))"
             " ON CONFLICT(decision_id) DO UPDATE SET"
             " decision_state=excluded.decision_state",
@@ -1716,6 +1737,9 @@ class StateStore:
                 _iso(decision.expires_at),
                 decision.decision_hash,
                 decision.prev_event_hash,
+                canonical_json(sorted(decision.grants)).decode(),
+                canonical_json(sorted(decision.revokes)).decode(),
+                decision.signature,
             ),
         )
 
@@ -1745,6 +1769,9 @@ class StateStore:
             expires_at=_parse_ts(row["expires_at"]),
             decision_hash=row["decision_hash"],
             prev_event_hash=row["prev_event_hash"],
+            grants=frozenset(json.loads(row["grants"])),
+            revokes=frozenset(json.loads(row["revokes"])),
+            signature=row["signature"],
         )
 
     def get_decision(self, decision_id: Id) -> HumanDecision:

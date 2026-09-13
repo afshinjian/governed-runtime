@@ -933,3 +933,7 @@ class StageRun:
     output_snapshot_id: Optional[Id] = None
     deadline_at: Optional[Ts] = None
     attempt: int = 1
+    contract_id: Optional[Id] = None
+    contract_hash: Optional[Hash] = None
+    activation_id: Optional[Id] = None
+    effective_capabilities: frozenset[CapabilityId] = frozenset()

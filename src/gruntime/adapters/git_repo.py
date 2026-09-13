@@ -82,6 +82,12 @@ class GitRepository:
 
     # -- observation -------------------------------------------------------
 
+    def submodule_paths(self):
+        """Gitlinks remain boundaries even when their checkout is absent."""
+        listing = self._git("ls-files", "--stage", "-z")
+        return frozenset(entry.split("\t", 1)[1] for entry in listing.split("\0")
+                         if entry.startswith("160000 "))
+
     def head_revision(self) -> str:
         """Current `HEAD` revision id."""
         return self._git("rev-parse", "HEAD").strip()
