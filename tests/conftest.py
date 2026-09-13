@@ -88,7 +88,18 @@ class Harness:
         return self.repo()
 
     def revision_count(self) -> int:
-        return int(_git(self.repo_dir, "rev-list", "--count", "HEAD"))
+        """Revisions in the repository, on every line.
+
+        Counted over `--all`, not over the checkout's `HEAD`: governed
+        mutation lands on the dedicated worktree's branch (GR-03), so a count
+        of one branch would miss the very commits "did this land exactly
+        once?" is asking about.
+        """
+        return int(_git(self.repo_dir, "rev-list", "--count", "--all"))
+
+    def worktree_dir(self, project_id: str) -> Path:
+        """Where the controller puts this project's governed worktree."""
+        return self.root / "worktrees" / project_id
 
     # -- in-process access ------------------------------------------------
 
@@ -115,7 +126,13 @@ class Harness:
 
     # -- subprocess control -----------------------------------------------
 
-    def spawn(self, project_id: str, *args: str, gate: str | None = None):
+    def spawn(
+        self,
+        project_id: str,
+        *args: str,
+        gate: str | None = None,
+        lease_ttl_ms: int | None = None,
+    ):
         env = dict(os.environ)
         env["PYTHONPATH"] = str(SRC) + os.pathsep + env.get("PYTHONPATH", "")
         if gate is not None:
@@ -134,7 +151,10 @@ class Harness:
         ]
         if self.repo_dir.exists():
             cmd += ["--repo", str(self.repo_dir)]
-        cmd += ["--project", project_id, *args]
+        cmd += ["--project", project_id]
+        if lease_ttl_ms is not None:
+            cmd += ["--lease-ttl-ms", str(lease_ttl_ms)]
+        cmd += [*args]
         return subprocess.Popen(
             cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )

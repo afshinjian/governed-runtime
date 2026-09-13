@@ -44,6 +44,11 @@ from .models import (
     CommitPreconditions,
     CommitReceipt,
     Completeness,
+    DecisionKind,
+    DecisionScope,
+    DecisionState,
+    DecisionSubjectKind,
+    DriftSummary,
     Encoding,
     EpistemicClass,
     Escalation,
@@ -52,6 +57,7 @@ from .models import (
     EscalationTrigger,
     GovernanceMode,
     Hash,
+    HumanDecision,
     Id,
     Independence,
     InvocationStatus,
@@ -116,7 +122,8 @@ SCHEMA: tuple[str, ...] = (
         event_seq INTEGER NOT NULL,
         controller_epoch INTEGER NOT NULL,
         policy_digest TEXT,
-        snapshot_current TEXT
+        snapshot_current TEXT,
+        suspension_ref TEXT
     ) STRICT
     """,
     """
@@ -301,6 +308,35 @@ SCHEMA: tuple[str, ...] = (
         byte_count INTEGER NOT NULL,
         snapshot_hash TEXT NOT NULL,
         vcs_state TEXT,
+        scope TEXT NOT NULL,
+        drift_vs TEXT,
+        drift_summary TEXT,
+        ordinal INTEGER NOT NULL
+    ) STRICT
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS decisions (
+        decision_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        subject_kind TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        decision_kind TEXT NOT NULL,
+        question TEXT NOT NULL,
+        options_offered TEXT NOT NULL,
+        chosen TEXT NOT NULL,
+        justification TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        decided_by TEXT NOT NULL,
+        auth_method TEXT NOT NULL,
+        decided_at TEXT NOT NULL,
+        nonce TEXT NOT NULL,
+        snapshot_bound INTEGER NOT NULL,
+        subject_snapshot_id TEXT,
+        decision_state TEXT NOT NULL,
+        evidence_shown TEXT NOT NULL,
+        expires_at TEXT,
+        decision_hash TEXT,
+        prev_event_hash TEXT,
         ordinal INTEGER NOT NULL
     ) STRICT
     """,
@@ -358,6 +394,15 @@ def actor_from_json(raw: str) -> ActorRef:
         auth_method=AuthMethod(data["auth_method"]),
         principal_key_id=data.get("principal_key_id"),
     )
+
+
+def _drift_to_dict(summary: DriftSummary) -> dict:
+    return {
+        "added": summary.added,
+        "removed": summary.removed,
+        "modified": summary.modified,
+        "unattributed": summary.unattributed,
+    }
 
 
 def mutation_to_dict(mutation: MutationProposal) -> dict:
@@ -763,6 +808,7 @@ class StateStore:
             budget=Budget(),
             budget_used=BudgetUsage(),
             snapshot_current=row["snapshot_current"],
+            suspension_ref=row["suspension_ref"],
         )
 
     def put_project(self, project: Project) -> None:
@@ -770,7 +816,8 @@ class StateStore:
             "INSERT INTO projects (project_id, name, slug, schema_version, lifecycle,"
             " suspension, governance_mode, workspace_root, created_at, updated_at,"
             " created_by, event_head, event_seq, controller_epoch, policy_digest,"
-            " snapshot_current) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            " snapshot_current, suspension_ref)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(project_id) DO UPDATE SET"
             " name=excluded.name, slug=excluded.slug, lifecycle=excluded.lifecycle,"
             " suspension=excluded.suspension,"
@@ -780,7 +827,8 @@ class StateStore:
             " event_seq=excluded.event_seq,"
             " controller_epoch=excluded.controller_epoch,"
             " policy_digest=excluded.policy_digest,"
-            " snapshot_current=excluded.snapshot_current",
+            " snapshot_current=excluded.snapshot_current,"
+            " suspension_ref=excluded.suspension_ref",
             (
                 project.project_id,
                 project.name,
@@ -798,7 +846,35 @@ class StateStore:
                 project.controller_epoch,
                 project.policy_digest,
                 project.snapshot_current,
+                project.suspension_ref,
             ),
+        )
+
+    def set_project_suspension(
+        self,
+        project_id: Id,
+        suspension: SuspensionState,
+        *,
+        suspension_ref: Optional[Id] = None,
+    ) -> None:
+        """Write axis 3 alone (`O-3`, `G-8`).
+
+        A targeted UPDATE, not a whole-row write: `event_head` and `event_seq`
+        belong to the append protocol, and a read-modify-write around an
+        `append_event` would roll the chain head back onto a sequence number
+        that is already spent.
+        """
+        self.connection.execute(
+            "UPDATE projects SET suspension=?, suspension_ref=?, updated_at=?"
+            " WHERE project_id=?",
+            (suspension.value, suspension_ref, _iso(now_ts()), project_id),
+        )
+
+    def set_project_snapshot_current(self, project_id: Id, snapshot_id: Id) -> None:
+        """Point `snapshot_current` at the newest snapshot. Targeted, as above."""
+        self.connection.execute(
+            "UPDATE projects SET snapshot_current=?, updated_at=? WHERE project_id=?",
+            (snapshot_id, _iso(now_ts()), project_id),
         )
 
     def bump_controller_epoch(self, project_id: Id) -> int:
@@ -1393,8 +1469,9 @@ class StateStore:
         self.connection.execute(
             "INSERT INTO snapshots (snapshot_id, project_id, taken_at, taken_by,"
             " trigger, completeness, tree_digest, file_index_digest, file_count,"
-            " byte_count, snapshot_hash, vcs_state, ordinal)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,(SELECT COUNT(*) FROM snapshots))",
+            " byte_count, snapshot_hash, vcs_state, scope, drift_vs, drift_summary,"
+            " ordinal)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT COUNT(*) FROM snapshots))",
             (
                 snapshot.snapshot_id,
                 snapshot.project_id,
@@ -1410,15 +1487,15 @@ class StateStore:
                 None
                 if snapshot.vcs_state is None
                 else canonical_json(dict(snapshot.vcs_state)).decode("utf-8"),
+                canonical_json(list(snapshot.scope)).decode("utf-8"),
+                snapshot.drift_vs,
+                None
+                if snapshot.drift_summary is None
+                else canonical_json(_drift_to_dict(snapshot.drift_summary)).decode("utf-8"),
             ),
         )
 
-    def get_snapshot(self, snapshot_id: Id) -> RealitySnapshot:
-        row = self.connection.execute(
-            "SELECT * FROM snapshots WHERE snapshot_id=?", (snapshot_id,)
-        ).fetchone()
-        if row is None:
-            raise KeyError(snapshot_id)
+    def _snapshot_from_row(self, row: sqlite3.Row) -> RealitySnapshot:
         return RealitySnapshot(
             snapshot_id=row["snapshot_id"],
             project_id=row["project_id"],
@@ -1436,7 +1513,136 @@ class StateStore:
             byte_count=int(row["byte_count"]),
             snapshot_hash=row["snapshot_hash"],
             vcs_state=None if row["vcs_state"] is None else json.loads(row["vcs_state"]),
+            scope=tuple(json.loads(row["scope"])),
+            drift_vs=row["drift_vs"],
+            drift_summary=(
+                None
+                if row["drift_summary"] is None
+                else DriftSummary(**json.loads(row["drift_summary"]))
+            ),
         )
+
+    def get_snapshot(self, snapshot_id: Id) -> RealitySnapshot:
+        row = self.connection.execute(
+            "SELECT * FROM snapshots WHERE snapshot_id=?", (snapshot_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(snapshot_id)
+        return self._snapshot_from_row(row)
+
+    def list_snapshots(self, project_id: Id) -> list[RealitySnapshot]:
+        """Every snapshot of a project, oldest first."""
+        rows = self.connection.execute(
+            "SELECT * FROM snapshots WHERE project_id=? ORDER BY ordinal",
+            (project_id,),
+        ).fetchall()
+        return [self._snapshot_from_row(row) for row in rows]
+
+    def newest_complete_snapshot(self, project_id: Id) -> Optional[RealitySnapshot]:
+        """The newest `COMPLETE` snapshot, or `None`.
+
+        Only `COMPLETE` counts: a partial or failed observation supersedes
+        nothing, because absence of observation is not observation of absence
+        (`RS-INV-1`).
+        """
+        row = self.connection.execute(
+            "SELECT * FROM snapshots WHERE project_id=? AND completeness=?"
+            " ORDER BY ordinal DESC LIMIT 1",
+            (project_id, Completeness.COMPLETE.value),
+        ).fetchone()
+        return None if row is None else self._snapshot_from_row(row)
+
+    def snapshot_document(self, snapshot: RealitySnapshot) -> dict:
+        """The stored `file_index_ref` payload for a snapshot.
+
+        Re-hashed on the way out by the artifact store, so a file index that no
+        longer matches its digest is an `IntegrityViolation` rather than a
+        quietly different reality.
+        """
+        return json.loads(self.artifact_bytes(snapshot.file_index_ref.digest))
+
+    # -- human decisions (domain-model §9.A) --------------------------------
+
+    def put_decision(self, decision: HumanDecision) -> None:
+        self.connection.execute(
+            "INSERT INTO decisions (decision_id, project_id, subject_kind,"
+            " subject_id, decision_kind, question, options_offered, chosen,"
+            " justification, scope, decided_by, auth_method, decided_at, nonce,"
+            " snapshot_bound, subject_snapshot_id, decision_state, evidence_shown,"
+            " expires_at, decision_hash, prev_event_hash, ordinal)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+            "(SELECT COUNT(*) FROM decisions))"
+            " ON CONFLICT(decision_id) DO UPDATE SET"
+            " decision_state=excluded.decision_state",
+            (
+                decision.decision_id,
+                decision.project_id,
+                decision.subject_kind.value,
+                decision.subject_id,
+                decision.decision_kind.value,
+                decision.question,
+                canonical_json(list(decision.options_offered)).decode("utf-8"),
+                decision.chosen,
+                decision.justification,
+                decision.scope.value,
+                actor_to_json(decision.decided_by),
+                decision.auth_method.value,
+                _iso(decision.decided_at),
+                decision.nonce,
+                int(decision.snapshot_bound),
+                decision.subject_snapshot_id,
+                decision.decision_state.value,
+                canonical_json(
+                    [ref.digest for ref in decision.evidence_shown]
+                ).decode("utf-8"),
+                _iso(decision.expires_at),
+                decision.decision_hash,
+                decision.prev_event_hash,
+            ),
+        )
+
+    def _decision_from_row(self, row: sqlite3.Row) -> HumanDecision:
+        return HumanDecision(
+            decision_id=row["decision_id"],
+            project_id=row["project_id"],
+            subject_kind=DecisionSubjectKind(row["subject_kind"]),
+            subject_id=row["subject_id"],
+            decision_kind=DecisionKind(row["decision_kind"]),
+            question=row["question"],
+            chosen=row["chosen"],
+            justification=row["justification"],
+            scope=DecisionScope(row["scope"]),
+            decided_by=actor_from_json(row["decided_by"]),
+            auth_method=AuthMethod(row["auth_method"]),
+            decided_at=_parse_ts(row["decided_at"]),
+            nonce=row["nonce"],
+            snapshot_bound=bool(row["snapshot_bound"]),
+            decision_state=DecisionState(row["decision_state"]),
+            options_offered=tuple(json.loads(row["options_offered"])),
+            evidence_shown=tuple(
+                ArtifactRef(digest=digest, media_type="application/json", byte_len=0)
+                for digest in json.loads(row["evidence_shown"])
+            ),
+            subject_snapshot_id=row["subject_snapshot_id"],
+            expires_at=_parse_ts(row["expires_at"]),
+            decision_hash=row["decision_hash"],
+            prev_event_hash=row["prev_event_hash"],
+        )
+
+    def get_decision(self, decision_id: Id) -> HumanDecision:
+        row = self.connection.execute(
+            "SELECT * FROM decisions WHERE decision_id=?", (decision_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(decision_id)
+        return self._decision_from_row(row)
+
+    def list_decisions(self, project_id: Id) -> list[HumanDecision]:
+        rows = self.connection.execute(
+            "SELECT * FROM decisions WHERE project_id=? ORDER BY ordinal",
+            (project_id,),
+        ).fetchall()
+        return [self._decision_from_row(row) for row in rows]
 
     def put_escalation(self, escalation: Escalation) -> None:
         self.connection.execute(
@@ -1496,6 +1702,26 @@ class StateStore:
         self.connection.execute(
             "UPDATE commit_intents SET expected_tree_digest=? WHERE intent_id=?",
             (digest, intent_id),
+        )
+
+    def force_mutation_path(self, intent_id: Id, path: str) -> None:
+        """Rewrite the path of an intent's single mutation.
+
+        Lets the apply-time protected-path guard be exercised against a record
+        the proposing guard would never have created — which is the only way to
+        find out whether the second guard is real or decorative.
+        """
+        row = self.connection.execute(
+            "SELECT mutations FROM commit_intents WHERE intent_id=?", (intent_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(intent_id)
+        raw = json.loads(row["mutations"])
+        for entry in raw:
+            entry["path"] = path
+        self.connection.execute(
+            "UPDATE commit_intents SET mutations=? WHERE intent_id=?",
+            (canonical_json(raw).decode("utf-8"), intent_id),
         )
 
     def force_precondition_reviews(

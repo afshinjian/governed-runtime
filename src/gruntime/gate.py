@@ -35,12 +35,18 @@ AFTER_LOOKUP_BEFORE_RECEIPT = "after_lookup_before_receipt"
 #: (`CM-INV-2`, transition-matrix §7.4).
 AFTER_COMMIT_BEFORE_RECEIPT = "after_commit_before_receipt"
 
+#: Inside the repository lease, before the mutation. A process killed here
+#: leaves the lease record behind with time still on it, which is what a
+#: second controller must honour (`lease.py`, `CM-INV-3`).
+INSIDE_REPOSITORY_LEASE = "inside_repository_lease"
+
 #: Every gate point the runtime declares.
 GATE_POINTS: frozenset[str] = frozenset(
     {
         AFTER_INVOKE_BEFORE_RECEIPT,
         AFTER_LOOKUP_BEFORE_RECEIPT,
         AFTER_COMMIT_BEFORE_RECEIPT,
+        INSIDE_REPOSITORY_LEASE,
     }
 )
 

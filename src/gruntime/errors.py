@@ -49,5 +49,24 @@ class ProviderUnavailable(GovernedRuntimeError):
     """A provider operation failed transiently (worker_provider §2.1)."""
 
 
+class LeaseUnavailable(GovernedRuntimeError):
+    """The repository lease is held by another controller and is not expired.
+
+    Two controllers holding one repository at once would each believe their
+    `operation_token` scan describes the whole truth. The lease is what makes
+    `CM-INV-2` a statement about the repository rather than about one process.
+    """
+
+
+class ProtectedPathViolation(GovernedRuntimeError):
+    """A mutation targeted a path no activation can make writable.
+
+    Design basis: authority-matrix §2.4 `fs.write.outside_scope` (`NEVER`) and
+    `fs.read.outside_workspace` (`NEVER`). Repository metadata and paths that
+    escape the root are outside every grantable scope, so the refusal is a
+    property of the path, not of the current grant.
+    """
+
+
 class PolicyDenied(GovernedRuntimeError):
     """A policy verdict forbade the transition (transition-matrix §2)."""

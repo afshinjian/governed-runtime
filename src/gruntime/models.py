@@ -242,6 +242,29 @@ class DecisionState(str, Enum):
     VOID = "VOID"
 
 
+class DecisionSubjectKind(str, Enum):
+    """`HumanDecision.subject.kind` (domain-model §9.A)."""
+
+    PROJECT = "PROJECT"
+    STAGE = "STAGE"
+    RUN = "RUN"
+    CONTRACT = "CONTRACT"
+    FINDING = "FINDING"
+    ESCALATION = "ESCALATION"
+    COMMIT_INTENT = "COMMIT_INTENT"
+    CAPABILITY = "CAPABILITY"
+
+
+class DecisionScope(str, Enum):
+    """`HumanDecision.scope` (domain-model §9.A). Bounds a decision with no
+    `expires_at`."""
+
+    PROJECT = "PROJECT"
+    STAGE = "STAGE"
+    RUN = "RUN"
+    SINGLE_ACTION = "SINGLE_ACTION"
+
+
 class ReconciliationState(str, Enum):
     """Derived solely by `reconciliation.derive_reconciliation_state`.
 
@@ -529,6 +552,29 @@ ATTESTATION_KIND = "ReviewAttestation"
 
 
 @dataclass(frozen=True)
+class DriftSummary:
+    """`RealitySnapshot.drift_summary` (domain-model §9.D).
+
+    Counts only, exactly as the field is declared. The paths behind the counts
+    are re-derivable at any time by diffing the two snapshots' file indexes,
+    so the record stays the four numbers the model names.
+
+    `unattributed > 0` is the `REALITY_DRIFT` trigger (domain-model §9.B.1) and
+    the precondition of `NONE → SUSPENDED_BY_DRIFT` (transition-matrix §4).
+    """
+
+    added: int = 0
+    removed: int = 0
+    modified: int = 0
+    unattributed: int = 0
+
+    @property
+    def changed(self) -> int:
+        """How many paths differ, however the change is attributed."""
+        return self.added + self.removed + self.modified
+
+
+@dataclass(frozen=True)
 class CommitPreconditions:
     """`CommitIntent.preconditions` (domain-model §8.3).
 
@@ -753,6 +799,43 @@ class AuditEvent:
 
 
 @dataclass
+class HumanDecision:
+    """domain-model §9.A — AUTHORITY. Only `decision_state = VALID` is authority.
+
+    `snapshot_bound` and `decision_state` are derived, never supplied: the
+    first by :func:`gruntime.decision.is_snapshot_bound`, the second by
+    :func:`gruntime.decision.derive_decision_state`. A snapshot-bound decision
+    names the `COMPLETE` snapshot its `evidence_shown` was measured against and
+    goes `STALE` when a newer snapshot supersedes it (`HD-INV-4`).
+    """
+
+    decision_id: Id
+    project_id: Id
+    subject_kind: DecisionSubjectKind
+    subject_id: Id
+    decision_kind: DecisionKind
+    question: str
+    chosen: str
+    justification: str
+    scope: DecisionScope
+    decided_by: ActorRef
+    auth_method: AuthMethod
+    decided_at: Ts
+    nonce: str
+    snapshot_bound: bool
+    decision_state: DecisionState
+    options_offered: Sequence[str] = ()
+    evidence_shown: Sequence[ArtifactRef] = ()
+    grants: frozenset[CapabilityId] = frozenset()
+    revokes: frozenset[CapabilityId] = frozenset()
+    subject_snapshot_id: Optional[Id] = None
+    expires_at: Optional[Ts] = None
+    signature: Optional[Hash] = None
+    decision_hash: Optional[Hash] = None
+    prev_event_hash: Optional[Hash] = None
+
+
+@dataclass
 class Escalation:
     """domain-model §9.B."""
 
@@ -797,6 +880,7 @@ class RealitySnapshot:
     toolchain_digest: Optional[Hash] = None
     env_digest: Optional[Hash] = None
     drift_vs: Optional[Id] = None
+    drift_summary: Optional[DriftSummary] = None
 
 
 @dataclass

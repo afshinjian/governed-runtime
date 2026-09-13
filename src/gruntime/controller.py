@@ -21,9 +21,14 @@ Command line, used by operators and by the crash tests::
 
     python -m gruntime.controller
         --db PATH --artifacts DIR --journal DIR [--repo DIR]
-        --project PROJECT_ID
+        --project PROJECT_ID [--lease-ttl-ms MS]
         {start | invoke --run RUN_ID | commit --run RUN_ID --path P --content C
-         | recover}
+         | snapshot | recover}
+
+`--repo` names the **user's checkout**: the runtime observes it and never
+writes a file into it. Governed mutation happens in a dedicated worktree under
+the governance directory (`worktree.py`), held under a repository lease
+(`lease.py`).
 
 `start` prints one JSON object carrying `controller_epoch`. The process is
 always launched as `sys.executable -m gruntime.controller`; the runtime never
@@ -35,12 +40,12 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Sequence
 
 from .artifacts import ArtifactStore
-from .canonical import canonical_json, digest_bytes, digest_json
+from .canonical import canonical_json, digest_json
 from .commit import (
     APPLY_CAPABILITY,
     AUTHORIZE_CAPABILITY,
@@ -51,8 +56,20 @@ from .commit import (
     expected_tree_digest,
     mint_operation_token,
 )
-from .errors import BarrierViolation, IntegrityViolation
-from .gate import AFTER_COMMIT_BEFORE_RECEIPT, AFTER_INVOKE_BEFORE_RECEIPT, gate
+from .decision import (
+    derive_decision_state,
+    drift_touches_scope,
+    is_snapshot_bound,
+    subject_scope,
+)
+from .errors import BarrierViolation, IntegrityViolation, PolicyDenied
+from .gate import (
+    AFTER_COMMIT_BEFORE_RECEIPT,
+    AFTER_INVOKE_BEFORE_RECEIPT,
+    INSIDE_REPOSITORY_LEASE,
+    gate,
+)
+from .lease import DEFAULT_TTL_MS, RepositoryLease
 from .models import (
     ActorKind,
     ActorRef,
@@ -64,12 +81,17 @@ from .models import (
     CommitPreconditions,
     CommitReceipt,
     Completeness,
+    DecisionKind,
+    DecisionScope,
+    DecisionState,
+    DecisionSubjectKind,
     EpistemicClass,
     Escalation,
     EscalationSeverity,
     EscalationStatus,
     EscalationTrigger,
     GovernanceMode,
+    HumanDecision,
     Id,
     Independence,
     InvocationStatus,
@@ -95,6 +117,17 @@ from .models import (
     is_terminal_status,
 )
 from .models import Review as ReviewRecord
+from .repository import (
+    WHOLE_WORKSPACE,
+    assert_unprotected,
+    derive_drift,
+    effective_index,
+    observe_filesystem,
+    observe_repository,
+    unattributed_paths,
+    verify_head,
+)
+from .worktree import WorktreePlacement, ensure_worktree, governed_branch, worktree_root
 from .policy import (
     PolicyOutcome,
     TransitionContext,
@@ -128,8 +161,12 @@ DEFAULT_BINDING = "default"
 #: How long an invocation may run before `deadline_at` passes.
 DEFAULT_DEADLINE = timedelta(hours=1)
 
-#: Directory names never counted as workspace content by a snapshot.
-SNAPSHOT_EXCLUDES = frozenset({".git", ".hg", ".svn"})
+#: Suspension values under which no new external effect may be initiated
+#: (transition-matrix §0.1). Snapshots stay allowed in every one of them:
+#: observing reality is how a suspension is ever cleared.
+EFFECT_BARRING_SUSPENSIONS: frozenset[SuspensionState] = frozenset(
+    state for state in SuspensionState if state is not SuspensionState.NONE
+)
 
 
 def _runtime_actor(component: str) -> ActorRef:
@@ -151,11 +188,68 @@ class Controller:
         artifacts: ArtifactStore,
         provider: WorkerProvider,
         repo: Optional[object] = None,
+        governance_dir: Optional[Path] = None,
+        lease_ttl_ms: int = DEFAULT_TTL_MS,
     ) -> None:
         self.store = store
         self.artifacts = artifacts
         self.provider = provider
+        #: The user's checkout: observed by every snapshot, written by nothing.
         self.repo = repo
+        #: Where runtime-owned state that is not the workspace lives — the
+        #: governed worktree and the repository lease. Never inside the
+        #: workspace, or the runtime's own files would read as workspace drift.
+        self.governance_dir = Path(governance_dir or store.db_path.parent)
+        self.lease_ttl_ms = lease_ttl_ms
+
+    # -- repository handles -------------------------------------------------
+
+    def governed_repo(self, project_id: Id, *, create: bool = True):
+        """The adapter rooted at this project's governed worktree.
+
+        Every governed mutation goes here and the user's checkout goes
+        untouched (`worktree.py`). With `create = False` the worktree is used
+        only if it already exists, which is what recovery needs: creating one
+        is a repository mutation, and `recovery.reconcile` authorizes
+        observation only (authority-matrix §2.3).
+        """
+        if self.repo is None:
+            raise IntegrityViolation("no repository adapter is configured")
+        placement = self._placement(project_id)
+        if placement.path.exists():
+            return ensure_worktree(self.repo, placement)
+        if not create:
+            return self.repo
+        # Creating a worktree writes to the repository, so it is taken under
+        # the lease exactly as a commit is.
+        with self.repository_lease(project_id):
+            return ensure_worktree(self.repo, placement)
+
+    def _placement(self, project_id: Id) -> WorktreePlacement:
+        project = self.store.get_project(project_id)
+        return WorktreePlacement(
+            path=worktree_root(self.governance_dir, project_id),
+            branch=governed_branch(project_id),
+            workspace_root=Path(project.workspace_root),
+        )
+
+    def repository_lease(self, project_id: Id) -> RepositoryLease:
+        """A fresh lease handle on the repository this project mutates.
+
+        Held only across a mutation. A controller killed mid-mutation leaves
+        the record behind, and the next controller waits out its expiry rather
+        than asking whether a pid is still alive (`lease.py`).
+        """
+        if self.repo is None:
+            raise IntegrityViolation("no repository adapter is configured")
+        project = self.store.get_project(project_id)
+        return RepositoryLease(
+            self.governance_dir / "leases",
+            Path(self.repo.root),
+            holder_id=f"{project_id}:{project.controller_epoch}:{os.getpid()}",
+            ttl_ms=self.lease_ttl_ms,
+            controller_epoch=project.controller_epoch,
+        )
 
     # -- internals ---------------------------------------------------------
 
@@ -215,6 +309,64 @@ class Controller:
                 + " (RUN-INV-3). Reconcile them first; recovery is the only "
                 "thing permitted under the barrier."
             )
+
+    def _assert_not_suspended(self, project_id: Id, what: str) -> None:
+        """Axis-3 gate (transition-matrix §0.1): suspension is a hard gate.
+
+        Every non-`NONE` suspension denies new worker invocations, new
+        validations and new commits. Snapshots are not gated here and never
+        should be: a suspension raised by drift is cleared by observing that
+        the drift is gone, so forbidding observation would make it permanent.
+        """
+        suspension = self.store.get_project(project_id).suspension
+        if suspension in EFFECT_BARRING_SUSPENSIONS:
+            raise PolicyDenied(
+                f"{what} refused: project {project_id} is {suspension.value}. "
+                "Suspension is a hard gate; allowing progress would make it "
+                "advisory (transition-matrix §0.1, §9.1 last row)."
+            )
+
+    def _set_suspension(
+        self,
+        project_id: Id,
+        suspension: SuspensionState,
+        *,
+        reason: str,
+        suspension_ref: Optional[Id] = None,
+    ) -> None:
+        """Write axis 3, and only axis 3 (`O-3`, `G-8`).
+
+        The lifecycle value is left exactly as it was: a suspended project
+        resumes into the value it held, because suspension is read alongside a
+        lifecycle and never encodes one.
+        """
+        project = self.store.get_project(project_id)
+        if project.suspension is suspension:
+            return
+        capability = (
+            "suspension.clear"
+            if suspension is SuspensionState.NONE
+            else "suspension.set"
+        )
+        self._append(
+            project_id,
+            event_type="suspension.set",
+            epistemic_class=EpistemicClass.AUTHORITY,
+            subject={"project_id": project_id},
+            payload={
+                "from": project.suspension.value,
+                "to": suspension.value,
+                "reason": reason,
+                "suspension_ref": suspension_ref,
+            },
+            capability_used=capability,
+        )
+        # Written through a targeted update: the append above already advanced
+        # `event_head` and `event_seq`, and a whole-row write from the copy
+        # read before it would roll the chain back onto a spent sequence.
+        self.store.set_project_suspension(
+            project_id, suspension, suspension_ref=suspension_ref
+        )
 
     def _raise_escalation(
         self,
@@ -367,47 +519,105 @@ class Controller:
         self.store.put_run(run)
         return run_id
 
-    def _file_index(self, root: Path) -> tuple[dict[str, str], int]:
-        index: dict[str, str] = {}
-        byte_count = 0
-        for path in sorted(root.rglob("*")):
-            if any(part in SNAPSHOT_EXCLUDES for part in path.relative_to(root).parts):
-                continue
-            if not path.is_file():
-                continue
-            data = path.read_bytes()
-            index[str(path.relative_to(root))] = digest_bytes(data)
-            byte_count += len(data)
-        return index, byte_count
+    # -- reality (domain-model §9.D) ---------------------------------------
 
-    def take_snapshot(self, project_id: Id) -> Id:
-        """Take a `RealitySnapshot` — the only source of truth about the
-        workspace (`RS-INV-1`)."""
+    def _observe(self, project_id: Id):
+        """Fingerprint the workspace: tracked reality only.
+
+        The user's checkout is what is measured, never the governed worktree:
+        the worktree is the runtime's own scratch space and measuring it would
+        make the runtime's activity indistinguishable from the world's.
+        """
         project = self.store.get_project(project_id)
-        root = Path(project.workspace_root)
-        index, byte_count = self._file_index(root) if root.exists() else ({}, 0)
-        index_ref = self.store.store_artifact(
-            canonical_json(index), media_type="application/json"
-        )
-        snapshot_id = f"snap-{uuid.uuid4().hex}"
-        vcs_state = None
         if self.repo is not None:
-            vcs_state = {"revision_id": self.repo.head_revision()}
+            workspace = Path(project.workspace_root).resolve()
+            if workspace == Path(self.repo.root).resolve():
+                return observe_repository(self.repo, scope=WHOLE_WORKSPACE)
+        return observe_filesystem(Path(project.workspace_root), scope=WHOLE_WORKSPACE)
+
+    def _attributed_globs(self, project_id: Id) -> tuple[str, ...]:
+        """The paths the runtime declared it was changing.
+
+        Every path named by a `CommitIntent` of this project that has been
+        authorized or applied. A change anywhere else is not the runtime's, and
+        that is precisely what `unattributed` counts (domain-model §9.B.1).
+        """
+        declared: set[str] = set()
+        for run in self.store.list_runs(project_id):
+            for intent in self.store.list_commit_intents(run.run_id):
+                if intent.status is CommitIntentStatus.PROPOSED:
+                    continue
+                for mutation in intent.mutations:
+                    declared.add(mutation.path)
+                    if mutation.rename_to is not None:
+                        declared.add(mutation.rename_to)
+        return tuple(sorted(declared))
+
+    def take_snapshot(
+        self,
+        project_id: Id,
+        *,
+        trigger: SnapshotTrigger = SnapshotTrigger.ON_DEMAND,
+    ) -> Id:
+        """Take a `RealitySnapshot` — the only source of truth about the
+        workspace (`RS-INV-1`).
+
+        Three things happen, in this order, and each one is separately audited:
+
+        1. the workspace is fingerprinted (`repository.py`, which documents
+           exactly what the hash covers and what it deliberately does not);
+        2. drift against the previous snapshot is derived, and
+           `unattributed > 0` raises `REALITY_DRIFT` and sets
+           `SUSPENDED_BY_DRIFT` (transition-matrix §4);
+        3. every snapshot-bound `HumanDecision` whose bound snapshot this one
+           supersedes inside the subject's scope goes `STALE` (`HD-INV-4`).
+
+        Taking a snapshot is always permitted, under every suspension value
+        (§0.1): observing reality is the only way a suspension raised by drift
+        is ever cleared.
+        """
+        fingerprint = self._observe(project_id)
+        index_ref = self.store.store_artifact(
+            canonical_json(fingerprint.document()), media_type="application/json"
+        )
+        # The baseline is the newest `COMPLETE` snapshot, not merely the last
+        # one: a failed observation is neither a baseline nor a comparand
+        # (`RS-INV-1`). Comparing against one would report the whole workspace
+        # as having vanished and then reappeared.
+        previous = self.store.newest_complete_snapshot(project_id)
+        attributed = self._attributed_globs(project_id)
+        drift = None
+        drifted: tuple[str, ...] = ()
+        after = fingerprint.effective_index()
+        # Both ends must be real observations. Comparing a `FAILED` one to a
+        # `COMPLETE` one reports the whole workspace as having vanished, which
+        # would suspend the project for a transient disk fault.
+        comparable = (
+            previous is not None
+            and fingerprint.completeness is Completeness.COMPLETE
+        )
+        if comparable:
+            before = self._effective_index_of(previous)
+            drift = derive_drift(before, after, attributed=attributed)
+            drifted = unattributed_paths(before, after, attributed=attributed)
+
+        snapshot_id = f"snap-{uuid.uuid4().hex}"
         snapshot = RealitySnapshot(
             snapshot_id=snapshot_id,
             project_id=project_id,
             taken_at=now_ts(),
             taken_by=_runtime_actor("snapshot"),
-            trigger=SnapshotTrigger.ON_DEMAND,
-            completeness=Completeness.COMPLETE,
-            tree_digest=index_ref.digest,
+            trigger=trigger,
+            completeness=fingerprint.completeness,
+            tree_digest=fingerprint.tree_digest,
             file_index_ref=index_ref,
-            file_count=len(index),
-            byte_count=byte_count,
-            snapshot_hash=digest_json(
-                {"snapshot_id": snapshot_id, "tree_digest": index_ref.digest}
-            ),
-            vcs_state=vcs_state,
+            file_count=len(after),
+            byte_count=fingerprint.byte_count,
+            snapshot_hash=fingerprint.snapshot_hash,
+            scope=fingerprint.scope,
+            vcs_state=fingerprint.vcs_state(),
+            drift_vs=None if previous is None else previous.snapshot_id,
+            drift_summary=drift,
         )
         self._append(
             project_id,
@@ -415,15 +625,213 @@ class Controller:
             epistemic_class=EpistemicClass.EVIDENCE,
             subject={"snapshot_id": snapshot_id},
             payload={
+                "trigger": trigger.value,
+                "completeness": snapshot.completeness.value,
+                "snapshot_hash": snapshot.snapshot_hash,
                 "tree_digest": snapshot.tree_digest,
+                "dirty_digest": fingerprint.dirty_digest,
                 "file_count": snapshot.file_count,
                 "byte_count": snapshot.byte_count,
+                "untracked_excluded": fingerprint.untracked_count,
+                "drift_vs": snapshot.drift_vs,
+                "drift_summary": None
+                if drift is None
+                else {
+                    "added": drift.added,
+                    "removed": drift.removed,
+                    "modified": drift.modified,
+                    "unattributed": drift.unattributed,
+                },
             },
             capability_used="snapshot.take",
             component="snapshot",
         )
         self.store.put_snapshot(snapshot)
+        self.store.set_project_snapshot_current(project_id, snapshot_id)
+
+        if comparable:
+            self._stale_decisions_against(project_id, previous, snapshot)
+        if drifted:
+            self._on_reality_drift(project_id, snapshot, drifted)
         return snapshot_id
+
+    def _effective_index_of(self, snapshot: RealitySnapshot) -> dict:
+        """A stored snapshot's committed index overlaid with its dirty index."""
+        document = self.store.snapshot_document(snapshot)
+        return effective_index(
+            document.get("committed", {}), document.get("dirty", {})
+        )
+
+    def _on_reality_drift(
+        self, project_id: Id, snapshot: RealitySnapshot, paths: Sequence[str]
+    ) -> None:
+        """`REALITY_DRIFT`: the workspace moved outside runtime-mediated change.
+
+        Raised whether the change was committed or merely left dirty in the
+        working tree. A dirty tracked file outside the paths the runtime
+        declared it was changing is somebody else's edit, and treating it as
+        noise is exactly how a runtime ends up validating one tree and
+        committing another.
+        """
+        listed = ", ".join(paths[:10]) + (" …" if len(paths) > 10 else "")
+        escalation_id = self._raise_escalation(
+            project_id,
+            trigger=EscalationTrigger.REALITY_DRIFT,
+            severity=EscalationSeverity.HIGH,
+            summary=(
+                f"snapshot {snapshot.snapshot_id} found {len(paths)} unattributed "
+                f"change(s) in the workspace: {listed}"
+            ),
+            suspension=SuspensionState.SUSPENDED_BY_DRIFT,
+        )
+        self._set_suspension(
+            project_id,
+            SuspensionState.SUSPENDED_BY_DRIFT,
+            reason=f"unattributed drift in {snapshot.snapshot_id}",
+            suspension_ref=escalation_id,
+        )
+
+    def _stale_decisions_against(
+        self,
+        project_id: Id,
+        previous: RealitySnapshot,
+        snapshot: RealitySnapshot,
+    ) -> None:
+        """`HD-INV-4`: a superseded approval stops being authority.
+
+        A snapshot that found nothing changed supersedes nothing, so approvals
+        survive being looked at again. That is only true because the
+        fingerprint excludes untracked and ignored files; if it did not, every
+        tool run would invalidate every approval (`repository.py`).
+        """
+        before = self._effective_index_of(previous)
+        after = self._effective_index_of(snapshot)
+        for decision in self.store.list_decisions(project_id):
+            if decision.subject_snapshot_id == snapshot.snapshot_id:
+                continue
+            touched = drift_touches_scope(before, after, subject_scope(decision))
+            state = derive_decision_state(
+                decision,
+                now=now_ts(),
+                superseded_by_drift=touched,
+            )
+            if state is decision.decision_state:
+                continue
+            self._append(
+                project_id,
+                event_type="decision.state_derived",
+                epistemic_class=EpistemicClass.EVIDENCE,
+                subject={"decision_id": decision.decision_id},
+                payload={
+                    "from": decision.decision_state.value,
+                    "to": state.value,
+                    "subject_snapshot_id": decision.subject_snapshot_id,
+                    "superseded_by": snapshot.snapshot_id,
+                },
+                capability_used="audit.append",
+                component="decision",
+            )
+            decision.decision_state = state
+            self.store.put_decision(decision)
+
+    # -- human decisions (domain-model §9.A) --------------------------------
+
+    def record_decision(
+        self,
+        project_id: Id,
+        *,
+        decision_kind: DecisionKind,
+        subject_kind: DecisionSubjectKind,
+        subject_id: Id,
+        question: str,
+        chosen: str,
+        justification: str,
+        decided_by: ActorRef,
+        evidence_shown: Sequence[ArtifactRef],
+        options_offered: Sequence[str] = (),
+        scope: DecisionScope = DecisionScope.PROJECT,
+        expires_at: Optional[datetime] = None,
+    ) -> HumanDecision:
+        """Record a human's decision. `∅ → VALID` (transition-matrix §7.5-1).
+
+        Refused unless it is a human's: `HD-INV-1` — a runtime or a worker
+        cannot manufacture authority. Refused with empty `evidence_shown`:
+        `HD-INV-2` — an uninformed approval discharges nothing. A
+        snapshot-bound decision is bound here to the newest `COMPLETE`
+        snapshot, which is the reality the human was actually shown.
+        """
+        if decided_by.actor_kind is not ActorKind.HUMAN:
+            raise IntegrityViolation(
+                f"a HumanDecision must be decided by a HUMAN; got "
+                f"{decided_by.actor_kind.value} (HD-INV-1)"
+            )
+        if decided_by.auth_method in (AuthMethod.NONE, AuthMethod.DELEGATED):
+            raise IntegrityViolation(
+                "unauthenticated authority is indistinguishable from forged "
+                f"authority: auth_method={decided_by.auth_method.value}"
+            )
+        if not evidence_shown:
+            raise IntegrityViolation(
+                "an uninformed approval cannot discharge required_evidence "
+                "(HD-INV-2)"
+            )
+        bound = is_snapshot_bound(subject_kind, decision_kind)
+        subject_snapshot_id = None
+        if bound:
+            snapshot = self.store.newest_complete_snapshot(project_id)
+            if snapshot is None:
+                raise IntegrityViolation(
+                    "a snapshot-bound decision needs a COMPLETE snapshot to be "
+                    "bound to; none exists for this project"
+                )
+            subject_snapshot_id = snapshot.snapshot_id
+
+        decision_id = f"dec-{uuid.uuid4().hex}"
+        decided_at = now_ts()
+        preimage = {
+            "decision_id": decision_id,
+            "project_id": project_id,
+            "subject": {"kind": subject_kind.value, "id": subject_id},
+            "decision_kind": decision_kind.value,
+            "chosen": chosen,
+            "decided_at": decided_at.isoformat(),
+            "subject_snapshot_id": subject_snapshot_id,
+            "evidence_shown": [ref.digest for ref in evidence_shown],
+        }
+        decision = HumanDecision(
+            decision_id=decision_id,
+            project_id=project_id,
+            subject_kind=subject_kind,
+            subject_id=subject_id,
+            decision_kind=decision_kind,
+            question=question,
+            chosen=chosen,
+            justification=justification,
+            scope=scope,
+            decided_by=decided_by,
+            auth_method=decided_by.auth_method,
+            decided_at=decided_at,
+            nonce=uuid.uuid4().hex,
+            snapshot_bound=bound,
+            decision_state=DecisionState.VALID,
+            options_offered=tuple(options_offered),
+            evidence_shown=tuple(evidence_shown),
+            subject_snapshot_id=subject_snapshot_id,
+            expires_at=expires_at,
+            decision_hash=digest_json(preimage),
+            prev_event_hash=self.store.get_project(project_id).event_head,
+        )
+        self._append(
+            project_id,
+            event_type="decision.recorded",
+            epistemic_class=EpistemicClass.DECISION,
+            subject={"decision_id": decision_id},
+            payload=preimage,
+            capability_used="decision.record",
+            component="decision",
+        )
+        self.store.put_decision(decision)
+        return decision
 
     # -- invocations (worker_provider §6) ----------------------------------
 
@@ -436,6 +844,7 @@ class Controller:
         """
         self._assert_barrier_clear(run_id, "creating an invocation")
         run = self.store.get_run(run_id)
+        self._assert_not_suspended(run.project_id, "creating an invocation")
         project = self.store.get_project(run.project_id)
 
         invocation_id = f"inv-{uuid.uuid4().hex}"
@@ -633,18 +1042,30 @@ class Controller:
         message: str,
         preconditions: Optional[CommitPreconditions] = None,
     ) -> CommitIntent:
-        """`∅ → PROPOSED`, minting `operation_token` into the trailers."""
+        """`∅ → PROPOSED`, minting `operation_token` into the trailers.
+
+        The base is the head of the **governed line**, not of the user's
+        checkout: governed revisions accumulate in the dedicated worktree, and
+        predicting a tree against a base the runtime is not committing onto
+        would make every `expected_tree_digest` wrong after the first commit.
+        """
         run = self.store.get_run(run_id)
+        self._assert_not_suspended(run.project_id, "proposing a commit")
         project = self.store.get_project(run.project_id)
         if self.repo is None:
             raise IntegrityViolation("no repository adapter is configured")
 
+        # Refused before anything is stored: no capability, decision or mode
+        # makes repository metadata or an escaping path writable.
+        path = assert_unprotected(path)
+
+        governed = self.governed_repo(run.project_id)
         payload = content.encode("utf-8")
         after_ref = self.store.store_artifact(
             payload, media_type="application/octet-stream"
         )
-        base_revision_id = self.repo.head_revision()
-        base_index = self.repo.file_index(base_revision_id)
+        base_revision_id = governed.head_revision()
+        base_index = governed.file_index(base_revision_id)
         mutation = MutationProposal(
             op=MutationOp.MODIFY if path in base_index else MutationOp.CREATE,
             path=path,
@@ -658,7 +1079,7 @@ class Controller:
             stage_id=run.stage_id,
             vcs_kind=VcsKind.DVCS,
             base_revision_id=base_revision_id,
-            target_ref="HEAD",
+            target_ref=governed_branch(run.project_id),
             expected_tree_digest=expected_tree_digest(base_index, [mutation]),
             message=message,
             operation_token=token,
@@ -812,7 +1233,9 @@ class Controller:
         attribution: Attribution,
     ) -> CommitReceipt:
         diff_ref = self.store.store_artifact(diff, media_type="text/x-diff")
-        post_snapshot_id = self.take_snapshot(project_id)
+        post_snapshot_id = self.take_snapshot(
+            project_id, trigger=SnapshotTrigger.POST_COMMIT
+        )
         receipt = build_receipt(
             intent,
             revision_id=revision_id,
@@ -882,11 +1305,25 @@ class Controller:
     def apply_commit(self, intent_id: Id) -> CommitReceipt:
         """Apply the intent and mint the receipt with `attribution = DIRECT`.
 
-        Refuses with `BarrierViolation` while the run is unreconciled.
+        Four guards stand between an authorized intent and a landed revision,
+        in this order, because each one is cheaper and more conclusive than the
+        next:
+
+        1. `RUN-INV-3` — `BarrierViolation` while the run is unreconciled;
+        2. the axis-3 gate — `PolicyDenied` while the project is suspended;
+        3. protected paths — no grant makes repository metadata writable;
+        4. the base — the governed line must still be at `base_revision_id`,
+           or the diff that was reviewed is not the diff that would land
+           (transition-matrix §9.3).
+
+        Only then is the repository lease taken, and the mutation happens in
+        the governed worktree. The user's checkout is neither written to nor
+        moved.
         """
         intent = self.store.get_commit_intent(intent_id)
         project_id = self.store.intent_project(intent_id)
         self._assert_barrier_clear(intent.run_id, "applying a commit")
+        self._assert_not_suspended(project_id, "applying a commit")
         if intent.status is CommitIntentStatus.AUTHORIZED:
             self.mark_applying(intent_id)
             intent = self.store.get_commit_intent(intent_id)
@@ -895,17 +1332,41 @@ class Controller:
                 f"intent {intent_id} is {intent.status.value}, not applying"
             )
 
-        paths = []
+        governed = self.governed_repo(project_id)
         for mutation in intent.mutations:
-            self.repo.write_file(
-                mutation.path,
-                self.store.artifact_bytes(mutation.after_ref.digest).decode("utf-8"),
-            )
-            paths.append(mutation.path)
-
-        revision_id = self.repo.commit(
-            message=intent.message, trailers=intent.trailers, paths=paths
+            assert_unprotected(mutation.path)
+        verification = verify_head(
+            governed,
+            expected_revision=intent.base_revision_id,
+            expected_ref=intent.target_ref,
         )
+        if not verification.matches:
+            raise IntegrityViolation(
+                f"intent {intent_id} was authorized against "
+                f"{intent.base_revision_id} on {intent.target_ref!r}, but "
+                f"{verification.reason()}; the reviewed diff is not the diff "
+                "that would land (transition-matrix §9.3)"
+            )
+
+        with self.repository_lease(project_id):
+            # Held across the whole mutation: a second controller writing the
+            # governed line here would make `CM-INV-3`'s "one revision, or
+            # provably none" a statement about one process rather than about
+            # the repository.
+            gate(INSIDE_REPOSITORY_LEASE)
+            paths = []
+            for mutation in intent.mutations:
+                governed.write_file(
+                    mutation.path,
+                    self.store.artifact_bytes(
+                        mutation.after_ref.digest
+                    ).decode("utf-8"),
+                )
+                paths.append(mutation.path)
+
+            revision_id = governed.commit(
+                message=intent.message, trailers=intent.trailers, paths=paths
+            )
 
         # The revision exists and carries the token. Nothing below is written
         # yet: recovery finds it by that token and adopts it.
@@ -915,9 +1376,9 @@ class Controller:
             intent,
             project_id,
             revision_id=revision_id,
-            parent_revision_ids=self.repo.parents(revision_id),
-            actual_tree_digest=self.repo.tree_digest(revision_id),
-            diff=self.repo.diff(revision_id),
+            parent_revision_ids=governed.parents(revision_id),
+            actual_tree_digest=governed.tree_digest(revision_id),
+            diff=governed.diff(revision_id),
             attribution=Attribution.DIRECT,
         )
 
@@ -1127,12 +1588,20 @@ class Controller:
 
         Holds no capability that can execute: the provider is reached through
         a gate that exposes `lookup` and nothing else (`WP-16`).
+
+        The repository is scanned through the governed worktree when one
+        exists, because that is the line the intents were based on. It is
+        never *created* here: `recovery.reconcile` authorizes observation only,
+        and a worktree that does not exist proves no governed commit was ever
+        proposed against it.
         """
         return run_recovery(
             project_id,
             store=self.store,
             provider=self.recovery_provider(),
-            repo=self.repo,
+            repo=None
+            if self.repo is None
+            else self.governed_repo(project_id, create=False),
             settle=lambda record, resolution: self._settle(
                 project_id, record, resolution
             ),
@@ -1226,7 +1695,9 @@ class Controller:
                 revision_id=resolution.revision_id,
                 parent_revision_ids=resolution.parent_revision_ids,
                 actual_tree_digest=resolution.actual_tree_digest,
-                diff=self.repo.diff(resolution.revision_id),
+                diff=self.governed_repo(project_id, create=False).diff(
+                    resolution.revision_id
+                ),
                 attribution=Attribution.RECONCILED,
             )
             return Settlement(state=state)
@@ -1288,10 +1759,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--journal", required=True)
     parser.add_argument("--repo")
     parser.add_argument("--project", required=True)
+    parser.add_argument(
+        "--lease-ttl-ms",
+        type=int,
+        default=DEFAULT_TTL_MS,
+        help=(
+            "how long this controller's repository lease is honoured without "
+            "renewal; a crashed holder blocks the repository for this long"
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("start")
     subparsers.add_parser("recover")
+    subparsers.add_parser("snapshot")
 
     invoke_parser = subparsers.add_parser("invoke")
     invoke_parser.add_argument("--run", required=True)
@@ -1312,6 +1793,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             artifacts=ArtifactStore(Path(args.artifacts)),
             provider=FakeProvider(Path(args.journal)),
             repo=GitRepository(Path(args.repo)) if args.repo else None,
+            lease_ttl_ms=args.lease_ttl_ms,
         )
         project_id = args.project
         epoch = controller.start(project_id)
@@ -1319,6 +1801,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         if args.command == "start":
             pass
+        elif args.command == "snapshot":
+            snapshot_id = controller.take_snapshot(project_id)
+            snapshot = store.get_snapshot(snapshot_id)
+            result["snapshot_id"] = snapshot_id
+            result["snapshot_hash"] = snapshot.snapshot_hash
+            result["suspension"] = store.get_project(project_id).suspension.value
         elif args.command == "recover":
             outcome = controller.recover(project_id)
             result["reconciled"] = {
