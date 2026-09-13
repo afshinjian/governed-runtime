@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+
+usage() { printf '%s\n' 'Usage: bin/mutate <file> <unique-string>'; }
+if [[ $# -eq 0 || ( $# -eq 1 && ( $1 == -h || $1 == --help ) ) ]]; then usage; exit 0; fi
+if [[ $# -ne 2 ]]; then usage >&2; exit 2; fi
+# The required staged-change guard is the sole git command.
+if ! git diff --cached --quiet; then
+    printf '%s\n' 'Error: staged changes exist, or the index could not be checked.' >&2
+    exit 1
+fi
+
+export PYTHONDONTWRITEBYTECODE=1
+mkdir -p .evidence
+log=".evidence/$(date -u +%Y%m%dT%H%M%S.%NZ)-mutate.log"
+target=$1
+backup_dir=$(mktemp -d)
+backup="$backup_dir/original"
+# A fresh cache location prevents same-size, same-second mutations from using
+# existing bytecode; -B also keeps mutant bytecode out of the restored run.
+export PYTHONPYCACHEPREFIX="$backup_dir/pycache"
+backup_ready=0
+completed=0
+
+emit() { printf 'SUMMARY %s\n' "$*" >>"$log"; printf '%s\n' "$*"; }
+restore_file() {
+    if ! cp -p -- "$backup" "$target" >>"$log" 2>&1 || ! cmp -s -- "$backup" "$target"; then
+        emit "Mutation: RESTORE FAILED; backup retained at $backup" >&2
+        return 1
+    fi
+}
+cleanup() {
+    local status=$?
+    trap - EXIT
+    if [[ $backup_ready -eq 1 ]]; then
+        if ! restore_file; then exit 1; fi
+        if [[ $completed -eq 0 ]]; then
+            emit "Mutation: aborted (exit $status); original restored" >&2
+        fi
+    fi
+    rm -f -- "$backup"
+    rmdir -- "$backup_dir"
+    exit "$status"
+}
+# Install restoration before making any change, including on pytest failure.
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [[ ! -f "$target" ]]; then
+    emit "Mutation: ERROR; not a regular file: $target" >&2
+    exit 1
+fi
+if ! cp -p -- "$target" "$backup" >>"$log" 2>&1; then
+    cat -- "$log" >&2
+    exit 1
+fi
+backup_ready=1
+if ! ./.venv/bin/python -B - "$target" "$2" >>"$log" 2>&1 <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+needle = sys.argv[2].encode("utf-8")
+if not needle:
+    sys.exit("Error: unique-string must not be empty.")
+data = path.read_bytes()
+# Count overlapping matches too: 'aa' is not unique in 'aaa'.
+count = 0
+start = 0
+while (start := data.find(needle, start)) != -1:
+    count += 1
+    start += 1
+if count != 1:
+    sys.exit(f"Error: unique-string must occur exactly once; found {count} occurrences.")
+path.write_bytes(data.replace(needle, b"# mutation: removed", 1))
+PY
+then
+    cat -- "$log" >&2
+    exit 1
+fi
+
+run_suite() {
+    local label=$1 status=0 start
+    start=$(wc -c <"$log")
+    printf '\n=== %s ===\n' "$label" >>"$log"
+    ./.venv/bin/python -B -m pytest -q -ra --color=no -p no:cacheprovider >>"$log" 2>&1 || status=$?
+    ./.venv/bin/python -B - "$log" "$start" "$label" "$status" <<'PY' || return 3
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+with path.open("rb") as log:
+    log.seek(int(sys.argv[2]))
+    output = log.read().decode("utf-8", errors="replace")
+label, status = sys.argv[3:5]
+summaries = [line.strip("= ") for line in output.splitlines()
+             if re.search(r"\b(?:\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected|warnings?)|no tests ran)\b.*\bin \d", line)]
+lines = [f"{label}: {summaries[-1] if summaries else f'pytest exited {status}; see {path}'}"]
+if label == "Mutant":
+    lines += [f"Red: {line}" for line in output.splitlines()
+              if line.startswith(("FAILED ", "ERROR "))]
+with path.open("a", encoding="utf-8") as log:
+    for line in lines:
+        print(line, flush=True)
+        log.write(f"SUMMARY {line}\n")
+PY
+    return "$status"
+}
+
+mutant_status=0
+run_suite Mutant || mutant_status=$?
+restore_file
+restored_status=0
+run_suite Restored || restored_status=$?
+
+if [[ $restored_status -ne 0 ]]; then
+    emit "Mutation: ERROR; restored suite is not green (pytest exit $restored_status)" >&2
+    exit 1
+fi
+completed=1
+if [[ $mutant_status -eq 0 ]]; then
+    emit 'Mutation: SURVIVED; no tests went red' >&2
+    exit 1
+fi
+# Collection errors, interrupts, and pytest usage/internal errors are not kills.
+if [[ $mutant_status -ne 1 ]] || ! grep -q '^SUMMARY Red: ' "$log"; then
+    emit "Mutation: ERROR; no test failure confirmed (pytest exit $mutant_status)" >&2
+    exit 1
+fi
+emit 'Mutation: KILLED; restored suite is green'

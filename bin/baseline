@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+
+usage() { printf '%s\n' 'Usage: bin/baseline [-h|--help]'; }
+if [[ $# -eq 1 && ( $1 == -h || $1 == --help ) ]]; then usage; exit 0; fi
+if [[ $# -ne 0 ]]; then usage >&2; exit 2; fi
+# The required staged-change guard is the sole git command.
+if ! git diff --cached --quiet; then
+    printf '%s\n' 'Error: staged changes exist, or the index could not be checked.' >&2
+    exit 1
+fi
+
+export PYTHONDONTWRITEBYTECODE=1
+mkdir -p .evidence
+log=".evidence/$(date -u +%Y%m%dT%H%M%S.%NZ)-baseline.log"
+./.venv/bin/python -B - "$log" <<'PY'
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+path = Path(sys.argv[1])
+command = ["./.venv/bin/python", "-B", "-m", "pytest", "-q", "-ra",
+           "--color=no", "-p", "no:cacheprovider"]
+
+with path.open("w+", encoding="utf-8") as log:
+    def emit(line):
+        print(line, flush=True)
+        log.write(f"SUMMARY {line}\n")
+        log.flush()
+
+    def run(label, extra):
+        log.write(f"\n=== {label} ===\n")
+        log.flush()
+        start = log.tell()
+        result = subprocess.run(command + extra, stdout=log, stderr=subprocess.STDOUT)
+        log.seek(start)
+        output = log.read()
+        log.seek(0, 2)
+        return result.returncode, output
+
+    status, output = run("Collection", ["--collect-only"])
+    counts = re.findall(r"\b(\d+) tests? collected\b", output)
+    emit(f"Collected: {counts[-1] if counts else '0' if status == 5 else 'unknown'} tests")
+    if status:
+        emit(f"Baseline: collection failed (pytest exit {status}); see {path}")
+        sys.exit(status if status > 0 else 1)
+
+    status, output = run("Suite", [])
+    summaries = [line.strip("= ") for line in output.splitlines()
+                 if re.search(r"\b(?:\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected|warnings?)|no tests ran)\b.*\bin \d", line)]
+    emit(f"Baseline: {summaries[-1] if summaries else f'pytest exited {status}; see {path}'}")
+    sys.exit(status if status >= 0 else 1)
+PY

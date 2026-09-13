@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+
+usage() { printf '%s\n' 'Usage: bin/phase <GR-NN> <description>'; }
+if [[ $# -eq 0 || ( $# -eq 1 && ( $1 == -h || $1 == --help ) ) ]]; then usage; exit 0; fi
+if [[ $# -ne 2 ]]; then usage >&2; exit 2; fi
+# The required staged-change guard is the sole git command.
+if ! git diff --cached --quiet; then
+    printf '%s\n' 'Error: staged changes exist, or the index could not be checked.' >&2
+    exit 1
+fi
+
+./.venv/bin/python -B - "$1" "$2" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+phase, description = sys.argv[1:]
+if not re.fullmatch(r"GR-\d+", phase) or not description.strip() or any(c in description for c in "\r\n"):
+    sys.exit("Error: provide a GR-NN phase and a nonempty, single-line description.")
+path = Path("CLAUDE.md")
+data = path.read_bytes()
+pattern = rb"(?m)^Phase:[^\r\n]*"
+count = len(re.findall(pattern, data))
+if count != 1:
+    sys.exit(f"Error: CLAUDE.md must contain exactly one Phase line; found {count}.")
+replacement = f"Phase: {phase} ({description}).".encode("utf-8")
+path.write_bytes(re.sub(pattern, lambda match: replacement, data))
+PY

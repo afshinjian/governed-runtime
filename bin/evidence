@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+
+usage() { printf '%s\n' 'Usage: bin/evidence [-h|--help]'; }
+if [[ $# -eq 1 && ( $1 == -h || $1 == --help ) ]]; then usage; exit 0; fi
+if [[ $# -ne 0 ]]; then usage >&2; exit 2; fi
+# The required staged-change guard is the sole git command.
+if ! git diff --cached --quiet; then
+    printf '%s\n' 'Error: staged changes exist, or the index could not be checked.' >&2
+    exit 1
+fi
+
+./.venv/bin/python -B - <<'PY'
+from pathlib import Path
+import sys
+
+logs = [path for path in Path(".evidence").glob("*.log") if path.is_file()]
+if not logs:
+    sys.exit("Error: no runs found in .evidence/.")
+latest = max(logs, key=lambda path: (path.stat().st_mtime_ns, path.name))
+lines = [line.removeprefix("SUMMARY ") for line in latest.read_text(encoding="utf-8", errors="replace").splitlines()
+         if line.startswith("SUMMARY ")]
+if not lines:
+    sys.exit(f"Error: no summary lines found in {latest}.")
+print("\n".join(lines))
+PY
