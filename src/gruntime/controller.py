@@ -95,6 +95,14 @@ from .models import (
     is_terminal_status,
 )
 from .models import Review as ReviewRecord
+from .policy import (
+    PolicyOutcome,
+    TransitionContext,
+    TransitionProposal,
+    TransitionResolution,
+    resolve,
+)
+from .transitions import normalize_state
 from .provider import (
     DISPATCH_CAPABILITIES,
     RECOVERY_CAPABILITIES,
@@ -1023,6 +1031,90 @@ class Controller:
         )
         self.store.put_attestation(attestation, run.project_id)
         return attestation
+
+    # -- transitions (transition-matrix §1, §9) -----------------------------
+
+    def evaluate_transition(
+        self,
+        project_id: Id,
+        proposal: TransitionProposal,
+        context: TransitionContext,
+    ) -> TransitionResolution:
+        """Resolve a proposal, audit the answer, and escalate a refusal.
+
+        The controller is the only thing that may decide (`G-3`): a worker
+        hands over a `TransitionProposal` and learns the outcome, never the
+        other way round. Every resolution is appended as an `AuditEvent` of
+        class `AUTHORITY`, including the permitting ones, so "what allowed
+        this?" and "what refused this?" are answered from the same chain
+        (authority-matrix §6).
+
+        An `ESCALATE` outcome also raises the `Escalation` §9 requires: those
+        attempts are never a retry. The escalation applies no suspension —
+        nothing happened, so there is nothing to quiesce; the record exists so
+        a human sees the attempt.
+
+        Deciding is all this does. Writing the new state onto the entity is the
+        caller's, on an `AUTO_ALLOW` and not otherwise.
+        """
+        resolution = resolve(proposal, context)
+        self._append(
+            project_id,
+            event_type="transition.resolved",
+            epistemic_class=EpistemicClass.AUTHORITY,
+            subject={
+                "axis": proposal.axis.value,
+                "subject_id": proposal.subject_id,
+            },
+            payload={
+                "axis": proposal.axis.value,
+                "from_state": normalize_state(proposal.from_state),
+                "to_state": normalize_state(proposal.to_state),
+                "operation": (
+                    proposal.operation.value if proposal.operation else None
+                ),
+                "proposed_by": proposal.proposed_by.actor_kind.value,
+                "governance_mode": context.governance_mode.value,
+                "suspension": context.suspension.value,
+                "outcome": resolution.outcome.value,
+                "reason": resolution.reason.value,
+                "row": resolution.row,
+                "detail": resolution.detail,
+                "required_decision": (
+                    resolution.required_decision.value
+                    if resolution.required_decision
+                    else None
+                ),
+                "notify": resolution.notify,
+                "unmet_preconditions": [
+                    predicate.value for predicate in resolution.unmet_preconditions
+                ],
+                "missing_evidence": list(resolution.missing_evidence),
+            },
+            capability_used=(
+                resolution.rule.required_capability if resolution.rule else None
+            ),
+        )
+        if resolution.outcome is not PolicyOutcome.ESCALATE:
+            return resolution
+
+        escalation_id = self._raise_escalation(
+            project_id,
+            trigger=(
+                resolution.escalation_trigger
+                or EscalationTrigger.POLICY_CONFLICT
+            ),
+            severity=EscalationSeverity.HIGH,
+            summary=(
+                f"refused {proposal.axis.value} "
+                f"{proposal.from_state} → {proposal.to_state} "
+                f"({resolution.reason.value}): {resolution.detail}"
+            ),
+            # Nothing happened, so there is nothing to quiesce. The record is
+            # the notice, not a state change.
+            suspension=SuspensionState.NONE,
+        )
+        return resolution.with_escalation(escalation_id)
 
     # -- recovery (worker_provider §6.1) -----------------------------------
 

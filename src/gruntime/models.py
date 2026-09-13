@@ -82,6 +82,25 @@ class ProjectLifecycle(str, Enum):
     ABANDONED = "ABANDONED"
 
 
+class StageLifecycle(str, Enum):
+    """domain-model §10.2 — axis 2.
+
+    Orthogonal to :class:`ProjectLifecycle` (`O-1`) and never encoding a
+    suspension (`O-2`): a suspended stage keeps the value it resumes into.
+    """
+
+    PENDING = "PENDING"
+    READY = "READY"
+    CONTRACTED = "CONTRACTED"
+    RUNNING = "RUNNING"
+    AWAITING_VALIDATION = "AWAITING_VALIDATION"
+    AWAITING_REVIEW = "AWAITING_REVIEW"
+    AWAITING_DECISION = "AWAITING_DECISION"
+    SATISFIED = "SATISFIED"
+    REJECTED = "REJECTED"
+    ABANDONED = "ABANDONED"
+
+
 class SuspensionState(str, Enum):
     """domain-model §10.3 — axis 3, orthogonal to lifecycle."""
 
@@ -147,6 +166,80 @@ class CommitIntentStatus(str, Enum):
     APPLIED = "APPLIED"
     FAILED = "FAILED"
     ROLLED_BACK = "ROLLED_BACK"
+
+
+class ContractStatus(str, Enum):
+    """`StageContract.status`, transitioned in transition-matrix §6.
+
+    Outside the `contract_hash` preimage, so every transition here preserves
+    the hash pinned into `StageRun.contract_hash` (`C-INV-2`, `XC-12`).
+    """
+
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    FULFILLED = "FULFILLED"
+    SUPERSEDED = "SUPERSEDED"
+    REVOKED = "REVOKED"
+    EXPIRED = "EXPIRED"
+
+
+class ValidationStatus(str, Enum):
+    """`ValidationOperation.status`, transitioned in transition-matrix §7.1."""
+
+    REQUESTED = "REQUESTED"
+    AUTHORIZED = "AUTHORIZED"
+    DENIED = "DENIED"
+    EXECUTING = "EXECUTING"
+    COMPLETED = "COMPLETED"
+    TIMED_OUT = "TIMED_OUT"
+    EXEC_FAILED = "EXEC_FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class FindingStatus(str, Enum):
+    """`Finding.status`, transitioned in transition-matrix §7.3."""
+
+    OPEN = "OPEN"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    FIXED = "FIXED"
+    WAIVED = "WAIVED"
+    DISPUTED = "DISPUTED"
+    INVALID = "INVALID"
+
+
+class DecisionKind(str, Enum):
+    """`HumanDecision.decision_kind` (domain-model §9.A).
+
+    The `K` of `DECIDE(K)` in the transition matrix's policy vocabulary (§1.1).
+    """
+
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    WAIVE = "WAIVE"
+    OVERRIDE = "OVERRIDE"
+    GRANT_CAPABILITY = "GRANT_CAPABILITY"
+    REVOKE_CAPABILITY = "REVOKE_CAPABILITY"
+    SET_MODE = "SET_MODE"
+    SUSPEND = "SUSPEND"
+    RESUME = "RESUME"
+    ABANDON = "ABANDON"
+    EXTEND_BUDGET = "EXTEND_BUDGET"
+    ACCEPT_RISK = "ACCEPT_RISK"
+
+
+class DecisionState(str, Enum):
+    """`HumanDecision.decision_state` — derived, transition-matrix §7.5.
+
+    Only `VALID` is authority. `STALE`, `EXPIRED`, `CONSUMED` and `VOID` are
+    retained as true records of an earlier choice and discharge nothing
+    (`HD-INV-3`, `HD-INV-4`).
+    """
+
+    VALID = "VALID"
+    CONSUMED = "CONSUMED"
+    STALE = "STALE"
+    EXPIRED = "EXPIRED"
+    VOID = "VOID"
 
 
 class ReconciliationState(str, Enum):
