@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from typing import Mapping, Optional, Sequence
 
 from .canonical import canonical_json, digest_bytes
+from .errors import IntegrityViolation
+from .repository import assert_unprotected
 from .models import (
     ActorKind,
     ActorRef,
@@ -117,7 +119,7 @@ def apply_to_index(
         elif mutation.op is MutationOp.RENAME:
             digest = index.pop(mutation.path, None)
             if mutation.rename_to is not None and digest is not None:
-                index[mutation.rename_to] = digest
+                index[mutation.rename_to] = (mutation.after_ref.digest if mutation.after_ref else digest)
         elif mutation.after_ref is not None:
             index[mutation.path] = mutation.after_ref.digest
     return index
@@ -137,72 +139,142 @@ def expected_tree_digest(
     return digest_bytes(canonical_json(apply_to_index(base_index, mutations)))
 
 
-def verify_application(
-    intent: CommitIntent, actual_tree_digest: Hash
-) -> Verification:
-    """`MATCHED` iff `actual_tree_digest == intent.expected_tree_digest`.
+def exact_paths(intent: CommitIntent) -> tuple[str, ...]:
+    """All source and destination paths, with no pathspec or scope expansion."""
+    paths = []
+    for mutation in intent.mutations:
+        if not mutation.in_scope:  # guard:commit_scope
+            raise IntegrityViolation("commit mutation is outside contract scope")
+        assert_unprotected(mutation.path)  # guard:commit_source_protected
+        paths.append(mutation.path)
+        if mutation.rename_to is not None:
+            assert_unprotected(mutation.rename_to)  # guard:commit_rename_protected
+            paths.append(mutation.rename_to)
+    if not paths or len(set(paths)) != len(paths):  # guard:commit_paths_unique
+        raise IntegrityViolation("commit paths must be nonempty and unique")
+    return tuple(sorted(paths))
 
-    `DIVERGED` raises `Escalation(INTEGRITY_VIOLATION)` and suspends the run
-    at the caller (`CM-INV-1`); the receipt still records what landed.
-    """
-    if actual_tree_digest == intent.expected_tree_digest:
-        return Verification.MATCHED
-    return Verification.DIVERGED
+
+def commit_message(intent: CommitIntent) -> bytes:
+    """Canonical UTF-8 message; body hash includes the evidence/token trailers."""
+    if (not intent.message.strip() or "\0" in intent.message  # guard:commit_message_shape
+            or "\r" in intent.message or len(intent.message) > 8192
+            or not intent.message.split("\n", 1)[0].strip()):
+        raise IntegrityViolation("invalid commit message")
+    if (not TOKEN_MIN_LEN <= len(intent.operation_token) <= TOKEN_MAX_LEN  # guard:commit_token_carried
+            or intent.trailers.get(OPERATION_TOKEN_TRAILER) != intent.operation_token
+            or any(not key or any(c in key for c in ":\n\r\0")
+                   or any(c in value for c in "\n\r\0")
+                   for key, value in intent.trailers.items())):
+        raise IntegrityViolation("invalid commit trailers or missing operation token")
+    return (intent.message.rstrip("\n") + "\n\n" + "\n".join(
+        f"{key}: {value}" for key, value in sorted(intent.trailers.items())
+    ) + "\n").encode("utf-8")
+
+
+def message_fields(message: bytes) -> tuple[str, Hash]:
+    subject, _, body = message.partition(b"\n")
+    return subject.decode("utf-8"), digest_bytes(body)
+
+
+def expected_entries(intent: CommitIntent, base: Mapping[str, tuple[str, Hash]]):
+    """Predict content AND modes, retaining every untouched entry."""
+    exact_paths(intent)
+    entries = dict(base)
+    for mutation in intent.mutations:
+        old = base.get(mutation.path)
+        if ((mutation.op is MutationOp.CREATE and old is not None)
+                or (mutation.op is not MutationOp.CREATE and old is None)
+                or mutation.before_digest != (old[1] if old else None)):
+            raise IntegrityViolation("mutation preimage differs from the base")  # guard:commit_preimage
+        if ((mutation.op in (MutationOp.CREATE, MutationOp.MODIFY) and mutation.after_ref is None)
+                or (mutation.op is MutationOp.DELETE and mutation.after_ref is not None)
+                or (mutation.op is MutationOp.RENAME and
+                    (not mutation.rename_to or mutation.rename_to in base))
+                or (mutation.op is not MutationOp.RENAME and mutation.rename_to is not None)
+                or (mutation.op is MutationOp.CHMOD and mutation.mode not in (0o644, 0o755))):
+            raise IntegrityViolation("invalid mutation shape")  # guard:commit_mutation_shape
+        if mutation.op in (MutationOp.DELETE, MutationOp.RENAME):
+            entries.pop(mutation.path)
+        if mutation.op is not MutationOp.DELETE:
+            path = mutation.rename_to if mutation.op is MutationOp.RENAME else mutation.path
+            mode = ("100755" if mutation.mode == 0o755 else "100644") if mutation.op is MutationOp.CHMOD else (old[0] if old else "100644")
+            entries[path] = (mode, mutation.after_ref.digest if mutation.after_ref else old[1])
+    return entries
+
+
+def verify_application(intent: CommitIntent, actual_tree_digest: Hash) -> Verification:
+    return (Verification.MATCHED if actual_tree_digest == intent.expected_tree_digest
+            else Verification.DIVERGED)
+
+
+def verification_errors(intent: CommitIntent, observation: Mapping) -> tuple[str, ...]:
+    """Used for precommit checks, direct receipts and reconciled receipts."""
+    subject, body_hash = message_fields(commit_message(intent))
+    expected = {
+        "parent_revision_ids": (intent.base_revision_id,),
+        "actual_tree_digest": intent.expected_tree_digest,
+        "subject": subject,
+        "body_hash": body_hash,
+        "committed_paths": exact_paths(intent),
+        "operation_tokens": (intent.operation_token,),
+        "matching_revisions": (observation["revision_id"],),
+        "entries": expected_entries(intent, observation["base_entries"]),
+    }
+    errors = []
+    for key, value in expected.items():
+        matches = observation.get(key) == value
+        if not matches:  # guard:commit_observation_matches
+            errors.append(key)
+    return tuple(errors)
+
+
+def verify_receipt(intent: CommitIntent, receipt: CommitReceipt, observation: Mapping) -> Verification:
+    errors = list(verification_errors(intent, observation))
+    recorded = {
+        "revision_id": receipt.revision_id,
+        "parent_revision_ids": tuple(receipt.parent_revision_ids),
+        "actual_tree_digest": receipt.actual_tree_digest,
+        "tree_id": receipt.tree_id,
+        "subject": receipt.subject,
+        "body_hash": receipt.body_hash,
+        "committed_paths": tuple(receipt.committed_paths),
+        "files_changed": tuple(receipt.files_changed),
+        "operation_tokens": (receipt.operation_token,),
+    }
+    if receipt.intent_id != intent.intent_id or any(  # guard:commit_receipt_matches
+        observation.get(key) != value for key, value in recorded.items()
+    ):
+        errors.append("receipt")
+    return Verification.DIVERGED if errors else Verification.MATCHED
 
 
 def build_receipt(
-    intent: CommitIntent,
-    *,
-    revision_id: str,
-    parent_revision_ids: Sequence[str],
-    actual_tree_digest: Hash,
-    diff_ref: ArtifactRef,
-    post_snapshot_id: Id,
-    attribution,
-    prev_event_hash: Hash,
-    rollback_handle: Optional[str] = None,
+    intent: CommitIntent, *, observation: Mapping, diff_ref: ArtifactRef,
+    post_snapshot_id: Id, attribution, prev_event_hash: Hash,
 ) -> CommitReceipt:
-    """Build the `CommitReceipt` for an application or an adoption.
-
-    `attribution = RECONCILED` when minted under `recovery.reconcile` for a
-    revision found by `operation_token` after a restart (§8.4). The receipt
-    carries the token either way, so the revision it describes stays matchable
-    to the intent that authorized it.
-    """
+    """Record the observed revision, including all fields in its hash."""
     applied_at = datetime.now(timezone.utc)
-    applied_by = ActorRef(
-        actor_kind=ActorKind.RUNTIME,
-        actor_id="gruntime.commit",
-        auth_method=AuthMethod.NONE,
+    preimage = dict(observation, intent_id=intent.intent_id,
+                    diff_digest=diff_ref.digest, applied_at=applied_at.isoformat(),
+                    attribution=attribution.value, post_snapshot_id=post_snapshot_id,
+                    prev_event_hash=prev_event_hash)
+    receipt = CommitReceipt(
+        receipt_id=f"cr-{uuid.uuid4().hex}", intent_id=intent.intent_id,
+        revision_id=observation["revision_id"],
+        parent_revision_ids=observation["parent_revision_ids"],
+        actual_tree_digest=observation["actual_tree_digest"],
+        tree_id=observation["tree_id"], subject=observation["subject"],
+        body_hash=observation["body_hash"],
+        committed_paths=observation["committed_paths"],
+        files_changed=observation["files_changed"],
+        verification=Verification.DIVERGED, diff_ref=diff_ref, applied_at=applied_at,
+        applied_by=ActorRef(actor_kind=ActorKind.RUNTIME,
+                            actor_id="gruntime.commit", auth_method=AuthMethod.NONE),
+        attribution=attribution, operation_token=intent.operation_token,
+        post_snapshot_id=post_snapshot_id, receipt_hash="", prev_event_hash=prev_event_hash,
     )
-    verification = verify_application(intent, actual_tree_digest)
-    preimage = {
-        "intent_id": intent.intent_id,
-        "revision_id": revision_id,
-        "parent_revision_ids": list(parent_revision_ids),
-        "actual_tree_digest": actual_tree_digest,
-        "expected_tree_digest": intent.expected_tree_digest,
-        "verification": verification.value,
-        "diff_digest": diff_ref.digest,
-        "applied_at": applied_at.isoformat(),
-        "attribution": getattr(attribution, "value", attribution),
-        "operation_token": intent.operation_token,
-        "post_snapshot_id": post_snapshot_id,
-    }
-    return CommitReceipt(
-        receipt_id=f"cr-{uuid.uuid4().hex}",
-        intent_id=intent.intent_id,
-        revision_id=revision_id,
-        actual_tree_digest=actual_tree_digest,
-        verification=verification,
-        diff_ref=diff_ref,
-        applied_at=applied_at,
-        applied_by=applied_by,
-        attribution=attribution,
-        operation_token=intent.operation_token,
-        post_snapshot_id=post_snapshot_id,
-        receipt_hash=digest_bytes(canonical_json(preimage)),
-        prev_event_hash=prev_event_hash,
-        parent_revision_ids=tuple(parent_revision_ids),
-        rollback_handle=rollback_handle,
-    )
+    receipt.verification = verify_receipt(intent, receipt, observation)
+    preimage["verification"] = receipt.verification.value
+    receipt.receipt_hash = digest_bytes(canonical_json(preimage))
+    return receipt

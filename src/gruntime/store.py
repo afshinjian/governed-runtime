@@ -109,8 +109,8 @@ SCHEMA_VERSION = "0.1.0"
 #: Physical layout version, kept in `PRAGMA user_version` — the place SQLite
 #: provides for exactly this, and separate from `SCHEMA_VERSION` because the
 #: two answer different questions: which domain model this database speaks,
-#: and which columns it actually has. GR-03 is version 2.
-STORAGE_VERSION = 2
+#: and which columns it actually has. GR-10 is version 3.
+STORAGE_VERSION = 3
 
 #: Columns this build reads that a pre-`STORAGE_VERSION` database lacks.
 #: Checked structurally as well as by version, because `user_version` defaults
@@ -118,6 +118,7 @@ STORAGE_VERSION = 2
 #: columns are what make it true, and a structural check cannot drift out of
 #: step with the schema above.
 REQUIRED_COLUMNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("commit_receipts", ("tree_id", "subject", "body_hash", "committed_paths", "files_changed")),
     ("projects", ("suspension_ref",)),
     ("snapshots", ("scope", "drift_vs", "drift_summary")),
 )
@@ -272,6 +273,11 @@ SCHEMA: tuple[str, ...] = (
         post_snapshot_id TEXT NOT NULL,
         receipt_hash TEXT NOT NULL,
         prev_event_hash TEXT NOT NULL,
+        tree_id TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body_hash TEXT NOT NULL,
+        committed_paths TEXT NOT NULL,
+        files_changed TEXT NOT NULL,
         parent_revision_ids TEXT NOT NULL,
         rollback_handle TEXT,
         ordinal INTEGER NOT NULL
@@ -649,7 +655,8 @@ class StateStore:
         """
         payload_ref = self.artifacts.put(payload, media_type="application/json")
         connection = self.connection
-        connection.execute("BEGIN IMMEDIATE")
+        nested = connection.in_transaction
+        connection.execute("SAVEPOINT audit_append" if nested else "BEGIN IMMEDIATE")
         try:
             row = connection.execute(
                 "SELECT event_head, event_seq FROM projects WHERE project_id=?",
@@ -716,9 +723,11 @@ class StateStore:
                     " WHERE project_id=?",
                     (event_hash, seq, recorded_at.isoformat(), project_id),
                 )
-            connection.execute("COMMIT")
+            connection.execute("RELEASE audit_append" if nested else "COMMIT")
         except BaseException:
-            connection.execute("ROLLBACK")
+            connection.execute("ROLLBACK TO audit_append" if nested else "ROLLBACK")
+            if nested:
+                connection.execute("RELEASE audit_append")
             raise
 
         return AuditEvent(
@@ -966,7 +975,8 @@ class StateStore:
         reported, not merely written.
         """
         connection = self.connection
-        connection.execute("BEGIN IMMEDIATE")
+        nested = connection.in_transaction
+        connection.execute("SAVEPOINT audit_append" if nested else "BEGIN IMMEDIATE")
         try:
             row = connection.execute(
                 "SELECT controller_epoch FROM projects WHERE project_id=?",
@@ -979,9 +989,11 @@ class StateStore:
                 "UPDATE projects SET controller_epoch=?, updated_at=? WHERE project_id=?",
                 (epoch, now_ts().isoformat(), project_id),
             )
-            connection.execute("COMMIT")
+            connection.execute("RELEASE audit_append" if nested else "COMMIT")
         except BaseException:
-            connection.execute("ROLLBACK")
+            connection.execute("ROLLBACK TO audit_append" if nested else "ROLLBACK")
+            if nested:
+                connection.execute("RELEASE audit_append")
             raise
         return epoch
 
@@ -1360,8 +1372,8 @@ class StateStore:
             " revision_id, actual_tree_digest, verification, diff_digest,"
             " diff_media_type, diff_byte_len, applied_at, applied_by, attribution,"
             " operation_token, post_snapshot_id, receipt_hash, prev_event_hash,"
-            " parent_revision_ids, rollback_handle, ordinal)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+            " parent_revision_ids, rollback_handle, tree_id, subject, body_hash, committed_paths, files_changed, ordinal)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
             " (SELECT COUNT(*) FROM commit_receipts))",
             (
                 receipt.receipt_id,
@@ -1382,6 +1394,11 @@ class StateStore:
                 receipt.prev_event_hash,
                 canonical_json(list(receipt.parent_revision_ids)).decode("utf-8"),
                 receipt.rollback_handle,
+                receipt.tree_id,
+                receipt.subject,
+                receipt.body_hash,
+                canonical_json(list(receipt.committed_paths)).decode(),
+                canonical_json(list(receipt.files_changed)).decode(),
             ),
         )
 
@@ -1406,6 +1423,11 @@ class StateStore:
             prev_event_hash=row["prev_event_hash"],
             parent_revision_ids=tuple(json.loads(row["parent_revision_ids"])),
             rollback_handle=row["rollback_handle"],
+            tree_id=row["tree_id"],
+            subject=row["subject"],
+            body_hash=row["body_hash"],
+            committed_paths=tuple(json.loads(row["committed_paths"])),
+            files_changed=tuple(json.loads(row["files_changed"])),
         )
 
     def list_commit_receipts(self, intent_id: Id) -> list[CommitReceipt]:

@@ -1,0 +1,696 @@
+{
+  "tests_passed": 518,
+  "original_tests_passed": 415,
+  "guards_killed": 43,
+  "design_baseline": "b953459622101bef31988c466bfd878afd279a37",
+  "guards": [
+    {
+      "guard": "commit_ambiguity_suspends",
+      "file": "src/gruntime/controller.py",
+      "line": 1791,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-7/20260913T201749.525231982Z-mutate.log"
+      ],
+      "group": 7,
+      "current_line": 1793,
+      "guard_sha256": "390afb5f514c4467fe5d0200c6f0a231c7aa8db66aba944796ef69883827e5a2",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 37.16s",
+        "Restored: 513 passed in 37.13s"
+      ]
+    },
+    {
+      "guard": "commit_apply_base",
+      "file": "src/gruntime/controller.py",
+      "line": 1405,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-4/20260913T201749.178271597Z-mutate.log"
+      ],
+      "group": 4,
+      "current_line": 1397,
+      "guard_sha256": "c7ce9ae2f12655c4a65f26e69a12722e46d44003870a6e8f41980ebcdd461be3",
+      "summaries": [
+        "Mutant: 2 failed, 511 passed in 37.41s",
+        "Restored: 513 passed in 37.10s"
+      ]
+    },
+    {
+      "guard": "commit_authorize_base",
+      "file": "src/gruntime/controller.py",
+      "line": 1199,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-10/20260913T202005.602424234Z-mutate.log"
+      ],
+      "group": 10,
+      "current_line": 1199,
+      "guard_sha256": "aed55dcd9c43d06a17c23dd2f4b1c5ae64335cfcbfe1e0cdcf5cc4d2ae20a5b1",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 35.95s",
+        "Restored: 515 passed in 36.34s"
+      ]
+    },
+    {
+      "guard": "commit_authorize_status",
+      "file": "src/gruntime/controller.py",
+      "line": 1194,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-4/20260913T201635.399829602Z-mutate.log"
+      ],
+      "group": 4,
+      "current_line": 1194,
+      "guard_sha256": "d110a7e35e7a98fbd90ad0d84917b046b783c55e2b47e3e8dc928039a0a760bc",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.53s",
+        "Restored: 513 passed in 35.99s"
+      ]
+    },
+    {
+      "guard": "commit_divergence_suspends",
+      "file": "src/gruntime/controller.py",
+      "line": 1348,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-2/20260913T201748.937810875Z-mutate.log"
+      ],
+      "group": 2,
+      "current_line": 1348,
+      "guard_sha256": "d37dac3bd43f45636757881cab54a24ce3818fdb04033afacf6f8483643d2ada",
+      "summaries": [
+        "Mutant: 3 failed, 510 passed in 37.11s",
+        "Restored: 513 passed in 37.28s"
+      ]
+    },
+    {
+      "guard": "commit_mark_barrier",
+      "file": "src/gruntime/controller.py",
+      "line": 1253,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-6/20260913T201635.544483320Z-mutate.log"
+      ],
+      "group": 6,
+      "current_line": 1253,
+      "guard_sha256": "0c1ab07d6ce1b7c518e6cb0d6b07c1572ac8bb3fd23bda7f0d531419553afdfd",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.56s",
+        "Restored: 513 passed in 36.26s"
+      ]
+    },
+    {
+      "guard": "commit_mark_completeness",
+      "file": "src/gruntime/controller.py",
+      "line": 1254,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-7/20260913T201635.723105637Z-mutate.log"
+      ],
+      "group": 7,
+      "current_line": 1254,
+      "guard_sha256": "ff87b74151c27ae55b5d52846db1f7602c66ef1eb6daab4db0260252ed8e9ae3",
+      "summaries": [
+        "Mutant: 3 failed, 510 passed in 35.50s",
+        "Restored: 513 passed in 36.21s"
+      ]
+    },
+    {
+      "guard": "commit_mark_status",
+      "file": "src/gruntime/controller.py",
+      "line": 1255,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-8/20260913T202120.912203659Z-mutate.log"
+      ],
+      "group": 8,
+      "current_line": 1255,
+      "guard_sha256": "902752f049902b2626a1e940f2ebf0652ae134fbb881a70ae4c9db21f15d830c",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.10s",
+        "Restored: 515 passed in 36.06s"
+      ]
+    },
+    {
+      "guard": "commit_message_shape",
+      "file": "src/gruntime/commit.py",
+      "line": 158,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-4/20260913T201253.076235058Z-mutate.log"
+      ],
+      "group": 4,
+      "current_line": 160,
+      "guard_sha256": "62d7c313c0719dde7c3bf113c061dfc9b797408bb6759bcd4e7b615736111ca2",
+      "summaries": [
+        "Mutant: 5 failed, 508 passed in 35.95s",
+        "Restored: 513 passed in 36.03s"
+      ]
+    },
+    {
+      "guard": "commit_mutation_shape",
+      "file": "src/gruntime/commit.py",
+      "line": 188,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-7/20260913T201253.078307192Z-mutate.log"
+      ],
+      "group": 7,
+      "current_line": 190,
+      "guard_sha256": "f31b9ab3e0b6f5b1b33863511e78d6083d90f68fab81a2c1530f3c8c3ec118f2",
+      "summaries": [
+        "Mutant: 2 failed, 511 passed in 36.09s",
+        "Restored: 513 passed in 36.38s"
+      ]
+    },
+    {
+      "guard": "commit_no_reapply",
+      "file": "src/gruntime/controller.py",
+      "line": 1384,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-12/20260913T201848.030405734Z-mutate.log"
+      ],
+      "group": 12,
+      "current_line": 1384,
+      "guard_sha256": "2237a0c82a2f531aa43d4411b030a983f4f23fee7d4a1b719d701c3cdef7c6ee",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.93s",
+        "Restored: 515 passed in 36.11s"
+      ]
+    },
+    {
+      "guard": "commit_observation_matches",
+      "file": "src/gruntime/commit.py",
+      "line": 227,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-10/20260913T201733.043164247Z-mutate.log"
+      ],
+      "group": 10,
+      "current_line": 227,
+      "guard_sha256": "2092c8c95df8721b578b0dc7909656398b8eac2e16f0ba4e6a8e9c6523f59f76",
+      "summaries": [
+        "Mutant: 12 failed, 503 passed in 37.51s",
+        "Restored: 515 passed in 37.71s"
+      ]
+    },
+    {
+      "guard": "commit_paths_unique",
+      "file": "src/gruntime/commit.py",
+      "line": 151,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-3/20260913T201253.077530545Z-mutate.log"
+      ],
+      "group": 3,
+      "current_line": 153,
+      "guard_sha256": "b2fe800fe58f8df71b79a5fecf9b82a51fa99570df16749beda9282e36fc1cc1",
+      "summaries": [
+        "Mutant: 2 failed, 511 passed in 35.85s",
+        "Restored: 513 passed in 35.98s"
+      ]
+    },
+    {
+      "guard": "commit_preimage",
+      "file": "src/gruntime/commit.py",
+      "line": 184,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-6/20260913T201253.078888183Z-mutate.log"
+      ],
+      "group": 6,
+      "current_line": 186,
+      "guard_sha256": "bca884d426fb2963db53b806bc88300bdaa1dbb1f69a67c7f07131a5bb4b5abc",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.98s",
+        "Restored: 513 passed in 36.07s"
+      ]
+    },
+    {
+      "guard": "commit_proposal_message",
+      "file": "src/gruntime/controller.py",
+      "line": 1131,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-8/20260913T202005.934182048Z-mutate.log"
+      ],
+      "group": 8,
+      "current_line": 1131,
+      "guard_sha256": "2e49f4849791d5eb42b3b1a24324841bb956dff55be6e5f28959f63c5639fe99",
+      "summaries": [
+        "Mutant: 5 failed, 510 passed in 36.27s",
+        "Restored: 515 passed in 36.70s"
+      ]
+    },
+    {
+      "guard": "commit_publish_denied",
+      "file": "src/gruntime/controller.py",
+      "line": 1431,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-6/20260913T201749.509402686Z-mutate.log"
+      ],
+      "group": 6,
+      "current_line": 1433,
+      "guard_sha256": "da0de3350463383c01e5707786f6c85b8f965381d35389158a2dcfbb927214e9",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 37.15s",
+        "Restored: 513 passed in 37.18s"
+      ]
+    },
+    {
+      "guard": "commit_receipt_matches",
+      "file": "src/gruntime/commit.py",
+      "line": 242,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-1/20260913T201400.009473581Z-mutate.log"
+      ],
+      "group": 1,
+      "current_line": 245,
+      "guard_sha256": "a52bc6787f67b051ba540c3c0fa98dd1e42d6404bfe36388fa0374a723053c5a",
+      "summaries": [
+        "Mutant: 10 failed, 503 passed in 37.59s",
+        "Restored: 513 passed in 37.44s"
+      ]
+    },
+    {
+      "guard": "commit_receipt_required",
+      "file": "src/gruntime/controller.py",
+      "line": 1415,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-11/20260913T202005.000779271Z-mutate.log"
+      ],
+      "group": 11,
+      "current_line": 1415,
+      "guard_sha256": "bf71e9b38b037094307f241ffd3ed8ce408cdfa44e04a02d4eb888b47e96f7d8",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.49s",
+        "Restored: 515 passed in 36.52s"
+      ]
+    },
+    {
+      "guard": "commit_rename_protected",
+      "file": "src/gruntime/commit.py",
+      "line": 151,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-9/20260913T201733.047680779Z-mutate.log"
+      ],
+      "group": 9,
+      "current_line": 151,
+      "guard_sha256": "9c0fab4083b625babb728c725aa1933cc578f6540122af13e20e72ea56a92a9d",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 37.45s",
+        "Restored: 515 passed in 37.74s"
+      ]
+    },
+    {
+      "guard": "commit_reverification_suspends",
+      "file": "src/gruntime/controller.py",
+      "line": 1420,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-9/20260913T202120.560337073Z-mutate.log"
+      ],
+      "group": 9,
+      "current_line": 1420,
+      "guard_sha256": "5796b429a6b06a2987a56319f86f5fe51dc27e9b8fce65494c77e2f8c4a754ad",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.07s",
+        "Restored: 515 passed in 35.63s"
+      ]
+    },
+    {
+      "guard": "commit_scope",
+      "file": "src/gruntime/commit.py",
+      "line": 146,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-0/20260913T201253.073732023Z-mutate.log"
+      ],
+      "group": 0,
+      "current_line": 146,
+      "guard_sha256": "69cd3d3f0b763422f8e2169d4a8e2a2e41826b8d6940345937fe5be192bd5d45",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.87s",
+        "Restored: 513 passed in 35.94s"
+      ]
+    },
+    {
+      "guard": "commit_single_receipt",
+      "file": "src/gruntime/controller.py",
+      "line": 1292,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-9/20260913T202005.738203666Z-mutate.log"
+      ],
+      "group": 9,
+      "current_line": 1292,
+      "guard_sha256": "67fc5a296b7df7e896626caa6ef2ea5cb12af4505fe55e0d112607975bed704f",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.17s",
+        "Restored: 515 passed in 36.57s"
+      ]
+    },
+    {
+      "guard": "commit_source_protected",
+      "file": "src/gruntime/commit.py",
+      "line": 148,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-8/20260913T201733.043173850Z-mutate.log"
+      ],
+      "group": 8,
+      "current_line": 148,
+      "guard_sha256": "7101ae7f26952a756b08199e336f38b10f14fd12e0e421c9f9cd4e8b6e3e6d3e",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 37.64s",
+        "Restored: 515 passed in 37.88s"
+      ]
+    },
+    {
+      "guard": "commit_token_carried",
+      "file": "src/gruntime/commit.py",
+      "line": 162,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-5/20260913T201253.078512317Z-mutate.log"
+      ],
+      "group": 5,
+      "current_line": 164,
+      "guard_sha256": "33388a5f58797939446745218fb3cfae853d8222c27d6b826d6817e54bd04e5b",
+      "summaries": [
+        "Mutant: 4 failed, 509 passed in 35.94s",
+        "Restored: 513 passed in 36.33s"
+      ]
+    },
+    {
+      "guard": "git_add_paths",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 48,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-4/20260913T201407.288080605Z-mutate.log"
+      ],
+      "group": 4,
+      "current_line": 48,
+      "guard_sha256": "2faf3ba359ceae70b443a0fd64c272fdf1c1f51941ca429778e6746cf38aadc4",
+      "summaries": [
+        "Mutant: 9 failed, 504 passed in 36.19s",
+        "Restored: 513 passed in 36.28s"
+      ]
+    },
+    {
+      "guard": "git_blanket_staging",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 46,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-3/20260913T201407.055979585Z-mutate.log"
+      ],
+      "group": 3,
+      "current_line": 46,
+      "guard_sha256": "3939b1bae2d225fb9fe7c0002f102dd2d9d584c726ee1ea84d3df508e98d458a",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 36.06s",
+        "Restored: 513 passed in 36.27s"
+      ]
+    },
+    {
+      "guard": "git_command_capability",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 43,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-2/20260913T201406.897250606Z-mutate.log"
+      ],
+      "group": 2,
+      "current_line": 43,
+      "guard_sha256": "8b894d2fe4f80d6db629f9b7a33fdde15b8800a52f1ae3cdd089aca419518db0",
+      "summaries": [
+        "Mutant: 2 failed, 511 passed in 35.97s",
+        "Restored: 513 passed in 36.22s"
+      ]
+    },
+    {
+      "guard": "git_commit_private_index",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 299,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-2/20260913T201635.316347408Z-mutate.log"
+      ],
+      "group": 2,
+      "current_line": 303,
+      "guard_sha256": "f171ab3d8e9dc74a79d82ab3b038c3e5fd27e77a95819f83b1fd8928588a12ce",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.60s",
+        "Restored: 513 passed in 35.83s"
+      ]
+    },
+    {
+      "guard": "git_disable_hooks",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 55,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-6/20260913T201407.276099040Z-mutate.log"
+      ],
+      "group": 6,
+      "current_line": 55,
+      "guard_sha256": "5a526f014e5af6ec3a4b80db591f0d2749362db7f6a286304960b0c838c75dea",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 36.03s",
+        "Restored: 513 passed in 36.05s"
+      ]
+    },
+    {
+      "guard": "git_disable_signing",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 56,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-13/20260913T202105.090215734Z-mutate.log"
+      ],
+      "group": 13,
+      "current_line": 56,
+      "guard_sha256": "c5db3fd89e37aaec780fd9288c023599f7840b1e25c061cffad6b5a699db29ab",
+      "summaries": [
+        "Mutant: 1 failed, 517 passed in 36.88s",
+        "Restored: 518 passed in 36.53s"
+      ]
+    },
+    {
+      "guard": "git_environment",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 59,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-7/20260913T201407.731138097Z-mutate.log"
+      ],
+      "group": 7,
+      "current_line": 60,
+      "guard_sha256": "c6025ad361960f2147bea1940d72d460c0d6124399f7bb3bb00038800de45bdd",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.58s",
+        "Restored: 513 passed in 36.37s"
+      ]
+    },
+    {
+      "guard": "git_expected_parent_branch",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 299,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-13/20260913T202220.784301908Z-mutate.log"
+      ],
+      "group": 13,
+      "current_line": 299,
+      "guard_sha256": "b6c01271473053346d58c4f6461a21d744eb21ae4784f62e6d81c3e21b9e5a2d",
+      "summaries": [
+        "Mutant: 4 failed, 514 passed in 37.46s",
+        "Restored: 518 passed in 36.81s"
+      ]
+    },
+    {
+      "guard": "git_literal_paths",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 67,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-1/20260913T201517.368198993Z-mutate.log"
+      ],
+      "group": 1,
+      "current_line": 68,
+      "guard_sha256": "4e38b397328766a22d925c0b2b69e1301d1fb2b1a6614d09147c15deb0338e39",
+      "summaries": [
+        "Mutant: 4 failed, 509 passed in 36.13s",
+        "Restored: 513 passed in 36.47s"
+      ]
+    },
+    {
+      "guard": "git_literal_pathspec_mode",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 54,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-11/20260913T201733.052236199Z-mutate.log"
+      ],
+      "group": 11,
+      "current_line": 54,
+      "guard_sha256": "c3cbe275f91881ec0dade1b07b693e633af8fbeb1854f2f96aaebe8ecae3736b",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 37.53s",
+        "Restored: 515 passed in 37.63s"
+      ]
+    },
+    {
+      "guard": "git_message_verbatim",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 302,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-13/20260913T202337.129738483Z-mutate.log"
+      ],
+      "group": 13,
+      "current_line": 302,
+      "guard_sha256": "eefb032e64ea252a06d22c2beea45510b465b80558e914bd095e57aeff398018",
+      "summaries": [
+        "Mutant: 1 failed, 517 passed in 36.83s",
+        "Restored: 518 passed in 36.89s"
+      ]
+    },
+    {
+      "guard": "git_mutation_boundary",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 238,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-9/20260913T201850.815069473Z-mutate.log"
+      ],
+      "group": 9,
+      "current_line": 239,
+      "guard_sha256": "69981a3ab034051569413e89a6f9459df26ef2806aa68bb156c85ef03d395051",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.61s",
+        "Restored: 515 passed in 35.92s"
+      ]
+    },
+    {
+      "guard": "git_nonempty_paths",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 63,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-10/20260913T201850.810572049Z-mutate.log"
+      ],
+      "group": 10,
+      "current_line": 64,
+      "guard_sha256": "cb21f15e334930d7853b75318a165c313acbc7b999c8a0eeb33d27165603e048",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.51s",
+        "Restored: 515 passed in 35.90s"
+      ]
+    },
+    {
+      "guard": "git_path_boundary",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 70,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-2/20260913T201521.475036294Z-mutate.log"
+      ],
+      "group": 2,
+      "current_line": 71,
+      "guard_sha256": "639aaabaed7296263f6c27dbcd85a22d6e51ec18f25e040f97bd3c3f91afd896",
+      "summaries": [
+        "Mutant: 3 failed, 510 passed in 35.89s",
+        "Restored: 513 passed in 35.60s"
+      ]
+    },
+    {
+      "guard": "git_publish_denied",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 80,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-8/20260913T201851.169651793Z-mutate.log"
+      ],
+      "group": 8,
+      "current_line": 81,
+      "guard_sha256": "5e3d6f1e4778dcd3400b4771227eb42b60fa3aab51954965479a4806a1fd9b53",
+      "summaries": [
+        "Mutant: 1 failed, 514 passed in 36.48s",
+        "Restored: 515 passed in 35.93s"
+      ]
+    },
+    {
+      "guard": "git_staged_paths",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 278,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-7/20260913T201521.909937510Z-mutate.log"
+      ],
+      "group": 7,
+      "current_line": 280,
+      "guard_sha256": "489ca8697b6a5de1fb2e3e28c1a33afd69f4d318364335ff669af1ba8b534890",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.71s",
+        "Restored: 513 passed in 35.76s"
+      ]
+    },
+    {
+      "guard": "git_staged_tree",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 276,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-6/20260913T201521.605138081Z-mutate.log"
+      ],
+      "group": 6,
+      "current_line": 278,
+      "guard_sha256": "93f266399a5d7f9d52c698f60b9ebb04ef73e23b47d2d2a989901f23f8afc165",
+      "summaries": [
+        "Mutant: 2 failed, 511 passed in 35.98s",
+        "Restored: 513 passed in 35.57s"
+      ]
+    },
+    {
+      "guard": "git_verify_before_commit",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 291,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-11/20260913T201850.790427504Z-mutate.log"
+      ],
+      "group": 11,
+      "current_line": 292,
+      "guard_sha256": "6855c778fdbd897074c46f1ca2f781a3e747e058faa6e95778e27d3a56df0e1e",
+      "summaries": [
+        "Mutant: 6 failed, 509 passed in 35.91s",
+        "Restored: 515 passed in 35.88s"
+      ]
+    },
+    {
+      "guard": "git_write_boundary",
+      "file": "src/gruntime/adapters/git_repo.py",
+      "line": 230,
+      "passed": true,
+      "logs": [
+        ".evidence/gr10/group-4/20260913T201521.983328791Z-mutate.log"
+      ],
+      "group": 4,
+      "current_line": 232,
+      "guard_sha256": "0ef22e07b6a6ec941c5cb0c426c4b7a6d1e042820bb31f14df77447088a15683",
+      "summaries": [
+        "Mutant: 1 failed, 512 passed in 35.69s",
+        "Restored: 513 passed in 35.52s"
+      ]
+    }
+  ]
+}

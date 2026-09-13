@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Run bin/mutate once per GR-10 guard, sequentially; retain its full evidence.
+
+Select a complete statement for block guards so mutations remain importable.
+Keyword arguments on their own line can be removed without replacing defaults.
+No mutants run concurrently against this shared checkout.
+"""
+import ast
+import argparse
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+FILES = ('commit.py', 'adapters/git_repo.py', 'controller.py')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--only', nargs='+', help='check only these guard names (default: all)')
+args = parser.parse_args()
+selected = None if args.only is None else set(args.only)
+results = []
+for filename in FILES:
+    path = ROOT / 'src' / 'gruntime' / filename
+    source = path.read_text()
+    lines = source.splitlines(keepends=True)
+    tree = ast.parse(source)
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    for number, line in enumerate(lines, 1):
+        match = re.search(r'# guard:([a-z_]+)', line)
+        if not match:
+            continue
+        name = match.group(1)
+        if not name.startswith(('commit_', 'git_')):
+            continue
+        if selected is not None and name not in selected:
+            continue
+        start, end = number, number
+        nodes = [node for node in ast.walk(tree) if isinstance(node, ast.stmt) and node.lineno == number]
+        if nodes:
+            node = min(nodes, key=lambda node: node.end_lineno - node.lineno)
+            parent = parents.get(node)
+            if isinstance(parent, ast.If) and parent.body == [node] and not parent.orelse:
+                node = parent
+            start, end = node.lineno, node.end_lineno
+        needle = ''.join(lines[start - 1:end]).rstrip('\n')
+        print(f'Checking {name} ({path.relative_to(ROOT)}:{start})', flush=True)
+        before = set((ROOT / '.evidence').glob('*-mutate.log')) if (ROOT / '.evidence').exists() else set()
+        result = subprocess.run([str(ROOT / 'bin' / 'mutate'), str(path.relative_to(ROOT)), needle], cwd=ROOT)
+        logs = set((ROOT / '.evidence').glob('*-mutate.log')) - before
+        results.append({'guard': name, 'file': str(path.relative_to(ROOT)), 'line': start, 'passed': result.returncode == 0, 'logs': [str(p.relative_to(ROOT)) for p in sorted(logs)]})
+        (ROOT / '.evidence' / 'gr10-mutations.json').write_text(json.dumps(results, indent=2) + '\n')
+        if result.returncode != 0:
+            print(f'Stopped at {name}; inspect .evidence before continuing.', flush=True)
+            sys.exit(result.returncode)
+print(f'All {len(results)} guards killed; every restored suite passed.', flush=True)

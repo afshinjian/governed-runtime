@@ -715,6 +715,10 @@ class CommitReceipt:
     parent_revision_ids: Sequence[str] = ()
     files_changed: Sequence[Mapping[str, object]] = ()
     rollback_handle: Optional[str] = None
+    tree_id: str = ""
+    subject: str = ""
+    body_hash: Hash = ""
+    committed_paths: Sequence[PathStr] = ()
 
 
 # --- evidence-producing entities (domain-model §7) -------------------------

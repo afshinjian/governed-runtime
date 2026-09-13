@@ -52,6 +52,9 @@ from .commit import (
     PROPOSE_CAPABILITY,
     build_receipt,
     build_trailers,
+    commit_message,
+    exact_paths,
+    verify_receipt,
     evaluate_preconditions,
     expected_tree_digest,
     mint_operation_token,
@@ -65,6 +68,7 @@ from .decision import (
 from .errors import BarrierViolation, IntegrityViolation, PolicyDenied
 from .gate import (
     AFTER_COMMIT_BEFORE_RECEIPT,
+    AFTER_COMMIT_RECEIPT_INSERT,
     AFTER_INVOKE_BEFORE_RECEIPT,
     INSIDE_REPOSITORY_LEASE,
     gate,
@@ -1098,6 +1102,7 @@ class Controller(ValidationController):
             op=MutationOp.MODIFY if path in base_index else MutationOp.CREATE,
             path=path,
             after_ref=after_ref,
+            before_digest=base_index.get(path),
             in_scope=True,
         )
         token = mint_operation_token()
@@ -1123,6 +1128,7 @@ class Controller(ValidationController):
             mutations=(mutation,),
             trailers=build_trailers(token),
         )
+        commit_message(intent)  # guard:commit_proposal_message
         # `CM-INV-2`: the token is durable before anything touches the
         # repository, so a revision that lands is always matchable back here.
         self._append(
@@ -1185,6 +1191,13 @@ class Controller(ValidationController):
         """
         intent = self.store.get_commit_intent(intent_id)
         project_id = self.store.intent_project(intent_id)
+        if intent.status is not CommitIntentStatus.PROPOSED:  # guard:commit_authorize_status
+            raise IntegrityViolation("only a proposed intent can be authorized")
+        governed = self.governed_repo(project_id)
+        head = verify_head(governed, expected_revision=intent.base_revision_id,
+                           expected_ref=intent.target_ref)
+        if not head.matches:  # guard:commit_authorize_base
+            raise IntegrityViolation(head.reason())
         met = evaluate_preconditions(
             intent.preconditions or CommitPreconditions(),
             resolve_attestation=self.store.resolve_review_evidence,
@@ -1237,6 +1250,10 @@ class Controller(ValidationController):
         intent (`CM-INV-2`).
         """
         intent = self.store.get_commit_intent(intent_id)
+        self._assert_barrier_clear(intent.run_id, "marking a commit applying")  # guard:commit_mark_barrier
+        self._assert_may_initiate_effect(self.store.intent_project(intent_id), "marking a commit applying")  # guard:commit_mark_completeness
+        if intent.status is not CommitIntentStatus.AUTHORIZED:  # guard:commit_mark_status
+            raise IntegrityViolation("only an authorized intent may start applying")
         self._transition_intent(
             intent,
             self.store.intent_project(intent_id),
@@ -1249,7 +1266,18 @@ class Controller(ValidationController):
             capability_used=APPLY_CAPABILITY,
         )
 
-    def _settle_commit_receipt(
+    def _settle_commit_receipt(self, intent, project_id, **kwargs):
+        connection = self.store.connection
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            receipt = self._record_commit_receipt(intent, project_id, **kwargs)
+            connection.execute("COMMIT")
+            return receipt
+        except BaseException:
+            connection.execute("ROLLBACK")
+            raise
+
+    def _record_commit_receipt(
         self,
         intent: CommitIntent,
         project_id: Id,
@@ -1260,18 +1288,17 @@ class Controller(ValidationController):
         diff: bytes,
         attribution: Attribution,
     ) -> CommitReceipt:
+        existing = self.store.list_commit_receipts(intent.intent_id)
+        if existing:  # guard:commit_single_receipt
+            return existing[0]
         diff_ref = self.store.store_artifact(diff, media_type="text/x-diff")
         post_snapshot_id = self.take_snapshot(
             project_id, trigger=SnapshotTrigger.POST_COMMIT
         )
+        observation = self.governed_repo(project_id, create=False).observe_commit(revision_id, intent=intent)
         receipt = build_receipt(
-            intent,
-            revision_id=revision_id,
-            parent_revision_ids=parent_revision_ids,
-            actual_tree_digest=actual_tree_digest,
-            diff_ref=diff_ref,
-            post_snapshot_id=post_snapshot_id,
-            attribution=attribution,
+            intent, observation=observation, diff_ref=diff_ref,
+            post_snapshot_id=post_snapshot_id, attribution=attribution,
             prev_event_hash=self.store.get_project(project_id).event_head,
         )
         capability = (
@@ -1293,11 +1320,13 @@ class Controller(ValidationController):
                 "verification": receipt.verification.value,
                 "actual_tree_digest": actual_tree_digest,
                 "attribution": attribution.value,
+                "receipt_hash": receipt.receipt_hash,
             },
             capability_used=capability,
             component="commit",
         )
         self.store.put_commit_receipt(receipt, project_id)
+        gate(AFTER_COMMIT_RECEIPT_INSERT)
 
         intent.receipt_id = receipt.receipt_id
         if receipt.verification is Verification.MATCHED:
@@ -1306,16 +1335,17 @@ class Controller(ValidationController):
             status = CommitIntentStatus.FAILED
             # `CM-INV-1`: a divergent tree is an established outcome and a
             # failure; it escalates rather than being quietly retried.
-            self._raise_escalation(
+            escalation_id = self._raise_escalation(
                 project_id,
                 trigger=EscalationTrigger.INTEGRITY_VIOLATION,
                 severity=EscalationSeverity.CRITICAL,
                 summary=(
                     f"commit {revision_id} for intent {intent.intent_id} landed a "
-                    "tree that differs from the authorized one"
+                    "revision that differs from the authorized intent"
                 ),
                 run_id=intent.run_id,
             )
+            self._suspend_commit_integrity(project_id, intent, escalation_id)  # guard:commit_divergence_suspends
         self._transition_intent(
             intent,
             project_id,
@@ -1330,85 +1360,77 @@ class Controller(ValidationController):
         )
         return receipt
 
+    def _suspend_commit_integrity(self, project_id, intent, escalation_id):
+        run = self.store.get_run(intent.run_id)
+        run.suspension = SuspensionState.SUSPENDED_BY_INTEGRITY
+        self.store.put_run(run)
+        self._set_suspension(project_id, SuspensionState.SUSPENDED_BY_INTEGRITY,
+                             reason="commit integrity failure", suspension_ref=escalation_id)
+
     def apply_commit(self, intent_id: Id) -> CommitReceipt:
         """Apply the intent and mint the receipt with `attribution = DIRECT`.
 
-        Four guards stand between an authorized intent and a landed revision,
-        in this order, because each one is cheaper and more conclusive than the
-        next:
-
-        1. `RUN-INV-3` — `BarrierViolation` while the run is unreconciled;
-        2. the axis-3 gate — `PolicyDenied` while the project is suspended;
-        3. protected paths — no grant makes repository metadata writable;
-        4. the base — the governed line must still be at `base_revision_id`,
-           or the diff that was reviewed is not the diff that would land
-           (transition-matrix §9.3).
-
-        Only then is the repository lease taken, and the mutation happens in
-        the governed worktree. The user's checkout is neither written to nor
-        moved.
+        The reconciliation and completeness gates precede all effects. Under
+        the repository lease, persist APPLYING, verify the base, apply only the
+        intent's paths and stage them literally. The adapter verifies the full
+        staged tree and exact diff, pins that index, rechecks parent and branch,
+        and commits. Receipt, snapshot and settlement then persist atomically.
+        An interrupted APPLYING intent is observed by recovery, never retried.
         """
         intent = self.store.get_commit_intent(intent_id)
         project_id = self.store.intent_project(intent_id)
         self._assert_barrier_clear(intent.run_id, "applying a commit")
         self._assert_may_initiate_effect(project_id, "applying a commit")
-        if intent.status is CommitIntentStatus.AUTHORIZED:
-            self.mark_applying(intent_id)
-            intent = self.store.get_commit_intent(intent_id)
-        if intent.status is not CommitIntentStatus.APPLYING:
-            raise IntegrityViolation(
-                f"intent {intent_id} is {intent.status.value}, not applying"
-            )
-
+        if intent.status is not CommitIntentStatus.AUTHORIZED:  # guard:commit_no_reapply
+            raise IntegrityViolation("commit requires AUTHORIZED; reconcile any prior application")
         governed = self.governed_repo(project_id)
-        for mutation in intent.mutations:
-            assert_unprotected(mutation.path)
-        verification = verify_head(
-            governed,
-            expected_revision=intent.base_revision_id,
-            expected_ref=intent.target_ref,
-        )
-        if not verification.matches:
-            raise IntegrityViolation(
-                f"intent {intent_id} was authorized against "
-                f"{intent.base_revision_id} on {intent.target_ref!r}, but "
-                f"{verification.reason()}; the reviewed diff is not the diff "
-                "that would land (transition-matrix §9.3)"
-            )
-
+        exact_paths(intent)
+        commit_message(intent)
         with self.repository_lease(project_id):
-            # Held across the whole mutation: a second controller writing the
-            # governed line here would make `CM-INV-3`'s "one revision, or
-            # provably none" a statement about one process rather than about
-            # the repository.
             gate(INSIDE_REPOSITORY_LEASE)
-            paths = []
-            for mutation in intent.mutations:
-                governed.write_file(
-                    mutation.path,
-                    self.store.artifact_bytes(
-                        mutation.after_ref.digest
-                    ).decode("utf-8"),
-                )
-                paths.append(mutation.path)
+            # Re-read state under the write lease, including the barrier and
+            # observation gate. Persist APPLYING before any mutation.
+            intent = self.store.get_commit_intent(intent_id)
+            self.mark_applying(intent_id)
+            head = verify_head(governed, expected_revision=intent.base_revision_id,
+                               expected_ref=intent.target_ref)
+            if not head.matches:  # guard:commit_apply_base
+                raise IntegrityViolation(f"{intent.base_revision_id}: {head.reason()}")
+            paths = governed.apply_mutations(intent, self.store.artifact_bytes)
+            governed.stage(paths)
+            revision_id = governed.commit(intent=intent)
 
-            revision_id = governed.commit(
-                message=intent.message, trailers=intent.trailers, paths=paths
-            )
-
-        # The revision exists and carries the token. Nothing below is written
-        # yet: recovery finds it by that token and adopts it.
         gate(AFTER_COMMIT_BEFORE_RECEIPT)
-
         return self._settle_commit_receipt(
-            intent,
-            project_id,
-            revision_id=revision_id,
+            intent, project_id, revision_id=revision_id,
             parent_revision_ids=governed.parents(revision_id),
             actual_tree_digest=governed.tree_digest(revision_id),
-            diff=governed.diff(revision_id),
-            attribution=Attribution.DIRECT,
+            diff=governed.diff(revision_id), attribution=Attribution.DIRECT,
         )
+
+    def verify_commit(self, intent_id: Id) -> Verification:
+        """Re-observe the recorded revision and compare every receipt field."""
+        intent = self.store.get_commit_intent(intent_id)
+        receipts = self.store.list_commit_receipts(intent_id)
+        if len(receipts) != 1:  # guard:commit_receipt_required
+            raise IntegrityViolation("commit verification requires exactly one receipt")
+        receipt = receipts[0]
+        repo = self.governed_repo(self.store.intent_project(intent_id), create=False)
+        verification = verify_receipt(intent, receipt, repo.observe_commit(receipt.revision_id, intent=intent))
+        if verification is Verification.DIVERGED:  # guard:commit_reverification_suspends
+            project_id = self.store.intent_project(intent_id)
+            escalation_id = self._raise_escalation(
+                project_id, trigger=EscalationTrigger.INTEGRITY_VIOLATION,
+                severity=EscalationSeverity.CRITICAL,
+                summary=f"commit receipt {receipt.receipt_id} failed verification",
+                run_id=intent.run_id,
+            )
+            self._suspend_commit_integrity(project_id, intent, escalation_id)
+        return verification
+
+    def publish_commit(self, intent_id: Id) -> None:
+        """Publication is a separate, denied capability in this runtime."""
+        raise PolicyDenied("commit.publish is DENIED")  # guard:commit_publish_denied
 
     # -- reviews and attestations ------------------------------------------
 
@@ -1768,6 +1790,7 @@ class Controller(ValidationController):
             ),
             run_id=intent.run_id,
         )
+        self._suspend_commit_integrity(project_id, intent, escalation_id)  # guard:commit_ambiguity_suspends
         self.store.put_commit_intent(intent, project_id)
         return Settlement(state=state, escalation_id=escalation_id)
 
