@@ -1,0 +1,36 @@
+[
+  {
+    "guard": "escalation_suspension_applied",
+    "file": "src/gruntime/controller.py",
+    "removed": "self._apply_escalation_suspension(escalation)  # guard:escalation_suspension_applied",
+    "source_sha256": "426d33c4f1aa6083e75c70352b316faf2c43b943b9cb2aa550de2248da1ed362",
+    "guard_sha256": "98ae965e2ed58f413c9e54a4451aabb86ad9cf13eb010509693ab8ffa226cbfd",
+    "killed": true,
+    "restored": true,
+    "summaries": [
+      "Mutant: 56 failed, 880 passed in 59.94s",
+      "Restored: 936 passed in 61.31s (0:01:01)",
+      "Mutation: KILLED; restored suite is green"
+    ],
+    "logs": [
+      ".evidence/20260913T220517.582812316Z-mutate.log"
+    ]
+  },
+  {
+    "guard": "suspension_ref_iff",
+    "file": "src/gruntime/store.py",
+    "removed": "        if ((suspension is SuspensionState.NONE and suspension_ref is not None)\n                or (suspension is not SuspensionState.NONE and not suspension_ref)):\n            raise IntegrityViolation(\"suspension_ref is required iff suspension != NONE\")  # guard:suspension_ref_iff",
+    "source_sha256": "4321fe772c4857599aee1dc3c98541a41b7814ab89bdc889356ed2d440382680",
+    "guard_sha256": "1964f0705d51e3f17eb7b711d9f2c2e9dc3ae96f8987976eb90d997b3ce36a33",
+    "killed": true,
+    "restored": true,
+    "summaries": [
+      "Mutant: 81 failed, 855 passed in 61.38s (0:01:01)",
+      "Restored: 936 passed in 61.13s (0:01:01)",
+      "Mutation: KILLED; restored suite is green"
+    ],
+    "logs": [
+      ".evidence/20260913T220721.052245259Z-mutate.log"
+    ]
+  }
+]

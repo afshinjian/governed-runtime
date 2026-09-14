@@ -15,7 +15,7 @@ from gruntime.contracts import SCHEMA_BYTES, StageContract, contract_hash, new_i
 from gruntime.controller import Controller
 from gruntime.errors import CapabilityDenied, IntegrityViolation, PolicyDenied, ProtectedPathViolation
 from gruntime.models import (ActorKind, ActorRef, AuthMethod, Budget, BudgetUsage, DecisionKind,
-    DecisionScope, DecisionState, DecisionSubjectKind, GovernanceMode, MutationOp)
+    DecisionScope, DecisionState, DecisionSubjectKind, GovernanceMode, MutationOp, SuspensionState)
 from gruntime.scope import authorize_path, canonical_path, canonical_pattern, matches
 from gruntime.store import now_ts
 from gr03_support import git, project_with_repo
@@ -212,7 +212,12 @@ def test_empty_activation_is_recorded_and_escalated(ctx):
     c, project, run = ctx
     assert activation.denied_capabilities == {'roadmap.writeback':'NO_GRANTOR'}
     assert activation.granted_capabilities == []
-    assert c.store.list_escalations(project)[-1].trigger.value == 'CAPABILITY_DENIED'
+    escalation = c.store.list_escalations(project)[-1]
+    assert escalation.trigger.value == 'CAPABILITY_DENIED'
+    assert escalation.suspension_applied is SuspensionState.SUSPENDED_BY_INTEGRITY
+    assert c.store.get_run(run).suspension is escalation.suspension_applied
+    assert c.store.get_project(project).suspension is escalation.suspension_applied
+    assert c.store.get_project(project).suspension_ref == escalation.escalation_id
     with pytest.raises(CapabilityDenied):
         c.require_authority(run, 'roadmap.writeback')
 

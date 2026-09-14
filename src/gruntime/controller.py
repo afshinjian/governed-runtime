@@ -372,8 +372,9 @@ class Controller(ContractController, ValidationController):
         resumes into the value it held, because suspension is read alongside a
         lifecycle and never encodes one.
         """
+        self.store.validate_suspension_ref(suspension, suspension_ref)  # guard:suspension_ref_transition
         project = self.store.get_project(project_id)
-        if project.suspension is suspension:
+        if project.suspension is suspension and project.suspension_ref == suspension_ref:
             return
         capability = (
             "suspension.clear"
@@ -419,25 +420,60 @@ class Controller(ContractController, ValidationController):
             raised_by=_runtime_actor("escalation"),
             raised_at=now_ts(),
             suspension_applied=suspension,
-            suspension_target="RUN" if run_id else "PROJECT",
+            suspension_target=(
+                "NONE" if suspension is SuspensionState.NONE else ("RUN" if run_id else "PROJECT")
+            ),
             status=EscalationStatus.OPEN,
             run_id=run_id,
         )
-        self._append(
-            project_id,
-            event_type="escalation.raised",
-            epistemic_class=EpistemicClass.CLAIM,
-            subject={"escalation_id": escalation.escalation_id},
-            payload={
-                "trigger": trigger.value,
-                "severity": severity.value,
-                "summary": summary,
-                "run_id": run_id,
-            },
-            capability_used="escalation.raise",
-        )
-        self.store.put_escalation(escalation)
+        # A suspension claim and its axis-3 writes become observable together.
+        # SAVEPOINT also composes with activation and commit receipt transactions.
+        db = self.store.connection
+        db.execute("SAVEPOINT escalation_raise")
+        try:
+            self._append(
+                project_id,
+                event_type="escalation.raised",
+                epistemic_class=EpistemicClass.CLAIM,
+                subject={"escalation_id": escalation.escalation_id},
+                payload={
+                    "trigger": trigger.value,
+                    "severity": severity.value,
+                    "summary": summary,
+                    "run_id": run_id,
+                },
+                capability_used="escalation.raise",
+            )
+            self.store.put_escalation(escalation)
+            self._apply_escalation_suspension(escalation)  # guard:escalation_suspension_applied
+            db.execute("RELEASE escalation_raise")
+        except BaseException:
+            db.execute("ROLLBACK TO escalation_raise")
+            db.execute("RELEASE escalation_raise")
+            raise
         return escalation.escalation_id
+
+    def _apply_escalation_suspension(self, escalation: Escalation) -> None:
+        suspension = escalation.suspension_applied
+        if suspension is SuspensionState.NONE:
+            return
+        self._set_suspension(
+            escalation.project_id, suspension,
+            reason=escalation.summary, suspension_ref=escalation.escalation_id,
+        )
+        if escalation.run_id is not None:
+            run = self.store.get_run(escalation.run_id)
+            self._append(
+                escalation.project_id,
+                event_type="suspension.set",
+                epistemic_class=EpistemicClass.AUTHORITY,
+                subject={"run_id": run.run_id},
+                payload={"from": run.suspension.value, "to": suspension.value,
+                         "reason": escalation.summary, "suspension_ref": escalation.escalation_id},
+                capability_used="suspension.set",
+            )
+            run.suspension = suspension
+            self.store.put_run(run)  # guard:escalation_run_suspension
 
     # -- project and run ---------------------------------------------------
 
@@ -711,7 +747,7 @@ class Controller(ContractController, ValidationController):
         committing another.
         """
         listed = ", ".join(paths[:10]) + (" …" if len(paths) > 10 else "")
-        escalation_id = self._raise_escalation(
+        self._raise_escalation(
             project_id,
             trigger=EscalationTrigger.REALITY_DRIFT,
             severity=EscalationSeverity.HIGH,
@@ -720,12 +756,6 @@ class Controller(ContractController, ValidationController):
                 f"change(s) in the workspace: {listed}"
             ),
             suspension=SuspensionState.SUSPENDED_BY_DRIFT,
-        )
-        self._set_suspension(
-            project_id,
-            SuspensionState.SUSPENDED_BY_DRIFT,
-            reason=f"unattributed drift in {snapshot.snapshot_id}",
-            suspension_ref=escalation_id,
         )
 
     def _stale_decisions_against(
@@ -1348,7 +1378,7 @@ class Controller(ContractController, ValidationController):
             status = CommitIntentStatus.FAILED
             # `CM-INV-1`: a divergent tree is an established outcome and a
             # failure; it escalates rather than being quietly retried.
-            escalation_id = self._raise_escalation(
+            self._raise_escalation(
                 project_id,
                 trigger=EscalationTrigger.INTEGRITY_VIOLATION,
                 severity=EscalationSeverity.CRITICAL,
@@ -1358,7 +1388,6 @@ class Controller(ContractController, ValidationController):
                 ),
                 run_id=intent.run_id,
             )
-            self._suspend_commit_integrity(project_id, intent, escalation_id)  # guard:commit_divergence_suspends
         self._transition_intent(
             intent,
             project_id,
@@ -1372,13 +1401,6 @@ class Controller(ContractController, ValidationController):
             capability_used=capability,
         )
         return receipt
-
-    def _suspend_commit_integrity(self, project_id, intent, escalation_id):
-        run = self.store.get_run(intent.run_id)
-        run.suspension = SuspensionState.SUSPENDED_BY_INTEGRITY
-        self.store.put_run(run)
-        self._set_suspension(project_id, SuspensionState.SUSPENDED_BY_INTEGRITY,
-                             reason="commit integrity failure", suspension_ref=escalation_id)
 
     def apply_commit(self, intent_id: Id) -> CommitReceipt:
         """Apply the intent and mint the receipt with `attribution = DIRECT`.
@@ -1433,13 +1455,12 @@ class Controller(ContractController, ValidationController):
         verification = verify_receipt(intent, receipt, repo.observe_commit(receipt.revision_id, intent=intent))
         if verification is Verification.DIVERGED:  # guard:commit_reverification_suspends
             project_id = self.store.intent_project(intent_id)
-            escalation_id = self._raise_escalation(
+            self._raise_escalation(
                 project_id, trigger=EscalationTrigger.INTEGRITY_VIOLATION,
                 severity=EscalationSeverity.CRITICAL,
                 summary=f"commit receipt {receipt.receipt_id} failed verification",
                 run_id=intent.run_id,
             )
-            self._suspend_commit_integrity(project_id, intent, escalation_id)
         return verification
 
     def publish_commit(self, intent_id: Id) -> None:
@@ -1804,7 +1825,6 @@ class Controller(ContractController, ValidationController):
             ),
             run_id=intent.run_id,
         )
-        self._suspend_commit_integrity(project_id, intent, escalation_id)  # guard:commit_ambiguity_suspends
         self.store.put_commit_intent(intent, project_id)
         return Settlement(state=state, escalation_id=escalation_id)
 

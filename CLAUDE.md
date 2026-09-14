@@ -1,16 +1,21 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-06 (close suspension_applied gap).
+Phase: GR-06 (suspension evidence gap closed).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
 - Tables and JSON Schema over prose.
 - Controller owns all state transitions; workers only propose.
 
+## Suspension evidence
+- Choice (a): every escalation declaring non-NONE suspension applies it to
+  the project and, when targeted, the run. The claim, state and audit events
+  persist atomically. NONE declares no suspension and never clears one.
+- Project suspension_ref is required iff suspension != NONE; controller
+  transitions and store reads/writes enforce both directions.
+- Validation: [suspension closure](docs/suspension-validation.md).
+
 ## Known gaps
-- GR-03: only drift suspension writes project.suspension. Other escalations
-  record suspension_applied without applying it. Must close before GR-07
-  (real workers) — a recorded-but-unapplied suspension is a false evidence claim.
 - GR-09: network ALLOWLIST fails closed (declared, not implemented). Any
   validation needing network egress is currently impossible, not merely denied.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test

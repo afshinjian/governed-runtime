@@ -475,7 +475,10 @@ def test_suspension_blocks_validation(runtime):
     h, project, run, _, _ = runtime
     with h.controller() as c:
         bind(c, run)
-        c.store.set_project_suspension(project,SuspensionState.SUSPENDED_BY_POLICY)
+        from gruntime.models import EscalationSeverity, EscalationTrigger
+        c._raise_escalation(project, trigger=EscalationTrigger.POLICY_CONFLICT,
+                            severity=EscalationSeverity.HIGH, summary="validation suspended",
+                            suspension=SuspensionState.SUSPENDED_BY_POLICY)
         with pytest.raises(PolicyDenied):
             c.execute_validation(run,'check')
         assert not c._validation_attempts(project)

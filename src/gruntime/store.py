@@ -883,12 +883,20 @@ class StateStore(ContractStore):
 
     # -- projects and runs -------------------------------------------------
 
+    @staticmethod
+    def validate_suspension_ref(suspension: SuspensionState, suspension_ref: Optional[Id]) -> None:
+        """domain-model §2: a reference is required iff axis 3 is not NONE."""
+        if ((suspension is SuspensionState.NONE and suspension_ref is not None)
+                or (suspension is not SuspensionState.NONE and not suspension_ref)):
+            raise IntegrityViolation("suspension_ref is required iff suspension != NONE")  # guard:suspension_ref_iff
+
     def get_project(self, project_id: Id) -> Project:
         row = self.connection.execute(
             "SELECT * FROM projects WHERE project_id=?", (project_id,)
         ).fetchone()
         if row is None:
             raise KeyError(project_id)
+        self.validate_suspension_ref(SuspensionState(row["suspension"]), row["suspension_ref"])  # guard:suspension_ref_read
         return Project(
             project_id=row["project_id"],
             name=row["name"],
@@ -913,6 +921,7 @@ class StateStore(ContractStore):
         )
 
     def put_project(self, project: Project) -> None:
+        self.validate_suspension_ref(project.suspension, project.suspension_ref)  # guard:suspension_ref_put
         self.connection.execute(
             "INSERT INTO projects (project_id, name, slug, schema_version, lifecycle,"
             " suspension, governance_mode, workspace_root, created_at, updated_at,"
@@ -970,6 +979,7 @@ class StateStore(ContractStore):
         `append_event` would roll the chain head back onto a sequence number
         that is already spent.
         """
+        self.validate_suspension_ref(suspension, suspension_ref)  # guard:suspension_ref_update
         self.connection.execute(
             "UPDATE projects SET suspension=?, suspension_ref=?, updated_at=?"
             " WHERE project_id=?",
