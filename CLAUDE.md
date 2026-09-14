@@ -25,7 +25,6 @@ Rules:
 - GR-07: no test exercises a live provider. The subprocess transport is offline;
   the full chain has never run against real Claude/Codex output. First live
   invocation is unproven territory.
-- GR-07: ToolBridge exposes no network operation, so no worker can reach an
-  inference endpoint. CF-4 permits egress only through the bridge, so this is a
-  missing implementation (the governed inference relay), not a policy to relax.
-  Blocks every live run. Owned by GR-07b.
+- GR-08: ToolBridge now provides the governed inference relay. Worker egress
+  requires a live grant and stays within one HTTPS origin; ProcessTransport
+  and validation isolation are unchanged. See [relay evidence](docs/gr08-validation.md).

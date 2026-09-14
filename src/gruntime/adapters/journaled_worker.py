@@ -19,6 +19,7 @@ from ..provider import (BindingDescriptor, CancelResult, InvocationOutcome, Look
     ProviderHealth, WorkerProvider)
 from ..store import now_ts
 from ..worker_protocol import RESULT_SCHEMA, artifact, request_bytes, result_document, strict_json
+from ..secret_guard import GuardedConnection, SecretLeak
 
 
 RESULT_MEDIA = 'application/vnd.gruntime.worker-result+json'
@@ -43,7 +44,8 @@ class JournaledWorkerProvider(WorkerProvider):
 
     @contextmanager
     def _db(self):
-        db = sqlite3.connect(self.state_dir / 'executions.db', timeout=10)
+        db = sqlite3.connect(self.state_dir / 'executions.db', timeout=10, factory=GuardedConnection)
+        db.secret_guard = self.artifacts.secret_guard
         db.execute('PRAGMA journal_mode=WAL')
         db.execute('PRAGMA synchronous=FULL')
         try:
@@ -95,9 +97,14 @@ class JournaledWorkerProvider(WorkerProvider):
             with self._db() as db:
                 return db.execute('SELECT 1 FROM cancellations WHERE invocation_id=?', (request.invocation_id,)).fetchone() is not None
         try:
-            result = self.transport.run(self.argv(request), self._input(request),
+            runner = getattr(self.transport, 'run_worker', self.transport.run)
+            relay_args = dict(bridge=bridge, endpoint_environment=self.relay_environment()) if hasattr(self.transport, 'run_worker') else {}
+            payload = self._input(request)
+            self.artifacts.secret_guard.check(payload)  # guard:gr08_provider_input
+            result = runner(self.argv(request), payload, **relay_args,
                 timeout=max(0, min((request.deadline_at-now_ts()).total_seconds(), request.budget.wall_clock_ms/1000)),
                 max_output_bytes=self.max_output_bytes, cancelled=cancelled)
+            self.artifacts.secret_guard.check((result.stdout, result.stderr))  # guard:gr08_provider_output
             require(not result.truncated and len(result.stdout) <= self.max_output_bytes, 'worker output overflow')  # guard:gr07_adapter_output
             if result.timed_out:  # guard:gr07_transport_timeout
                 deadline = now_ts() >= request.deadline_at
@@ -116,7 +123,12 @@ class JournaledWorkerProvider(WorkerProvider):
                     TerminationReason(document['termination_reason']))
         except Exception as exc:
             # Adapter failures are structured error outcomes, not optimistic prose guesses.
-            outcome = self._error(request, 'PROVIDER_ERROR', 'FAILED', type(exc).__name__)
+            try:
+                self.artifacts.secret_guard.check(str(exc))  # guard:gr08_provider_diagnostic
+            except SecretLeak as safe:
+                exc = safe
+            outcome = self._error(request, 'PROVIDER_ERROR', 'FAILED',
+                'SECRET_LEAK' if isinstance(exc, SecretLeak) else 'PROVIDER_FAILURE')
         document = dict(invocation_id=outcome.invocation_id, status=outcome.status.value,
             termination_reason=outcome.termination_reason.value, output_ref=asdict(outcome.output_ref))
         with self._db() as db:
@@ -126,6 +138,9 @@ class JournaledWorkerProvider(WorkerProvider):
     def _error(self, request, reason, status, detail=''):
         ref = self.artifacts.put(canonical_json(dict(error=reason, detail=detail)), media_type='application/json')
         return InvocationOutcome(request.invocation_id, OutcomeStatus(status), ref, TerminationReason(reason))
+
+    def relay_environment(self):
+        raise ProviderError('UNAVAILABLE', 'relay endpoint mapping unavailable')
 
     def _outcome(self, document):
         return InvocationOutcome(document['invocation_id'], OutcomeStatus(document['status']),

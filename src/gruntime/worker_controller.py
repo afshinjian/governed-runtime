@@ -1,5 +1,6 @@
 """Controller-owned worker dispatch, leases, proposal checks and provenance."""
 from dataclasses import asdict, replace
+from datetime import timedelta
 from pathlib import Path
 import time
 import uuid
@@ -35,6 +36,9 @@ class WorkerController:
         require(type(provider).lookup is not WorkerProvider.lookup and callable(provider.lookup),
                 'governed providers must implement lookup', PolicyDenied)  # guard:gr07_lookup_registration
         descriptor = provider.describe()
+        provider.secret_guard = self.secret_guard
+        if hasattr(provider, 'artifacts'):
+            provider.artifacts.secret_guard = self.secret_guard
         self.providers[descriptor.provider_id] = provider
         return descriptor.provider_id
 
@@ -259,8 +263,9 @@ class WorkerController:
         governed = GovernedProvider(provider, DISPATCH_CAPABILITIES)
         accepted = governed.preflight(request)
         require(accepted.accepted, 'provider rejected preflight', PolicyDenied)  # guard:gr07_preflight
+        lease_deadline = min(request.deadline_at, now_ts() + timedelta(milliseconds=request.budget.wall_clock_ms))  # guard:gr08_worker_lease
         lease = WorkerLease(str(uuid.uuid4()), invocation_id, invocation.run_id,
-            invocation.controller_epoch, request.deadline_at, request.session_id)
+            invocation.controller_epoch, lease_deadline, request.session_id)
         db = self.store.connection
         db.execute('BEGIN IMMEDIATE')
         try:
@@ -284,6 +289,7 @@ class WorkerController:
         try:
             outcome = governed.invoke(request, bridge)
             output = governed.fetch(outcome.output_ref)
+            self.secret_guard.check(output)  # guard:gr08_worker_output
             status, reason = status_for_outcome(outcome.status), outcome.termination_reason
             extras = {}
             # Structured providers mark their wire media type, never their prose.
@@ -291,11 +297,19 @@ class WorkerController:
                 doc = result_document(output, invocation_id)
                 self._worker_session(request, doc)
                 extras = self._worker_result(invocation, doc, bridge)
+            if bridge.secret_failure:  # guard:gr08_bridge_leak_failure
+                from .secret_guard import SecretLeak
+                raise SecretLeak()
             if now_ts() >= request.deadline_at:  # guard:gr07_result_deadline
                 status, reason = InvocationStatus.TIMED_OUT, TerminationReason.DEADLINE
             elif int((time.monotonic()-tick)*1000) > request.budget.wall_clock_ms:  # guard:gr07_result_budget
                 status, reason = InvocationStatus.FAILED, TerminationReason.BUDGET
         except (ProviderError, GovernedRuntimeError, ValueError, TypeError, KeyError, OSError) as exc:
+            from .secret_guard import SecretLeak
+            try:
+                self.secret_guard.check(str(exc))  # guard:gr08_worker_diagnostic
+            except SecretLeak as safe:
+                exc = safe
             bridge.violations.append(dict(capability='worker.result', at=now_ts().isoformat(), detail=str(exc)[:1024]))
             output = canonical_json({'error': type(exc).__name__, 'detail': str(exc)[:1024]})
             status, reason, extras = InvocationStatus.FAILED, TerminationReason.PROVIDER_ERROR, {}

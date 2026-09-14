@@ -189,9 +189,10 @@ from .decision import decision_content_hash
 
 
 from .worker_controller import WorkerController
+from .relay_controller import RelayController
 
 
-class Controller(WorkerController, ContractController, ValidationController):
+class Controller(WorkerController, ContractController, ValidationController, RelayController):
     """Owns every state transition for one store."""
 
     def __init__(
@@ -206,6 +207,9 @@ class Controller(WorkerController, ContractController, ValidationController):
     ) -> None:
         self.store = store
         self.artifacts = artifacts
+        self.secret_guard = store.secret_guard
+        self.artifacts.secret_guard = self.secret_guard
+        self._inference_relay = None
         self.provider = provider
         self.providers = {}
         self.register_provider(provider)
@@ -945,6 +949,13 @@ class Controller(WorkerController, ContractController, ValidationController):
         usage: Usage,
         **extras,
     ) -> WorkerReceipt:
+        from .secret_guard import SecretLeak
+        from .store import _worker_value
+        try:
+            self.secret_guard.check((output, _worker_value(extras)))  # guard:gr08_receipt_check
+        except SecretLeak:
+            output, extras = b'{"error":"SECRET_LEAK"}', {}
+            status, termination_reason = InvocationStatus.FAILED, TerminationReason.PROVIDER_ERROR
         output_ref = self.store.store_artifact(
             output, media_type="application/octet-stream"
         )

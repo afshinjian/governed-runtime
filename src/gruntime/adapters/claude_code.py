@@ -7,6 +7,13 @@ from .journaled_worker import JournaledWorkerProvider
 
 class ClaudeCodeProvider(JournaledWorkerProvider):
     provider_id = 'claude-code'
+    relay_headers = ('anthropic-version', 'anthropic-beta')
+
+    def relay_environment(self):
+        # This public placeholder only selects API auth in the CLI. The relay
+        # strips it; the upstream credential exists only in the kernel relay.
+        return ('ANTHROPIC_BASE_URL', {'ANTHROPIC_API_KEY': 'governed-local-bridge',
+            'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1'})
 
     def argv(self, request):
         return ('--print', '--output-format', 'json', '--json-schema', canonical_json(RESULT_SCHEMA).decode(),

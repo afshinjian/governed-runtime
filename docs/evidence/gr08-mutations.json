@@ -1,0 +1,964 @@
+[
+  {
+    "guard": "gr08_fake_write",
+    "file": "src/gruntime/adapters/fake_provider.py",
+    "line": 80,
+    "guard_sha256": "58c6843e3eb650d0ff05051131d18b767980020a3ba9284614f211d5cb5aa6df",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_log_and_fake_output_checked_before_write"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.26s",
+    "restored_summary": "1 passed, 130 deselected in 0.38s"
+  },
+  {
+    "guard": "gr08_log_line",
+    "file": "src/gruntime/adapters/fake_provider.py",
+    "line": 266,
+    "guard_sha256": "726224ebfbb8ecb0961a239d7729e2b29fb4eb8618c0bf6da60b1e0f455e5e14",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_log_and_fake_output_checked_before_write"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 1.01s",
+    "restored_summary": "1 passed, 130 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_provider_input",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 103,
+    "guard_sha256": "5ec219ad8d52bfdfdce1c654c746cf8080521eba9641de8b4db65c2a6de5760f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_provider_input_is_checked_before_launch"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.75s",
+    "restored_summary": "1 passed, 130 deselected in 0.78s"
+  },
+  {
+    "guard": "gr08_provider_output",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 107,
+    "guard_sha256": "17a2dc2ed1b996662044647392dfb113b2d33c4ee580bc5ab7331c0a1e5461d0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[stderr]"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.82s",
+    "restored_summary": "1 passed, 130 deselected in 0.79s"
+  },
+  {
+    "guard": "gr08_provider_diagnostic",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 127,
+    "guard_sha256": "08d413226726e4f2f07ecd0c1693abbfdace6f2f62567bffbed9774ef772c01a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[exception]"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.75s",
+    "restored_summary": "1 passed, 130 deselected in 0.75s"
+  },
+  {
+    "guard": "gr08_http_framing",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 54,
+    "guard_sha256": "e64c5114ba1078ca702ecf7c71309d7450d55237b041f40d482fa89a34b86f22",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_http_boundary_guards[duplicate-length]"
+    ],
+    "mutant_summary": "1 failed, 126 deselected in 0.16s",
+    "restored_summary": "5 passed, 126 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_http_limit",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 56,
+    "guard_sha256": "5d13c7c9bff081afb0100ffe13a9c6dfc809e4d908d43aac55977730efc2a8fa",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_http_boundary_guards[limit]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 126 deselected in 0.16s",
+    "restored_summary": "5 passed, 126 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_http_deadline",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 58,
+    "guard_sha256": "0a4371babb492f3a957f9371a611ca8683ae11fa2b1ca1cf767688be937f9c99",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_http_boundary_guards[deadline]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 126 deselected in 0.16s",
+    "restored_summary": "5 passed, 126 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_http_delivery",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 61,
+    "guard_sha256": "5e3fe7b2a597b97619e92e5d9921366af5ecc874dea4af80b2bc42836bc0ea85",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_http_boundary_guards[delivery]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 126 deselected in 0.16s",
+    "restored_summary": "5 passed, 126 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_worker_only",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 83,
+    "guard_sha256": "ffcf01b87966571a13e5f497948112a95f4976da3ec6f41d7813f06709436925",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_only_transport_guard"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.17s",
+    "restored_summary": "1 passed, 130 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_process_input",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 86,
+    "guard_sha256": "a09067a3752471e76f7e67052c0afc1294786cc36ecd1cd6ae20b8cdc60f07e0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_transport_guards[input]"
+    ],
+    "mutant_summary": "1 failed, 125 deselected in 0.89s",
+    "restored_summary": "6 passed, 125 deselected in 1.20s"
+  },
+  {
+    "guard": "gr08_schema_write",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 91,
+    "guard_sha256": "26715605ef8563d4fbe54e0b13b33aa05852862f5280349231d53678d3fb98c0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_transport_guards[schema]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 125 deselected in 1.01s",
+    "restored_summary": "6 passed, 125 deselected in 1.21s"
+  },
+  {
+    "guard": "gr08_worker_isolation",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 97,
+    "guard_sha256": "119dfa6147d883224a8afc66638eb9f0a39685e2b3b131fbbc70691818b7fee2",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_real_worker_uses_bridge_and_validation_remains_isolated"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 1.60s",
+    "restored_summary": "1 passed, 130 deselected in 1.58s"
+  },
+  {
+    "guard": "gr08_worker_environment",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 103,
+    "guard_sha256": "c2e71f3298538d6b215c5c87ea3663b1d3bbb96f8e48147ef20a93c57f565a6d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_real_worker_uses_bridge_and_validation_remains_isolated"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 1.62s",
+    "restored_summary": "1 passed, 130 deselected in 1.59s"
+  },
+  {
+    "guard": "gr08_process_deadline",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 122,
+    "guard_sha256": "2593f8bd025fd0b80f9d67c7198a0b866dda06060ce836e78dd7cb81713e45b0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_transport_guards[deadline]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 125 deselected in 1.37s",
+    "restored_summary": "6 passed, 125 deselected in 1.24s"
+  },
+  {
+    "guard": "gr08_process_output",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 135,
+    "guard_sha256": "5b1fd5b0905ff2b6bdd06deaaf8bc306b79f742c188e8e958aff300eb8835307",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_transport_guards[output]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 125 deselected in 1.19s",
+    "restored_summary": "6 passed, 125 deselected in 1.24s"
+  },
+  {
+    "guard": "gr08_process_output_limit",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 137,
+    "guard_sha256": "26165707849b96ffe310739d51145e73e0be59a841786a5f3bd237984bb5eb86",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_transport_guards[limit]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 125 deselected in 1.59s",
+    "restored_summary": "6 passed, 125 deselected in 1.24s"
+  },
+  {
+    "guard": "gr08_process_kill",
+    "file": "src/gruntime/adapters/relay_process.py",
+    "line": 143,
+    "guard_sha256": "0ea7da3908a9aeeca0a6fc4cf914ecd7899efeca0712a8f71eb8f59508a25541",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_transport_guards[kill]"
+    ],
+    "mutant_summary": "1 failed, 5 passed, 125 deselected in 5.39s",
+    "restored_summary": "6 passed, 125 deselected in 1.20s"
+  },
+  {
+    "guard": "gr08_receipt_check",
+    "file": "src/gruntime/controller.py",
+    "line": 955,
+    "guard_sha256": "6e4590a969e63192eebb243989868c8458daa3c50656ce5c9a19bba119bd62bc",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_receipt_boundary_discards_tainted_output_and_fields"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.76s",
+    "restored_summary": "1 passed, 130 deselected in 0.82s"
+  },
+  {
+    "guard": "gr08_url_syntax",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 23,
+    "guard_sha256": "8b5e4ec181c2a461c41b93aff668b741726b71bf252f5f575a82ef6a12925e91",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_destination_parser_guards[https://host/\\npart]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 123 deselected in 0.17s",
+    "restored_summary": "8 passed, 123 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_https",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 27,
+    "guard_sha256": "4dc22257e6d2c6ec95be0c82c11de12f280c8ef37c1eb353e10dac0fd12ae951",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_destination_parser_guards[http://host]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 123 deselected in 0.18s",
+    "restored_summary": "8 passed, 123 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_port",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 29,
+    "guard_sha256": "7aa357cc6ec7d80996679c4372c388bebab83bf0517aff5a95b3ad7c6e738e9c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_destination_parser_guards[https://host:0]"
+    ],
+    "mutant_summary": "1 failed, 7 passed, 123 deselected in 0.17s",
+    "restored_summary": "8 passed, 123 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_origin_config",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 39,
+    "guard_sha256": "517e3bd3a10a4825d138370dbcca8765b3dd8c965de005377295e61b7bd0ee30",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_configuration_guards[change0]"
+    ],
+    "mutant_summary": "1 failed, 125 deselected in 0.18s",
+    "restored_summary": "6 passed, 125 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_credential_header",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 42,
+    "guard_sha256": "754f4c1fbe34943f961f1d70949b31f25720ed41bd29ed92b8edb37965d170a1",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_configuration_guards[change2]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 125 deselected in 0.18s",
+    "restored_summary": "6 passed, 125 deselected in 0.17s"
+  },
+  {
+    "guard": "gr08_credential_value",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 44,
+    "guard_sha256": "3b22416a9fc2e4ba2e4bfb1bd866bd87d4794debdafab739e8d19bd66dd6e6bc",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_configuration_guards[change4]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 125 deselected in 0.19s",
+    "restored_summary": "6 passed, 125 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_protocol_headers",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 51,
+    "guard_sha256": "1984e4fb4ad488f20343b5418ecc4a2e57937fca830bf4cf03224a6447bca45f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_configuration_guards[change5]"
+    ],
+    "mutant_summary": "1 failed, 5 passed, 125 deselected in 0.18s",
+    "restored_summary": "6 passed, 125 deselected in 0.15s"
+  },
+  {
+    "guard": "gr08_tls_verification",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 53,
+    "guard_sha256": "e97e91fd03009159abba29744c52faab676e448c8aefc9fdf810a9f9771e3e78",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_response_guards[tls] - ..."
+    ],
+    "mutant_summary": "1 failed, 128 deselected in 0.92s",
+    "restored_summary": "3 passed, 128 deselected in 2.21s"
+  },
+  {
+    "guard": "gr08_origin_request",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 58,
+    "guard_sha256": "686fbd29f5ec0cb33f6495769134c37ab65575a65b2de3db79c8ce2ad3977335",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change0-None]"
+    ],
+    "mutant_summary": "1 failed, 124 deselected in 0.19s",
+    "restored_summary": "7 passed, 124 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_method",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 59,
+    "guard_sha256": "f8cd14ecf6d6783e3af4d5af8f5b79db9020b496ce882eea594ecb2da2aa07ea",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change1-None]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 124 deselected in 0.20s",
+    "restored_summary": "7 passed, 124 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_request_types",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 62,
+    "guard_sha256": "acc231c28987e238d59d83c557d7a89c447458b97a275c2d30cebcb16f91e371",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change2-None]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 124 deselected in 0.20s",
+    "restored_summary": "7 passed, 124 deselected in 0.22s"
+  },
+  {
+    "guard": "gr08_request_limit",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 64,
+    "guard_sha256": "67686149005a79cd07530bcef0717f399271a03b84f745ddcd3f3926b4e13468",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change3-2]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 124 deselected in 0.21s",
+    "restored_summary": "7 passed, 124 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_request_secret",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 65,
+    "guard_sha256": "962bff75a3941887b23bfa3cb22685121d21f28062bde096d00a11f613c25b9d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change4-None]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 124 deselected in 0.22s",
+    "restored_summary": "7 passed, 124 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_outbound_headers",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 69,
+    "guard_sha256": "b869ee61b002f1da417f808411dbf0e05c2042c625a9b131ed10297f3d7ea6d8",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_https_relay_injects_only_at_upstream"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.95s",
+    "restored_summary": "1 passed, 130 deselected in 0.88s"
+  },
+  {
+    "guard": "gr08_header_injection",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 71,
+    "guard_sha256": "f2df5067cd9e3564e46c9cc5801dfd4ae39ebc94f79bb9ad9f3142f2ad7ed9b9",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change5-None]"
+    ],
+    "mutant_summary": "1 failed, 5 passed, 124 deselected in 0.23s",
+    "restored_summary": "7 passed, 124 deselected in 0.22s"
+  },
+  {
+    "guard": "gr08_request_target",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 74,
+    "guard_sha256": "74a8e2d982caeca9983ac2076e2ac3ddfb6e8cd314d6f8c16d71ec378da0ff10",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_request_guards_precede_transport[change6-None]"
+    ],
+    "mutant_summary": "1 failed, 6 passed, 124 deselected in 0.24s",
+    "restored_summary": "7 passed, 124 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_request_authority",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 78,
+    "guard_sha256": "2f5502a89022494caf76ca153e1128886a9e91f2c8a9a7509d10415fb9ff43a3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_authorization_and_deadline_guards"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.19s",
+    "restored_summary": "1 passed, 130 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_relay_deadline",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 79,
+    "guard_sha256": "48eff237a40d8c0d06fd251db9f4f86fecd9b485a08592fa586a899ddc9e2d60",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_authorization_and_deadline_guards"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.19s",
+    "restored_summary": "1 passed, 130 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_redirect",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 103,
+    "guard_sha256": "9f0d322437a1bf1bd8f5c47de95ad69e2c4868e3d9ee7a08b4479a9df36ab55c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[other-302]"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 1.41s",
+    "restored_summary": "1 passed, 130 deselected in 0.89s"
+  },
+  {
+    "guard": "gr08_response_limit",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 105,
+    "guard_sha256": "35cdfdb8998f140171135b8866e5329b526e297f5229833bcce286f400ae57d1",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_response_guards[oversize]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 128 deselected in 1.60s",
+    "restored_summary": "3 passed, 128 deselected in 2.18s"
+  },
+  {
+    "guard": "gr08_response_secret",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 108,
+    "guard_sha256": "71931cdec2d3d72abe4a91f5a6842ee49c71dfe38fd62ab795a432c8f059c6a4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_relay_response_guards[response-secret]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 128 deselected in 2.13s",
+    "restored_summary": "3 passed, 128 deselected in 2.16s"
+  },
+  {
+    "guard": "gr08_single_origin",
+    "file": "src/gruntime/relay_controller.py",
+    "line": 14,
+    "guard_sha256": "87cd9d7fba63802f3036900dd82c0e339a7ef059de289f45b59c54a29a95c49a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[single-origin]"
+    ],
+    "mutant_summary": "1 failed, 5 passed, 125 deselected in 3.55s",
+    "restored_summary": "6 passed, 125 deselected in 3.61s"
+  },
+  {
+    "guard": "gr08_secret_grant",
+    "file": "src/gruntime/relay_controller.py",
+    "line": 24,
+    "guard_sha256": "1d1daf565132b42e1058133447265e0a8d67302bc47d31237f7080ed87c3daee",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[grant]"
+    ],
+    "mutant_summary": "1 failed, 125 deselected in 0.80s",
+    "restored_summary": "6 passed, 125 deselected in 3.54s"
+  },
+  {
+    "guard": "gr08_secret_approval",
+    "file": "src/gruntime/relay_controller.py",
+    "line": 36,
+    "guard_sha256": "15f8409ad78dd975bf4bd330018d6ff406a4b94e1ab57bbf98a27138c86dc045",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[approval]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 125 deselected in 1.35s",
+    "restored_summary": "6 passed, 125 deselected in 3.67s"
+  },
+  {
+    "guard": "gr08_secret_integrity",
+    "file": "src/gruntime/relay_controller.py",
+    "line": 38,
+    "guard_sha256": "f1f2b002b4a643d71fde980e9ced0ca7fb8a8555f541e06b2d465d940c7cc577",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[integrity]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 125 deselected in 1.90s",
+    "restored_summary": "6 passed, 125 deselected in 3.56s"
+  },
+  {
+    "guard": "gr08_secret_currency",
+    "file": "src/gruntime/relay_controller.py",
+    "line": 40,
+    "guard_sha256": "7f163111d72d19144c7798003d4441b7de656b52328b074b9b3733134b34e228",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[currency]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 125 deselected in 2.49s",
+    "restored_summary": "6 passed, 125 deselected in 3.64s"
+  },
+  {
+    "guard": "gr08_secret_nonce",
+    "file": "src/gruntime/relay_controller.py",
+    "line": 43,
+    "guard_sha256": "c9e5976c97d1c27501d8594e099998bc178e4308629bd1005fd5375f8df807d0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[nonce]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 125 deselected in 2.99s",
+    "restored_summary": "6 passed, 125 deselected in 3.58s"
+  },
+  {
+    "guard": "gr08_secret_name",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 48,
+    "guard_sha256": "124935875655310849a54675d000cdf5664a0d7abc24282284ee184e0c253d00",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_name_and_fingerprint_write_guards"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.18s",
+    "restored_summary": "1 passed, 130 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_fingerprint_write",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 51,
+    "guard_sha256": "74aea6c924233ffdde6e26529cc756843a6ba4701f0f5001422f9d18ac60ce6c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_name_and_fingerprint_write_guards"
+    ],
+    "mutant_summary": "1 failed, 130 deselected in 0.18s",
+    "restored_summary": "1 passed, 130 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_secret_match",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 79,
+    "guard_sha256": "72cea59f47e1dfa0bd5a1fd6c9724b68a58aedbd475fbe2f9c7baaa5538fe215",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_salted_checker_discards_encoded_secrets[plain]"
+    ],
+    "mutant_summary": "1 failed, 127 deselected in 0.19s",
+    "restored_summary": "4 passed, 127 deselected in 0.18s"
+  },
+  {
+    "guard": "gr08_event_append",
+    "file": "src/gruntime/store.py",
+    "line": 674,
+    "guard_sha256": "ebe20fc44c9397e1f15654f565f473b7be6538120ff1941b05b06a2984342910",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[event-subject]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 121 deselected in 2.46s",
+    "restored_summary": "10 passed, 121 deselected in 5.83s"
+  },
+  {
+    "guard": "gr08_relay_binding",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 88,
+    "guard_sha256": "36b5d70f39acd09cfa582b2d53fef0cd8c152d4174b5e8137f6eba83f1744b99",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[missing]"
+    ],
+    "mutant_summary": "1 failed, 126 deselected in 0.77s",
+    "restored_summary": "5 passed, 126 deselected in 3.02s"
+  },
+  {
+    "guard": "gr08_tool_diagnostic",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 104,
+    "guard_sha256": "752f5d914c7ad1a12f3d2ae1c5dcd008eac3577ba19f51c816b23f685a01574b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_tool_secret_diagnostics_are_discarded[diagnostic]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 129 deselected in 1.35s",
+    "restored_summary": "2 passed, 129 deselected in 1.29s"
+  },
+  {
+    "guard": "gr08_network_grant",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 125,
+    "guard_sha256": "27f45532384b699d11bb2c393d4999e68bbcff9617d62ec2fa5553516e80c62d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[grant]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 126 deselected in 1.89s",
+    "restored_summary": "5 passed, 126 deselected in 3.03s"
+  },
+  {
+    "guard": "gr08_network_live",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 126,
+    "guard_sha256": "9c3b8e7aeca05f52720a486b32a812b8f47722d030857df900e0896cb0f2ced3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[revoked]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 126 deselected in 2.45s",
+    "restored_summary": "5 passed, 126 deselected in 3.02s"
+  },
+  {
+    "guard": "gr08_relay_watchdog",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 94,
+    "guard_sha256": "a9b2221523ad29ec97995e1682df8be50808c682c23eb53b0f8b009bb95d796b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_watchdog_interrupts_trickling_response"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.86s",
+    "restored_summary": "1 passed, 135 deselected in 0.89s"
+  },
+  {
+    "guard": "gr08_before_send",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 99,
+    "guard_sha256": "3f0e07fa3c291a9558bd09e4b50357b953c98de0f7abe740fad85688f90f365d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_deadline_and_authority_after_connect[authorization]"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.18s",
+    "restored_summary": "1 passed, 135 deselected in 0.17s"
+  },
+  {
+    "guard": "gr08_send_deadline",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 100,
+    "guard_sha256": "7070e3289a680656ec51fd7212fce8494587c97aa52a65c0179d8408f015ed16",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_deadline_and_authority_after_connect[send-deadline]"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.23s",
+    "restored_summary": "1 passed, 135 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_response_deadline",
+    "file": "src/gruntime/inference_relay.py",
+    "line": 109,
+    "guard_sha256": "38b8a16b52d43727e328164dfe16d8043e2319e35fc3955a6fab05c9a145de48",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_deadline_and_authority_after_connect[response-deadline]"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.22s",
+    "restored_summary": "1 passed, 135 deselected in 0.20s"
+  },
+  {
+    "guard": "gr08_local_target",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 135,
+    "guard_sha256": "4a4f3ac57ea351a86b89e7cba4b7021ec932a22593ee8eeb3e31aa43f77ca9eb",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[target]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 131 deselected in 3.05s",
+    "restored_summary": "5 passed, 131 deselected in 3.01s"
+  },
+  {
+    "guard": "gr08_progress",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 149,
+    "guard_sha256": "2b83cffde1f130b36e0d9425b7554e8a5eba6be88669686fa0e8ce82bb655ecc",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[progress]"
+    ],
+    "mutant_summary": "1 failed, 9 passed, 126 deselected in 5.82s",
+    "restored_summary": "10 passed, 126 deselected in 5.96s"
+  },
+  {
+    "guard": "gr08_worker_lease",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 266,
+    "guard_sha256": "8cf9a045d248192eb68d50811fb7ffa49cd63e18cf2858675dff34359a0d4382",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_worker_lease_limits_requests_to_wall_budget"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 1.02s",
+    "restored_summary": "1 passed, 135 deselected in 0.90s"
+  },
+  {
+    "guard": "gr08_worker_output",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 292,
+    "guard_sha256": "d3edad2cc32030dad124201d34bf84f050347e10c8b33ed9e3f2f3e30172f787",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_controller_worker_output_is_checked_before_processing"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.77s",
+    "restored_summary": "1 passed, 135 deselected in 0.76s"
+  },
+  {
+    "guard": "gr08_bridge_leak_failure",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 300,
+    "guard_sha256": "325667054b8a5029155175634fc4d9fba553bd938f5deec5b87a4aa2db43dae6",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[progress]"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.75s",
+    "restored_summary": "1 passed, 135 deselected in 0.81s"
+  },
+  {
+    "guard": "gr08_artifact_write",
+    "file": "src/gruntime/artifacts.py",
+    "line": 50,
+    "guard_sha256": "632a63a03da5a4577504efcbdbd38eafe8185a90629c80ada0cca3586360fc57",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[artifact]"
+    ],
+    "mutant_summary": "1 failed, 126 deselected in 0.83s",
+    "restored_summary": "10 passed, 126 deselected in 5.84s"
+  },
+  {
+    "guard": "gr08_tool_metadata",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 66,
+    "guard_sha256": "b9eef70e52ac31bacc058a068e8f6d3d09b300705abb9872a43deca2fa33b584",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_tool_secret_diagnostics_are_discarded[metadata]"
+    ],
+    "mutant_summary": "1 failed, 134 deselected in 0.88s",
+    "restored_summary": "2 passed, 134 deselected in 1.35s"
+  },
+  {
+    "guard": "gr08_worker_diagnostic",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 310,
+    "guard_sha256": "0f2574a232f566c3ca07b4773be5d3d3974ba739d988d87565642393b59fab7e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_controller_diagnostic_is_checked_before_receipt"
+    ],
+    "mutant_summary": "1 failed, 135 deselected in 0.77s",
+    "restored_summary": "1 passed, 135 deselected in 0.77s"
+  },
+  {
+    "guard": "gr08_shim_framing",
+    "file": "src/gruntime/adapters/relay_client.py",
+    "line": 35,
+    "guard_sha256": "78e5c68bed6deb09f7df0ca999f2f2f1810278d13514af94682ba0867f4933dc",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_shim_framing_guard[length]"
+    ],
+    "mutant_summary": "1 failed, 140 deselected in 0.18s",
+    "restored_summary": "2 passed, 140 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_nonempty_secret",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 33,
+    "guard_sha256": "13a5efa19a9e867dae9b5d12ac258f71a2b60f12079002fdb0049e69eb41bdfd",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_empty_secret_refused_before_fingerprint_write"
+    ],
+    "mutant_summary": "1 failed, 141 deselected in 0.18s",
+    "restored_summary": "1 passed, 141 deselected in 0.16s"
+  },
+  {
+    "guard": "gr08_cursor_write",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 93,
+    "guard_sha256": "84c4dd57f2bce562297228daad985d35f36131d220b5a45977a159ab94c0aa46",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_cursor_sinks_reject_before_sqlite_write[execute]"
+    ],
+    "mutant_summary": "1 failed, 139 deselected in 0.23s",
+    "restored_summary": "3 passed, 139 deselected in 0.33s"
+  },
+  {
+    "guard": "gr08_cursor_many",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 99,
+    "guard_sha256": "80ffe1bc1d26be354b949a4d45877e82749aec979220109069438bb90b8fe6ef",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_cursor_sinks_reject_before_sqlite_write[executemany]"
+    ],
+    "mutant_summary": "1 failed, 141 deselected in 0.22s",
+    "restored_summary": "1 passed, 141 deselected in 0.21s"
+  },
+  {
+    "guard": "gr08_cursor_script",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 104,
+    "guard_sha256": "0b4480348bd160113706d769fe9c4f32ff306084987de2a1d78a0729776dac7b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_relay_boundaries.py::test_cursor_sinks_reject_before_sqlite_write[executescript]"
+    ],
+    "mutant_summary": "1 failed, 141 deselected in 0.24s",
+    "restored_summary": "1 passed, 141 deselected in 0.22s"
+  },
+  {
+    "guard": "gr08_sql_write",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 117,
+    "guard_sha256": "a1d815faa8b67bc0b05d0dda8db55e09f3a79cdef85a90f20aa97d23d5e97584",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[state]"
+    ],
+    "mutant_summary": "1 failed, 6 passed, 132 deselected in 4.15s",
+    "restored_summary": "10 passed, 132 deselected in 5.84s"
+  },
+  {
+    "guard": "gr08_sql_many",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 123,
+    "guard_sha256": "294b442bc58bbf0232e493a7687387ee19c958bbb53de2dad261515e9d5ade58",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[sql-many]"
+    ],
+    "mutant_summary": "1 failed, 7 passed, 132 deselected in 5.54s",
+    "restored_summary": "10 passed, 132 deselected in 5.85s"
+  },
+  {
+    "guard": "gr08_sql_script",
+    "file": "src/gruntime/secret_guard.py",
+    "line": 128,
+    "guard_sha256": "8b17bdf7b86dcf9660398c2dbc7365230ba0ec0e8cfc9e1ba760f8d53224f6dc",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[sql-script]"
+    ],
+    "mutant_summary": "1 failed, 8 passed, 132 deselected in 5.24s",
+    "restored_summary": "10 passed, 132 deselected in 5.83s"
+  }
+]

@@ -483,7 +483,10 @@ class StateStore(ContractStore):
     def __init__(self, connection: Any, db_path: Path) -> None:
         self.connection = connection
         self.db_path = Path(db_path)
-        self.artifacts = ArtifactStore(self.db_path.parent / "artifacts")
+        from .secret_guard import SecretGuard
+        self.secret_guard = SecretGuard(self.db_path.with_suffix('.secrets.json'))
+        self.connection.secret_guard = self.secret_guard
+        self.artifacts = ArtifactStore(self.db_path.parent / "artifacts", secret_guard=self.secret_guard)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -501,7 +504,8 @@ class StateStore(ContractStore):
         """
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(str(db_path), isolation_level=None)
+        from .secret_guard import GuardedConnection
+        connection = sqlite3.connect(str(db_path), isolation_level=None, factory=GuardedConnection)
         connection.row_factory = sqlite3.Row
         for name, value in PRAGMAS:
             connection.execute(f"PRAGMA {name}={value}")
@@ -666,6 +670,8 @@ class StateStore(ContractStore):
         under the per-project lock; the event and the new `event_head` are
         persisted in one transaction. Only then is the change observable.
         """
+        self.secret_guard.check((project_id, event_type, actor_to_dict(actor), subject,
+            payload, capability_used, authority_ref, causal_parent))  # guard:gr08_event_append
         payload_ref = self.artifacts.put(payload, media_type="application/json")
         connection = self.connection
         nested = connection.in_transaction

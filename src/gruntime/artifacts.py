@@ -20,6 +20,7 @@ from pathlib import Path
 from .canonical import digest_bytes, is_digest
 from .errors import IntegrityViolation
 from .models import ArtifactRef, Encoding, Hash, RetentionClass
+from .secret_guard import SecretGuard
 
 
 def _fsync_dir(path: Path) -> None:
@@ -33,8 +34,9 @@ def _fsync_dir(path: Path) -> None:
 class ArtifactStore:
     """A content-addressed store rooted at `root`."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, secret_guard=None) -> None:
         self.root = Path(root)
+        self.secret_guard = secret_guard if secret_guard is not None else SecretGuard()
 
     def put(
         self,
@@ -45,6 +47,7 @@ class ArtifactStore:
         retention_class: RetentionClass = RetentionClass.STANDARD,
     ) -> ArtifactRef:
         """Store `data` and return its ref. Idempotent on content."""
+        self.secret_guard.check((data, media_type, encoding, retention_class))  # guard:gr08_artifact_write
         digest = digest_bytes(data)
         target = self.path_for(digest)
         if not target.exists():

@@ -34,6 +34,7 @@ from ..provider import (
     WorkerProvider,
 )
 from ..models import WorkerRole
+from ..secret_guard import SecretGuard
 
 #: Journal file holding one record per provider call.
 JOURNAL_NAME = "journal.jsonl"
@@ -73,6 +74,11 @@ class FakeProvider(WorkerProvider):
 
     def __init__(self, journal_dir: Path) -> None:
         self.journal_dir = Path(journal_dir)
+        self.secret_guard = SecretGuard()
+
+    def _write_durably(self, path, data):
+        self.secret_guard.check(data)  # guard:gr08_fake_write
+        _write_durably(path, data)
 
     # -- inspection --------------------------------------------------------
 
@@ -114,7 +120,7 @@ class FakeProvider(WorkerProvider):
         adoption must preserve it as a refusal mapped to `FAILED`, never
         upgrade it to `COMPLETED` (`W-INV-4`).
         """
-        _write_durably(
+        self._write_durably(
             self.journal_dir / DEFAULT_OUTCOME_NAME,
             json.dumps(
                 {
@@ -175,7 +181,7 @@ class FakeProvider(WorkerProvider):
         seed = self._default_outcome()
         output = seed["output"].encode("utf-8", errors="surrogateescape")
         output_ref = self._store_output(key, output)
-        _write_durably(
+        self._write_durably(
             stored,
             json.dumps(
                 {
@@ -257,6 +263,7 @@ class FakeProvider(WorkerProvider):
             {"kind": kind, "at": datetime.now(timezone.utc).isoformat(), **fields},
             sort_keys=True,
         )
+        self.secret_guard.check(line)  # guard:gr08_log_line
         with open(self._journal_path(), "a", encoding="utf-8") as handle:
             handle.write(line + "\n")
             handle.flush()
@@ -264,7 +271,7 @@ class FakeProvider(WorkerProvider):
 
     def _store_output(self, idempotency_key: Hash, output: bytes) -> ArtifactRef:
         digest = digest_bytes(output)
-        _write_durably(
+        self._write_durably(
             self.journal_dir / OUTCOMES_DIRNAME / digest.replace(":", "-"), output
         )
         return ArtifactRef(

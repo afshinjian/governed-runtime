@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Preflight the first supervised pilot, using only the throwaway repository.
+
+This pilot is BLOCKED before registration. The shipped ClaudeCodeProvider
+requires an injected transport; the only shipped transport, ProcessTransport,
+cannot reach inference or credentials. No live transport configuration exists
+in this checkout. Do not replace this refusal with an unsandboxed subprocess,
+a fixture, or a manufactured receipt.
+
+Run: bin/pilot-run
+Exit 2 means a missing prerequisite; exit 1 means an invalid pilot target.
+The JSON report distinguishes requested transitions from observed execution.
+No runtime transition is performed, so no human approval is fabricated. The
+remaining end-to-end driver is blocked on the missing live transport, rather
+than represented here by unreachable or simulated implementations.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+RUNTIME = Path(__file__).resolve().parents[1]
+TARGET = Path('/tmp/pilot-sandbox')
+DATABASE = Path('/tmp/pilot-db')
+BASE = '27e6c88'
+TRANSITIONS = (
+    ('register_project', 'project.create'),
+    ('take_reality_snapshot', 'snapshot.take'),
+    ('activate_stage_contract', 'contract.activate'),
+    ('dispatch_claude_code_implementer', 'worker.invoke'),
+    ('execute_catalog_validation', 'validation.execute'),
+    ('propose_commit_intent', 'commit.propose'),
+    ('authorize_commit_intent', 'commit.authorize'),
+    ('apply_commit_intent_gr10', 'commit.apply'),
+)
+
+
+def git(*arguments: str) -> str:
+    # Read only, and immune to an ambient GIT_DIR redirecting the target.
+    environment = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null')
+    return subprocess.run(
+        ['git', '--no-optional-locks', '-C', str(TARGET), *arguments],
+        check=True, capture_output=True, text=True, timeout=10,
+        env=environment, cwd='/tmp',
+    ).stdout.strip()
+
+
+def inspect_target() -> dict:
+    if TARGET.is_symlink() or TARGET.resolve() != TARGET:
+        raise ValueError('The pilot target must be the real /tmp/pilot-sandbox directory.')
+    if not TARGET.is_dir() or TARGET.resolve() == RUNTIME:
+        raise ValueError('The pilot target is absent or resolves to the runtime checkout.')
+    if Path(git('rev-parse', '--show-toplevel')).resolve() != TARGET:
+        raise ValueError('The pilot target must be its own repository root.')
+    if DATABASE.exists() or DATABASE.is_symlink():
+        raise ValueError('/tmp/pilot-db already exists; refusing to reuse or delete it.')
+    head = git('rev-parse', 'HEAD')
+    if head != git('rev-parse', '--verify', BASE + '^{commit}'):
+        raise ValueError('The pilot target is no longer at commit 27e6c88.')
+    paths = git('ls-files', '-z').split('\0')
+    if paths != ['main.py', '']:
+        raise ValueError('The pilot must contain exactly one tracked file: main.py.')
+    if git('status', '--porcelain=v1', '--untracked-files=all'):
+        raise ValueError('The pilot target has local changes; refusing to proceed.')
+    if (TARGET / 'main.py').is_symlink() or not (TARGET / 'main.py').is_file():
+        raise ValueError('main.py must be a regular file.')
+    return {'head': head, 'tracked_paths': ['main.py'], 'clean': True,
+            'store_exists': False}
+
+
+def inspect_claude() -> dict:
+    executable = shutil.which('claude')
+    result = {'executable': executable, 'version': None,
+              'credential_file_present': (Path.home() / '.claude/.credentials.json').is_file(),
+              'authentication_verified': False, 'inference_attempted': False}
+    if executable:
+        version = subprocess.run(
+            [executable, '--version'], capture_output=True, text=True,
+            timeout=15, cwd='/tmp', check=True,
+        )
+        result['version'] = version.stdout.strip()
+    # Credential contents and environment values never enter the report.
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
+    report = {
+        'mode': 'SUPERVISED',
+        'target_repository': str(TARGET),
+        'fresh_store_root': str(DATABASE),
+        'objective': 'Add greet(name) to main.py, returning a greeting.',
+        # StageContract calls this scope_include; allowed_paths is the user's
+        # requested scope, not an invented schema field or an actual grant.
+        'requested_scope': {'allowed_paths': ['main.py'], 'scope_include': ['main.py']},
+        'state': 'PREFLIGHT',
+        'capability_grant': None,
+        'receipt': None,
+        'runtime_transitions_performed': 0,
+        'steps': [dict(step=i, transition=name, state='NOT_ATTEMPTED',
+                       requested_capability=capability, capability_grant=None, receipt=None)
+                  for i, (name, capability) in enumerate(TRANSITIONS, start=1)],
+    }
+    try:
+        report['target_observation'] = inspect_target()
+        report['claude'] = inspect_claude()
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        report.update(state='BLOCKED', reason=str(exc), blocked_before='register_project')
+        print(json.dumps(report, indent=2), flush=True)
+        return 1
+
+    missing = [
+        'A live transport implementation injected into ClaudeCodeProvider(transport=...). '
+        'The only shipped transport is ProcessTransport: --unshare-all disables network, '
+        '--clearenv removes ambient credentials, and the worker receives a fresh empty HOME.',
+        'That live transport must provide a fixed inference endpoint and broker-side '
+        'authentication, preserve isolation, and expose worker tool calls only through '
+        'the invocation bridge. There is no shipped broker or configuration switch '
+        'that enables this in ProcessTransport.',
+    ]
+    if not report['claude']['executable']:
+        missing.insert(0, 'The Claude Code executable is absent from PATH.')
+    report.update(
+        state='BLOCKED', blocked_before='register_project',
+        reason='Live transport unavailable; stopped before creating the store or granting authority.',
+        missing=missing,
+        implementation_evidence=[
+            'src/gruntime/adapters/claude_code.py: ClaudeCodeProvider',
+            'src/gruntime/adapters/journaled_worker.py: constructor requires transport',
+            'src/gruntime/adapters/worker_process.py: offline isolation and broker requirements',
+            'CLAUDE.md: Known gaps / GR-07',
+        ],
+        receipt_absence_reason='No invocation, validation, or commit was attempted; no runtime receipt exists.',
+        supervision='Stopped before the first transition. Subsequent transitions require individual human confirmation.',
+    )
+    print(json.dumps(report, indent=2), flush=True)
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())
