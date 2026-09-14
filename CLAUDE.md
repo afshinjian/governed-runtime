@@ -34,3 +34,10 @@ Rules:
   Precommit validation is therefore unimplementable as designed. RealitySnapshot
   has no root field and scope is [Glob] over workspace-relative paths, so this
   cannot be closed by wiring alone. Requires DESIGN-02.
+
+## Design baseline
+design-01-frozen is amended by design-02-frozen in three places:
+- W-INV-2 (domain-model.md:611) — precommit kernel staging now permitted
+- transition-matrix.md:429 — commit allowed during AWAITING_VALIDATION
+- CM-INV-3 — attributable staging distinguished from an unknown commit
+Any review or implementation must read BOTH. design-01-frozen alone is stale.
