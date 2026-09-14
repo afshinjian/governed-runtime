@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
-from .errors import ProviderUnavailable
+from .errors import ProviderUnavailable, GovernedRuntimeError
 from .gate import AFTER_LOOKUP_BEFORE_RECEIPT, gate
 from .models import CommitIntent, Id, ReconciliationState, WorkerInvocation
 from .provider import (
@@ -193,6 +193,7 @@ def run_recovery(
     provider: GovernedProvider,
     repo: Optional[object] = None,
     settle: Optional[Callable[[object, Resolution], Settlement]] = None,
+    provider_for=None,
 ) -> RecoveryOutcome:
     """Run the full §6.1 sequence for one project.
 
@@ -214,9 +215,12 @@ def run_recovery(
     for invocation in store.list_unreconciled_invocations(project_id):
         if not requires_lookup(invocation.reconciliation_state):
             continue
-        resolution = reconcile_invocation(
-            invocation, provider=provider, project_epoch=epoch
-        )
+        try:
+            resolution = reconcile_invocation(
+                invocation, provider=provider_for(invocation) if provider_for else provider, project_epoch=epoch
+            )
+        except (GovernedRuntimeError, ProviderError):
+            resolution = Resolution(observation=Observation.UNANSWERABLE)
         if settle is None:
             continue
         settlement = settle(invocation, resolution)

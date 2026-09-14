@@ -188,7 +188,10 @@ from .contracts import new_id
 from .decision import decision_content_hash
 
 
-class Controller(ContractController, ValidationController):
+from .worker_controller import WorkerController
+
+
+class Controller(WorkerController, ContractController, ValidationController):
     """Owns every state transition for one store."""
 
     def __init__(
@@ -204,6 +207,8 @@ class Controller(ContractController, ValidationController):
         self.store = store
         self.artifacts = artifacts
         self.provider = provider
+        self.providers = {}
+        self.register_provider(provider)
         #: The user's checkout: observed by every snapshot, written by nothing.
         self.repo = repo
         #: Where runtime-owned state that is not the workspace lives — the
@@ -908,85 +913,12 @@ class Controller(ContractController, ValidationController):
 
     # -- invocations (worker_provider §6) ----------------------------------
 
-    def create_invocation(self, run_id: Id, *, prompt: bytes) -> WorkerInvocation:
-        """Mint the key and persist the request, before any provider call.
-
-        Refuses with `BarrierViolation` while any record of the run is
-        unreconciled: a run that outlived a controller initiates no new
-        external effect until its records are settled (`RUN-INV-3`).
-        """
-        self._assert_barrier_clear(run_id, "creating an invocation")
-        run = self.store.get_run(run_id)
-        self._assert_may_initiate_effect(run.project_id, "creating an invocation")
-        project = self.store.get_project(run.project_id)
-
-        invocation_id = f"inv-{uuid.uuid4().hex}"
-        prompt_ref = self.store.store_artifact(
-            prompt, media_type="application/octet-stream"
-        )
-        context_digest = digest_json([])
-        deadline_at = now_ts() + DEFAULT_DEADLINE
-
-        # `WP-6`: the key is a function of what will be sent. Rebuilding the
-        # bundle after a restart would produce a different key and therefore a
-        # second execution, so the key is minted once and read back forever.
-        preimage = {
-            "invocation_id": invocation_id,
-            "worker_role": WorkerRole.IMPLEMENTER.value,
-            "binding_id": DEFAULT_BINDING,
-            "prompt_bundle_digest": prompt_ref.digest,
-            "context_digest": context_digest,
-            "scope_root": project.workspace_root,
-            "deadline_at": deadline_at.isoformat(),
-            "granted_capabilities": [],
-        }
-        idempotency_key = digest_json(preimage)
-        request_ref = self.store.store_artifact(
-            canonical_json(dict(preimage, idempotency_key=idempotency_key)),
-            media_type="application/json",
-        )
-
-        invocation = WorkerInvocation(
-            invocation_id=invocation_id,
-            run_id=run_id,
-            stage_id=run.stage_id,
-            provider_id=self.provider.describe().provider_id,
-            provider_version=self.provider.describe().provider_version,
-            worker_role=WorkerRole.IMPLEMENTER,
-            prompt_bundle_ref=prompt_ref,
-            request_ref=request_ref,
-            request_digest=request_ref.digest,
-            context_digest=context_digest,
-            idempotency_key=idempotency_key,
-            controller_epoch=project.controller_epoch,
-            status=InvocationStatus.PENDING,
-            reconciliation_state=derive_reconciliation_state(
-                record_epoch=project.controller_epoch,
-                project_epoch=project.controller_epoch,
-                status_terminal=False,
-            ),
-            deadline_at=deadline_at,
-        )
-        # Evidence-model §3.2.1 step 1: the identity is durable before the
-        # effect, so a crash before the receipt is recoverable by key alone.
-        self._append(
-            run.project_id,
-            event_type="invocation.created",
-            epistemic_class=EpistemicClass.AUTHORITY,
-            subject={"invocation_id": invocation_id, "run_id": run_id},
-            payload={
-                "idempotency_key": idempotency_key,
-                "request_digest": request_ref.digest,
-                "controller_epoch": invocation.controller_epoch,
-            },
-            capability_used="worker.invoke",
-        )
-        self.store.put_invocation(invocation, run.project_id)
-        return invocation
 
     def mark_dispatched(self, invocation_id: Id) -> None:
         """`PENDING → DISPATCHED` (transition-matrix §7.1)."""
         invocation = self.store.get_invocation(invocation_id)
+        from .contracts import require
+        require(invocation.status is InvocationStatus.PENDING, 'dispatch status cannot be reset', PolicyDenied)  # guard:gr07_dispatch_reset
         project_id = self.store.invocation_project(invocation_id)
         invocation.status = InvocationStatus.DISPATCHED
         invocation.dispatched_at = now_ts()
@@ -1000,23 +932,6 @@ class Controller(ContractController, ValidationController):
         )
         self.store.put_invocation(invocation, project_id)
 
-    def _request_for(self, invocation: WorkerInvocation) -> InvocationRequest:
-        """Rebuild the request from the bytes that were persisted, verbatim."""
-        document = json.loads(self.store.artifact_bytes(invocation.request_digest))
-        return InvocationRequest(
-            invocation_id=document["invocation_id"],
-            worker_role=WorkerRole(document["worker_role"]),
-            binding_id=document["binding_id"],
-            prompt_bundle_ref=invocation.prompt_bundle_ref,
-            scope_view=ScopeView(
-                root=document["scope_root"],
-                file_index_ref=invocation.prompt_bundle_ref,
-                snapshot_id="",
-                writable=False,
-            ),
-            idempotency_key=document["idempotency_key"],
-            deadline_at=datetime.fromisoformat(document["deadline_at"]),
-        )
 
     def _mint_worker_receipt(
         self,
@@ -1028,6 +943,7 @@ class Controller(ContractController, ValidationController):
         attribution: Attribution,
         status: InvocationStatus,
         usage: Usage,
+        **extras,
     ) -> WorkerReceipt:
         output_ref = self.store.store_artifact(
             output, media_type="application/octet-stream"
@@ -1042,11 +958,14 @@ class Controller(ContractController, ValidationController):
             "attribution": attribution.value,
             "ended_at": ended_at.isoformat(),
         }
+        from .store import _worker_value
+        preimage['details'] = {k: _worker_value(v) for k, v in extras.items()}
+        preimage['usage'] = _worker_value(usage)
         receipt = WorkerReceipt(
             receipt_id=f"wr-{uuid.uuid4().hex}",
             invocation_id=invocation.invocation_id,
             ended_at=ended_at,
-            duration_ms=0,
+            duration_ms=usage.wall_clock_ms,
             usage=usage,
             output_ref=output_ref,
             output_digest=output_ref.digest,
@@ -1055,54 +974,37 @@ class Controller(ContractController, ValidationController):
             attested_by=_runtime_actor("worker_receipt"),
             receipt_hash=digest_json(preimage),
             prev_event_hash=project.event_head,
+            **extras,
         )
-        self._append(
-            project_id,
-            event_type="worker_receipt.attested",
-            epistemic_class=EpistemicClass.EVIDENCE,
-            subject={
-                "invocation_id": invocation.invocation_id,
-                "receipt_id": receipt.receipt_id,
-            },
-            payload=preimage,
-            capability_used=(
-                "recovery.reconcile"
-                if attribution is Attribution.RECONCILED
-                else "worker.invoke"
-            ),
-        )
-        self.store.put_worker_receipt(receipt, project_id)
-        invocation.status = status
-        invocation.receipt_id = receipt.receipt_id
-        self.store.put_invocation(invocation, project_id)
+        db = self.store.connection
+        db.execute('SAVEPOINT worker_receipt')
+        try:
+            self._append(
+                project_id,
+                event_type="worker_receipt.attested",
+                epistemic_class=EpistemicClass.EVIDENCE,
+                subject={
+                    "invocation_id": invocation.invocation_id,
+                    "receipt_id": receipt.receipt_id,
+                },
+                payload=preimage,
+                capability_used=(
+                    "recovery.reconcile"
+                    if attribution is Attribution.RECONCILED
+                    else "worker.invoke"
+                ),
+            )
+            self.store.put_worker_receipt(receipt, project_id)
+            invocation.status = status
+            invocation.receipt_id = receipt.receipt_id
+            self.store.put_invocation(invocation, project_id)
+            db.execute('RELEASE worker_receipt')
+        except BaseException:
+            db.execute('ROLLBACK TO worker_receipt')
+            db.execute('RELEASE worker_receipt')
+            raise
         return receipt
 
-    def invoke(self, invocation_id: Id) -> WorkerReceipt:
-        """Call the provider and mint the receipt with `attribution = DIRECT`.
-
-        The gate point between those two steps is where the crash tests kill
-        the process.
-        """
-        invocation = self.store.get_invocation(invocation_id)
-        project_id = self.store.invocation_project(invocation_id)
-        self._assert_barrier_clear(invocation.run_id, "invoking a worker")
-
-        governed = GovernedProvider(self.provider, DISPATCH_CAPABILITIES)
-        outcome = governed.invoke(self._request_for(invocation))
-
-        # The execution happened. Nothing below has been written yet: this is
-        # the window recovery has to close from the key alone.
-        gate(AFTER_INVOKE_BEFORE_RECEIPT)
-
-        return self._mint_worker_receipt(
-            invocation,
-            project_id,
-            output=governed.fetch(outcome.output_ref),
-            termination_reason=outcome.termination_reason,
-            attribution=Attribution.DIRECT,
-            status=status_for_outcome(outcome.status),
-            usage=outcome.usage,
-        )
 
     # -- commits (transition-matrix §7.4) ----------------------------------
 
@@ -1541,13 +1443,14 @@ class Controller(ContractController, ValidationController):
         attestation at all (`RA-INV-2`).
         """
         run = self.store.get_run(run_id)
+        worker_contract_hash = self._worker_review_contract(run_id, review_spec_id, reviews, quorum)
         attestation = mint_attestation(
             reviews=reviews,
             review_spec_id=review_spec_id,
             quorum=quorum,
             independence_required=True,
             input_snapshot_id=reviews[0].input_snapshot_id,
-            contract_hash=digest_json({"review_spec_id": review_spec_id}),
+            contract_hash=worker_contract_hash or digest_json({"review_spec_id": review_spec_id}),
             run_id=run_id,
             stage_id=run.stage_id,
             attested_by={
@@ -1684,6 +1587,7 @@ class Controller(ContractController, ValidationController):
             project_id,
             store=self.store,
             provider=self.recovery_provider(),
+            provider_for=lambda invocation: GovernedProvider(self._worker_provider(invocation), RECOVERY_CAPABILITIES),
             repo=None
             if self.repo is None
             else self.governed_repo(project_id, create=False),
@@ -1720,15 +1624,26 @@ class Controller(ContractController, ValidationController):
         state = self._settled_state(invocation, project_id, observation)
         escalation_id = None
         status = invocation.status
+        extras = {}
 
         if observation is Observation.FINISHED:
             outcome = resolution.lookup_result.outcome
             # `W-INV-4`: the outcome is adopted as it was. A refusal is a
             # refusal; adoption never upgrades it.
             status = status_for_outcome(outcome.status)
-            output = self.recovery_provider().fetch(outcome.output_ref)
+            output = GovernedProvider(self._worker_provider(invocation), RECOVERY_CAPABILITIES).fetch(outcome.output_ref)
             termination_reason = outcome.termination_reason
-            usage = outcome.usage
+            usage = Usage()
+            if outcome.output_ref.media_type == 'application/vnd.gruntime.worker-result+json':  # guard:gr07_structured_recovery
+                from .worker_protocol import result_document
+                from .errors import GovernedRuntimeError
+                try:
+                    document = result_document(output, invocation.invocation_id)
+                    self._worker_session(self._request_for(invocation), document)
+                    extras = self._worker_claim_fields(invocation, document)
+                except (GovernedRuntimeError, ValueError, KeyError, TypeError):
+                    status = InvocationStatus.FAILED
+                    termination_reason = TerminationReason.PROVIDER_ERROR
         elif observation is Observation.ABSENT:
             # Nothing ran under the key: the positive finding that the
             # invocation never took effect (transition-matrix §7.2).
@@ -1764,6 +1679,7 @@ class Controller(ContractController, ValidationController):
             attribution=Attribution.RECONCILED,
             status=status,
             usage=usage,
+            **extras,
         )
         return Settlement(state=state)
 

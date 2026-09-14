@@ -146,6 +146,7 @@ class InvocationStatus(str, Enum):
     """domain-model §8.1. Terminal from `COMPLETED` onwards."""
 
     PENDING = "PENDING"
+    DISPATCHING = "DISPATCHING"
     DISPATCHED = "DISPATCHED"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"

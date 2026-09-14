@@ -175,7 +175,7 @@ class ContractActivationRecord:
 
 
 def evaluate_authority(contract, activation, capability, *, run_id, project_id, now,
-                       root=None, path=None, submodules=(), exercise_decision=None):
+                       root=None, path=None, submodules=(), exercise_decision=None, grant_only=False):
     """Evaluate a verified activation. The controller also replays source records.
 
     No activation means no authority, including for a document labelled ACTIVE.
@@ -193,6 +193,8 @@ def evaluate_authority(contract, activation, capability, *, run_id, project_id, 
     require(set(activation.granted_capabilities) | set(activation.denied_capabilities) == set(contract.capability_request), "AX-8: activation must account for every request")  # guard:gr06_denial_coverage
     require(parse_ts(activation.expires_at) == parse_ts(activation.activated_at) + timedelta(milliseconds=contract.deadline_ms), "activation deadline differs from frozen contract")  # guard:gr06_activation_deadline
     require(capability not in contract.prohibited_actions, "contract prohibits action", CapabilityDenied)  # guard:gr06_prohibited_action
+    if grant_only:  # guard:gr07_grant_only_boundary
+        return True
     needs_decision = REGISTER[capability][0] == "HUMAN" or (
         activation.governance_mode_at_activation == "SUPERVISED" and capability in ("roadmap.writeback", "fs.delete"))
     if needs_decision:

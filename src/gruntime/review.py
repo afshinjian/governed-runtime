@@ -173,10 +173,10 @@ def independence_satisfied(
     """Computed from provenance (`WP-12`, `RC-2`), never asserted.
 
     A spec that does not require independence is satisfied by anything; one
-    that does is satisfied only if no counted review is a `SELF_REVIEW`.
+    that does accepts only INDEPENDENT provenance, never shared context.
     """
     if not independence_required:
         return True
     return all(
-        review.independence is not Independence.SELF_REVIEW for review in reviews
-    )
+        review.independence is Independence.INDEPENDENT for review in reviews
+    )  # guard:gr07_independence_attestation

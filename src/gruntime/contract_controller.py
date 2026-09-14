@@ -145,7 +145,7 @@ class ContractController:
                 severity=EscalationSeverity.HIGH, summary="activation grants no capabilities", run_id=run_id)
         return record
 
-    def require_authority(self, run_id, capability, *, path=None, repo=None, exercise_decision_id=None):
+    def require_authority(self, run_id, capability, *, path=None, repo=None, exercise_decision_id=None, _grant_only=False):
         run = self.store.get_run(run_id)
         try:
             activation = self.store.activation_for_run(run_id)
@@ -173,7 +173,7 @@ class ContractController:
             result = evaluate_authority(contract, activation, capability, run_id=run_id,
                 project_id=run.project_id, now=now, root=root, path=path,
                 exercise_decision=self.store.get_decision(exercise_decision_id) if exercise_decision_id else None,
-                submodules=repo.submodule_paths() if repo else ())
+                submodules=repo.submodule_paths() if repo else (), grant_only=_grant_only)
             return result
         except (CapabilityDenied, IntegrityViolation, PolicyDenied, ProtectedPathViolation) as exc:
             self._append(run.project_id, event_type="authority.denied", epistemic_class=EpistemicClass.AUTHORITY,

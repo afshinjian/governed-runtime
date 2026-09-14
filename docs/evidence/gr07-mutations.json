@@ -1,0 +1,1276 @@
+[
+  {
+    "guard": "gr07_claude_result",
+    "file": "src/gruntime/adapters/claude_code.py",
+    "line": 20,
+    "guard_sha256": "28a98e1244beeb5be9dbddba238846d85a407c9e3e3e834338d91b0405afce32",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[outer-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 16 passed, 73 deselected in 2.52s",
+    "restored_summary": "18 passed, 73 deselected in 2.46s"
+  },
+  {
+    "guard": "gr07_codex_terminal",
+    "file": "src/gruntime/adapters/codex.py",
+    "line": 19,
+    "guard_sha256": "85dd98fffdb929ed5aa493464d337c4d21710eca503d945652e1ac0ec8436bb3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[outer-CodexProvider]"
+    ],
+    "mutant_summary": "1 failed, 17 passed, 73 deselected in 2.55s",
+    "restored_summary": "18 passed, 73 deselected in 2.49s"
+  },
+  {
+    "guard": "gr07_codex_message",
+    "file": "src/gruntime/adapters/codex.py",
+    "line": 22,
+    "guard_sha256": "db66da9366ce60703fce5d5e770a2728fbec74e1562549a5558b46a92d924fe9",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_codex_requires_unambiguous_terminal_message"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.24s",
+    "restored_summary": "1 passed, 90 deselected in 0.22s"
+  },
+  {
+    "guard": "gr07_transport_context",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 78,
+    "guard_sha256": "e7ca9b84d80cfd3b1319a2e91567c2a3ef0f93cf6a6fe49c7876329fddc695fb",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_context_limit_is_enforced_by_adapter_too"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.25s",
+    "restored_summary": "1 passed, 90 deselected in 0.23s"
+  },
+  {
+    "guard": "gr07_adapter_preflight",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 82,
+    "guard_sha256": "e535efcbdf952f66d487bfdb4e3f0ad52552804dd10787a083e883c15ad6350b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_adapter_refuses_nonfresh_request[ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 89 deselected in 0.21s",
+    "restored_summary": "2 passed, 89 deselected in 0.30s"
+  },
+  {
+    "guard": "gr07_key_binding",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 89,
+    "guard_sha256": "d0e95fd7125ea673a075d287b4ac7804176c2179e9aa1a43ff085b9602733dab",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_same_key_cannot_change_request - Fail..."
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.21s",
+    "restored_summary": "1 passed, 90 deselected in 0.18s"
+  },
+  {
+    "guard": "gr07_adapter_output",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 101,
+    "guard_sha256": "5b6a360240ae6e64a26d2b4b3c5f45a7a02bc68bbaaf3c58f7cf2bdbe66e62d0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[overflow-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 14 passed, 73 deselected in 2.09s",
+    "restored_summary": "18 passed, 73 deselected in 2.49s"
+  },
+  {
+    "guard": "gr07_process_exit",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 107,
+    "guard_sha256": "07b9d232f84d9325369efc9f85e36d66a81d3e6778dfd662bbf6de58a161793e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[exit-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 12 passed, 73 deselected in 1.77s",
+    "restored_summary": "18 passed, 73 deselected in 2.52s"
+  },
+  {
+    "guard": "gr07_lookup_expiry",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 143,
+    "guard_sha256": "9fd3763922751c89d4c2dfeb28663bf2c28a908d3d483a377a09b74328e93a2a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_reservation_is_durable_live_then_unanswerable_and_never_replayed"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.25s",
+    "restored_summary": "1 passed, 90 deselected in 0.22s"
+  },
+  {
+    "guard": "gr07_process_isolation",
+    "file": "src/gruntime/adapters/worker_process.py",
+    "line": 47,
+    "guard_sha256": "de4f8ff53ca8df6cfc43e7317d081711a71a761fcac2c040b3beaa347927c9d2",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_process_contains_actual_forbidden_effects"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.19s",
+    "restored_summary": "1 passed, 90 deselected in 0.14s"
+  },
+  {
+    "guard": "gr07_process_environment",
+    "file": "src/gruntime/adapters/worker_process.py",
+    "line": 53,
+    "guard_sha256": "411c746706ca9eb5763e41a5d36e3c1aebabe11f9780fced2a73df361db6d169",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_process_contains_actual_forbidden_effects"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.16s",
+    "restored_summary": "1 passed, 90 deselected in 0.14s"
+  },
+  {
+    "guard": "gr07_process_deadline",
+    "file": "src/gruntime/adapters/worker_process.py",
+    "line": 70,
+    "guard_sha256": "33e49768b5b2527931901004d62b052bf8e42863ca8f4d9cc581b7b2d216a306",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_process_timeout_and_output_bound - As..."
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 10.13s",
+    "restored_summary": "1 passed, 90 deselected in 0.16s"
+  },
+  {
+    "guard": "gr07_process_output_bound",
+    "file": "src/gruntime/adapters/worker_process.py",
+    "line": 81,
+    "guard_sha256": "655fef3048f51bcce75a1b7c381e9d7ed2264e8e050dba2b14a84ece1b1a16fb",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_process_timeout_and_output_bound - As..."
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.20s",
+    "restored_summary": "1 passed, 90 deselected in 0.17s"
+  },
+  {
+    "guard": "gr07_bridge_closed",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 49,
+    "guard_sha256": "64c2542df29ae046de205832b1a2dd9970840f1fd58468f4afcd88c28466bba3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[closed]"
+    ],
+    "mutant_summary": "1 failed, 82 deselected in 0.22s",
+    "restored_summary": "9 passed, 82 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_bridge_expiry",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 50,
+    "guard_sha256": "57f0d439305eec617eb2ecc62ff5d825619b736f8a5c3137f5380c47ea43e48a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[expired]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 82 deselected in 0.32s",
+    "restored_summary": "9 passed, 82 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_bridge_epoch",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 53,
+    "guard_sha256": "8b5895a2635e7348a9546e6195884dcc89cc89c5b4587200c0049ae235931620",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[epoch]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 82 deselected in 0.45s",
+    "restored_summary": "9 passed, 82 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_bridge_suspension",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 54,
+    "guard_sha256": "9f02c1159edf0aa86e1a6720bd77b9f011d58564a1f65bb699ce67b2a533f5d6",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[suspended]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 82 deselected in 0.57s",
+    "restored_summary": "9 passed, 82 deselected in 1.10s"
+  },
+  {
+    "guard": "gr07_bridge_observation",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 55,
+    "guard_sha256": "ea5b1dca6ad431f4e2c4ca2e55aa501b8ec3a6241ffa48c22c0bc216190fa42e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_read_index_and_live_project_gate"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.24s",
+    "restored_summary": "1 passed, 90 deselected in 0.19s"
+  },
+  {
+    "guard": "gr07_bridge_grant",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 64,
+    "guard_sha256": "6f384016b5dcc282bb0864e9dd7358aca8421f516a5be93beafa216cb1c83756",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_subset_is_enforced_per_invocation"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.23s",
+    "restored_summary": "1 passed, 90 deselected in 0.18s"
+  },
+  {
+    "guard": "gr07_bridge_surface",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 66,
+    "guard_sha256": "8d37f03a541776fb33e3d1cabeb4513a83730411e72ed4e7139c0c3b3704f7a4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[surface]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 82 deselected in 0.67s",
+    "restored_summary": "9 passed, 82 deselected in 1.10s"
+  },
+  {
+    "guard": "gr07_tool_identity",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 69,
+    "guard_sha256": "93e5463ca7c4df4ffef08fd7beadd8a76a8ccd6a4850ce1b3f83f51b694c41eb",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[duplicate]"
+    ],
+    "mutant_summary": "1 failed, 8 passed, 82 deselected in 1.09s",
+    "restored_summary": "9 passed, 82 deselected in 1.17s"
+  },
+  {
+    "guard": "gr07_tool_arguments",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 74,
+    "guard_sha256": "e880f8abfab3d61aee04fd85d5138624309e3c166cce21fbff3bda8e81bb3fcd",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[args]"
+    ],
+    "mutant_summary": "1 failed, 5 passed, 82 deselected in 0.80s",
+    "restored_summary": "9 passed, 82 deselected in 1.09s"
+  },
+  {
+    "guard": "gr07_tool_authority",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 76,
+    "guard_sha256": "90d555c9675c3e741d0f3b44fb3cd721f774b06d70b62e5231cd6e2768e3e719",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[revoked]"
+    ],
+    "mutant_summary": "1 failed, 7 passed, 82 deselected in 1.02s",
+    "restored_summary": "9 passed, 82 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_tool_read_scope",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 81,
+    "guard_sha256": "ff1e10a3311a2b94ece04759153c203db20ea34c136f75f6b20aa1189f358f29",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_read_index_and_live_project_gate"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.23s",
+    "restored_summary": "1 passed, 90 deselected in 0.20s"
+  },
+  {
+    "guard": "gr07_lookup_registration",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 28,
+    "guard_sha256": "878f3f83f2a9c962fa28f3427fac00d8291c6963b691ba530210d3b245afec24",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_recovery_gate_and_provider_admissibility"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.21s",
+    "restored_summary": "1 passed, 90 deselected in 0.16s"
+  },
+  {
+    "guard": "gr07_provider_pin",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 36,
+    "guard_sha256": "38b00bc445e39ce654ccb2a6c786e30f259789e498a633d8b9532da2c2b9ec30",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[pin] - Failed: DID NO..."
+    ],
+    "mutant_summary": "1 failed, 83 deselected in 0.22s",
+    "restored_summary": "8 passed, 83 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_activation",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 41,
+    "guard_sha256": "60d469c1c419b52587c5947928042d17a9d8e59f0623f06ac35a5ff977d4c40f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[activation] - Attribu..."
+    ],
+    "mutant_summary": "1 failed, 77 deselected in 0.21s",
+    "restored_summary": "14 passed, 77 deselected in 1.48s"
+  },
+  {
+    "guard": "gr07_activation_live",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 44,
+    "guard_sha256": "00451705a86089f4b4fbdfe2bdb5583db15ace7d8ee808f4e353fc8a2828538d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[inactive] - Failed: D..."
+    ],
+    "mutant_summary": "1 failed, 1 passed, 77 deselected in 0.28s",
+    "restored_summary": "14 passed, 77 deselected in 1.49s"
+  },
+  {
+    "guard": "gr07_activation_replay",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 46,
+    "guard_sha256": "c1898080e0a6c96e9a0f7297656b349330e8c563ec2c511b8ede6586f3250f11",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[replay] - Failed: DID..."
+    ],
+    "mutant_summary": "1 failed, 2 passed, 77 deselected in 0.40s",
+    "restored_summary": "14 passed, 77 deselected in 1.51s"
+  },
+  {
+    "guard": "gr07_dispatch_barrier",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 51,
+    "guard_sha256": "aea1d47c046b19787eaf79418d0ede05fb53ae934564688a3d62b9f30e891f5d",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[barrier] - Failed: DI..."
+    ],
+    "mutant_summary": "1 failed, 13 passed, 77 deselected in 1.50s",
+    "restored_summary": "14 passed, 77 deselected in 1.50s"
+  },
+  {
+    "guard": "gr07_dispatch_observation",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 52,
+    "guard_sha256": "17d844722ce4f64d44b32cf0467e50c87636aa9233556aa06a56a2ff9c1509d6",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[project_suspension]"
+    ],
+    "mutant_summary": "1 failed, 12 passed, 77 deselected in 1.44s",
+    "restored_summary": "14 passed, 77 deselected in 1.47s"
+  },
+  {
+    "guard": "gr07_run_suspension",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 53,
+    "guard_sha256": "4c5ecb03b65f1d641b756de62d5360af34fb0796ebd12d6b57f1584e7de00609",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[suspension] - Failed:..."
+    ],
+    "mutant_summary": "1 failed, 11 passed, 77 deselected in 1.35s",
+    "restored_summary": "14 passed, 77 deselected in 1.51s"
+  },
+  {
+    "guard": "gr07_snapshot",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 56,
+    "guard_sha256": "8e0dd0ca5c3a9ee0f7917df86b65c24431256bd0e51e521506ebb75c295acffe",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[snapshot] - Attribute..."
+    ],
+    "mutant_summary": "1 failed, 10 passed, 77 deselected in 1.34s",
+    "restored_summary": "14 passed, 77 deselected in 1.54s"
+  },
+  {
+    "guard": "gr07_registered",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 64,
+    "guard_sha256": "c0d3f2662ea7c19550c19a01706abcc22e24e3f3720e35b3aaae388fdd42d581",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[provider] - KeyError:..."
+    ],
+    "mutant_summary": "1 failed, 3 passed, 77 deselected in 0.52s",
+    "restored_summary": "14 passed, 77 deselected in 1.47s"
+  },
+  {
+    "guard": "gr07_role",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 68,
+    "guard_sha256": "d611e980284ea5f3fd2c7f63c9dbfaf065641ca9a8f9e42c6c26997c3dc4fb1b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[role] - Failed: DID N..."
+    ],
+    "mutant_summary": "1 failed, 4 passed, 77 deselected in 0.60s",
+    "restored_summary": "14 passed, 77 deselected in 1.58s"
+  },
+  {
+    "guard": "gr07_binding",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 69,
+    "guard_sha256": "6631514b17b44c60d8ef2b83e45d5c33d59e696dbca28b65a8ec55bbc730fb72",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[binding] - Failed: DI..."
+    ],
+    "mutant_summary": "1 failed, 5 passed, 77 deselected in 0.74s",
+    "restored_summary": "14 passed, 77 deselected in 1.56s"
+  },
+  {
+    "guard": "gr07_invocation_budget",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 71,
+    "guard_sha256": "244a44daef3c25b50523da7f568cb0619aff9a8638b08fb672d3ef9209a843d8",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[budget] - Failed: DID..."
+    ],
+    "mutant_summary": "1 failed, 6 passed, 77 deselected in 0.83s",
+    "restored_summary": "14 passed, 77 deselected in 1.55s"
+  },
+  {
+    "guard": "gr07_refusal_retry",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 74,
+    "guard_sha256": "9642d018f3f755a2e52703d65f8d7cb19e5fec2fc173e206a103fef955ffb82e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[refusal] - Failed: DI..."
+    ],
+    "mutant_summary": "1 failed, 7 passed, 77 deselected in 0.96s",
+    "restored_summary": "14 passed, 77 deselected in 1.58s"
+  },
+  {
+    "guard": "gr07_scope_snapshot",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 91,
+    "guard_sha256": "7fa0b99e60077288a8f589f234c892c0bf91591ad8c4c6c2fada4fb063005876",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[scope] - Failed: DID ..."
+    ],
+    "mutant_summary": "1 failed, 9 passed, 77 deselected in 1.24s",
+    "restored_summary": "14 passed, 77 deselected in 1.55s"
+  },
+  {
+    "guard": "gr07_context_budget",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 104,
+    "guard_sha256": "2eec429c9a84112a685b440a674269d336f5a2254c3b8e823105a75bb972653e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_creation_guards[context] - Failed: DI..."
+    ],
+    "mutant_summary": "1 failed, 8 passed, 77 deselected in 1.12s",
+    "restored_summary": "14 passed, 77 deselected in 1.54s"
+  },
+  {
+    "guard": "gr07_proposal_scope",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 148,
+    "guard_sha256": "997141aa4486f54fbc3d1c8557bf3d350b88e4ee5b6c69c4858f44102b413722",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_rename_destination_cannot_broaden_paths"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.27s",
+    "restored_summary": "1 passed, 90 deselected in 0.23s"
+  },
+  {
+    "guard": "gr07_roadmap",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 151,
+    "guard_sha256": "aaa8b374f3a29bebd67568663d67893c31f05022c13e1cec11d2938c29470cb9",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_mutations_are_scope_checked_not_applied[ROADMAP.md]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 87 deselected in 0.66s",
+    "restored_summary": "4 passed, 87 deselected in 0.66s"
+  },
+  {
+    "guard": "gr07_validation_pin",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 158,
+    "guard_sha256": "49c2beb35c798c32afd6d195ebfa6394aed0d03680c0bf24c42dd81bdab45c3c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_validation_guards_are_independent_of_grant"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.20s",
+    "restored_summary": "1 passed, 90 deselected in 0.19s"
+  },
+  {
+    "guard": "gr07_review_stage",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 163,
+    "guard_sha256": "238e048408778e2a71f3ee3a685576b27c197a26c8eb3822a6a8874c2c5bd878",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_controller_refuses_self_review_and_shared_provenance[stage]"
+    ],
+    "mutant_summary": "1 failed, 86 deselected in 0.27s",
+    "restored_summary": "5 passed, 86 deselected in 0.97s"
+  },
+  {
+    "guard": "gr07_review_role",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 165,
+    "guard_sha256": "a63df640bfe6502ad218a1a11d35a7b1784dc520e22999da05cde26733361e56",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_controller_refuses_self_review_and_shared_provenance[role]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 86 deselected in 0.45s",
+    "restored_summary": "5 passed, 86 deselected in 0.97s"
+  },
+  {
+    "guard": "gr07_review_session",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 167,
+    "guard_sha256": "6495f296c89d6ba63f9e740afadf30bef5078534205739b3909679c215465540",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_controller_refuses_self_review_and_shared_provenance[session]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 86 deselected in 0.63s",
+    "restored_summary": "5 passed, 86 deselected in 0.92s"
+  },
+  {
+    "guard": "gr07_review_provider",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 168,
+    "guard_sha256": "e1e70dd130733fd799c68ee429a3797b75838ad9f315d1384264cf9953c24ae1",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_controller_refuses_self_review_and_shared_provenance[provider]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 86 deselected in 0.79s",
+    "restored_summary": "5 passed, 86 deselected in 0.95s"
+  },
+  {
+    "guard": "gr07_review_context",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 172,
+    "guard_sha256": "e770a7edc8e4774e5dd97469223847f2785e4389c029433bf1a77dbac1a595cf",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_controller_refuses_self_review_and_shared_provenance[context]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 86 deselected in 0.97s",
+    "restored_summary": "5 passed, 86 deselected in 0.97s"
+  },
+  {
+    "guard": "gr07_review_receipt",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 187,
+    "guard_sha256": "18c51d644dc8c2617ca92bc4fc58372edeb3a0ff67a18b429963757e4c0af99b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_receipt_spec_grant_and_kernel_attestation"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.28s",
+    "restored_summary": "1 passed, 90 deselected in 0.29s"
+  },
+  {
+    "guard": "gr07_review_spec",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 192,
+    "guard_sha256": "2a6e4cfa9d6999b58fdda8a84c6344dc170730312f02d71bee876514b945da48",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_receipt_spec_grant_and_kernel_attestation"
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.31s",
+    "restored_summary": "1 passed, 90 deselected in 0.28s"
+  },
+  {
+    "guard": "gr07_review_grant",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 193,
+    "guard_sha256": "69518eac22647c2634a683de2edf3e0bd0a2ef2dd14054da05200061542ae74c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_grant_is_required - Failed: DI..."
+    ],
+    "mutant_summary": "1 failed, 90 deselected in 0.30s",
+    "restored_summary": "1 passed, 90 deselected in 0.29s"
+  },
+  {
+    "guard": "gr07_result_session",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 200,
+    "guard_sha256": "3cd7b471d809dbde6528c38bdb85bb136f0068c4947091469e0dfc0624f6aa80",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[session-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 10 passed, 73 deselected in 1.60s",
+    "restored_summary": "18 passed, 73 deselected in 2.44s"
+  },
+  {
+    "guard": "gr07_request_grant",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 211,
+    "guard_sha256": "4f10581267e94d746ba8bdb19c52d5b2390b5c9124d4917a74b4a99bd2009603",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[grant] - Failed: DID ..."
+    ],
+    "mutant_summary": "1 failed, 1 passed, 83 deselected in 0.36s",
+    "restored_summary": "8 passed, 83 deselected in 1.10s"
+  },
+  {
+    "guard": "gr07_request_snapshot",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 212,
+    "guard_sha256": "7642143714dea44706dd742ea253bf4d66dd74255587b639282a6c9dcfc2b219",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[snapshot] - Failed: D..."
+    ],
+    "mutant_summary": "1 failed, 2 passed, 83 deselected in 0.57s",
+    "restored_summary": "8 passed, 83 deselected in 1.09s"
+  },
+  {
+    "guard": "gr07_cancel_reason",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 159,
+    "guard_sha256": "3e88d5f06d6896100e11f64fa6c7cdd6bb29522407370d8eb316d76588c7dad9",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_cancellation_is_durable_and_bounded_to_live_invocation"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.35s",
+    "restored_summary": "1 passed, 108 deselected in 0.81s"
+  },
+  {
+    "guard": "gr07_cancel_live",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 162,
+    "guard_sha256": "212e39fe225995191a8353cfaec9128585239f19082f3682b37b0cb47ab58efd",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_cancellation_is_durable_and_bounded_to_live_invocation"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.36s",
+    "restored_summary": "1 passed, 108 deselected in 0.21s"
+  },
+  {
+    "guard": "gr07_dispatch_reset",
+    "file": "src/gruntime/controller.py",
+    "line": 921,
+    "guard_sha256": "61aee2dbf2070fe763b91d2f045f1b524845414f9718168f8bbe94c5b9aa938c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_cannot_reset_a_live_invocation"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.21s",
+    "restored_summary": "1 passed, 108 deselected in 0.18s"
+  },
+  {
+    "guard": "gr07_independence_attestation",
+    "file": "src/gruntime/review.py",
+    "line": 182,
+    "guard_sha256": "03e29166800f5e06ea0f760312b0cf7066ed1293b98fe2cd5e420e0822bc86ff",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_independence_attestation_rejects_shared_context"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.20s",
+    "restored_summary": "1 passed, 108 deselected in 0.17s"
+  },
+  {
+    "guard": "gr07_worker_classes",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 54,
+    "guard_sha256": "1e0a9ed663f15a759de52732237ce4c3d803856b423721d45d14ef47937ae3bd",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_worker_classes_exclude_all_nonordinary_grants[worker.invoke]"
+    ],
+    "mutant_summary": "1 failed, 105 deselected in 0.19s",
+    "restored_summary": "4 passed, 105 deselected in 0.42s"
+  },
+  {
+    "guard": "gr07_context_read",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 90,
+    "guard_sha256": "6659e2b9b0199ae423b2c72986a0967286a7659dc9f83337541aa3abd6d71653",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_no_read_grant_means_no_repository_bytes"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.19s",
+    "restored_summary": "1 passed, 108 deselected in 0.17s"
+  },
+  {
+    "guard": "gr07_review_envelope",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 206,
+    "guard_sha256": "16cab4c3a4cc8e639f222f0709c93c0ccac3ce2e4d18b5ab1f362c81c50a2deb",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_evidence_cannot_be_forged[envelope]"
+    ],
+    "mutant_summary": "1 failed, 104 deselected in 0.30s",
+    "restored_summary": "5 passed, 104 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_attest_provenance",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 225,
+    "guard_sha256": "5d2327ac237b34007f5cb51306b1a969d36d61b4fa7bacbc0be913099efedc3a",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_evidence_cannot_be_forged[provenance]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 104 deselected in 0.53s",
+    "restored_summary": "5 passed, 104 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_attest_binding",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 231,
+    "guard_sha256": "2aca2e14ac35ad0481517cdce89f93f41d6583acef7ffb59efd945e6f73542fb",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_evidence_cannot_be_forged[binding]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 104 deselected in 0.71s",
+    "restored_summary": "5 passed, 104 deselected in 1.08s"
+  },
+  {
+    "guard": "gr07_attest_contract",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 235,
+    "guard_sha256": "81a7aae8412f6bdbfe33e23ddf61319f6c8d047407aa4812c92e7a0d78616449",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_evidence_cannot_be_forged[quorum]"
+    ],
+    "mutant_summary": "1 failed, 3 passed, 104 deselected in 0.92s",
+    "restored_summary": "5 passed, 104 deselected in 1.07s"
+  },
+  {
+    "guard": "gr07_request_identity",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 250,
+    "guard_sha256": "6a1632b0167a2255b0b1c65c495bd54ba0ae7635b72ad7855fc0254c116196fa",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_identity_epoch_and_wall_budget[request_identity]"
+    ],
+    "mutant_summary": "1 failed, 106 deselected in 0.23s",
+    "restored_summary": "3 passed, 106 deselected in 0.50s"
+  },
+  {
+    "guard": "gr07_dispatch_once",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 256,
+    "guard_sha256": "82a1ded01789feaada0a2ef373ba3689dae2f7977b2667835ce62fcec23beca5",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[once] - AssertionErro..."
+    ],
+    "mutant_summary": "1 failed, 3 passed, 101 deselected in 0.68s",
+    "restored_summary": "8 passed, 101 deselected in 1.08s"
+  },
+  {
+    "guard": "gr07_deadline",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 257,
+    "guard_sha256": "39d5e113bb609a3e65f33d621324fa12a8a9e00a1f998450f184e7a5baa20b27",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[deadline] - Failed: D..."
+    ],
+    "mutant_summary": "1 failed, 4 passed, 101 deselected in 0.74s",
+    "restored_summary": "8 passed, 101 deselected in 1.10s"
+  },
+  {
+    "guard": "gr07_preflight",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 261,
+    "guard_sha256": "2908b543e30789c13b497d685170a10a955ee93ab4f9be10f07f69425ac5cbd0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[preflight] - Failed: ..."
+    ],
+    "mutant_summary": "1 failed, 5 passed, 101 deselected in 0.91s",
+    "restored_summary": "8 passed, 101 deselected in 1.11s"
+  },
+  {
+    "guard": "gr07_dispatch_cas",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 269,
+    "guard_sha256": "93da12ff0592a2581d5d1f2e2c47c0721a2b68ac99674f9515ec1e4de54e4395",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[cas] - Failed: DID NO..."
+    ],
+    "mutant_summary": "1 failed, 6 passed, 101 deselected in 1.09s",
+    "restored_summary": "8 passed, 101 deselected in 1.16s"
+  },
+  {
+    "guard": "gr07_durable_before_launch",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 277,
+    "guard_sha256": "cd698b22f6cb705bd65fa0328afb8cbc80dd911a099645bd10459302a6ab028e",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_is_durable_grant_bound_and_receipt_is_measured[ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 107 deselected in 5.28s",
+    "restored_summary": "2 passed, 107 deselected in 0.37s"
+  },
+  {
+    "guard": "gr07_result_deadline",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 294,
+    "guard_sha256": "a2573b9f1446b26101b40a64c7a6640388196c4edd28f044849b7ab6a0cb4b03",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_guards[late] - AssertionErro..."
+    ],
+    "mutant_summary": "1 failed, 7 passed, 101 deselected in 1.19s",
+    "restored_summary": "8 passed, 101 deselected in 1.10s"
+  },
+  {
+    "guard": "gr07_result_budget",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 296,
+    "guard_sha256": "ce94bc4a4af14d0f46a5ed24f099984deab13aec78f4aadf14d725edb3662a06",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_identity_epoch_and_wall_budget[budget]"
+    ],
+    "mutant_summary": "1 failed, 2 passed, 106 deselected in 0.52s",
+    "restored_summary": "3 passed, 106 deselected in 0.52s"
+  },
+  {
+    "guard": "gr07_receipt_epoch",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 305,
+    "guard_sha256": "61783988e2f59177a9c36c5faacdfee878360e1f875c7b78754d2dfa2c515af9",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_identity_epoch_and_wall_budget[epoch]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 106 deselected in 0.38s",
+    "restored_summary": "3 passed, 106 deselected in 0.51s"
+  },
+  {
+    "guard": "gr07_mutation_grant",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 320,
+    "guard_sha256": "35ff41916e3f92571376af57902430321391c4e5ec2c80bf98143f61229c1cb5",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_mutation_grant_is_required_even_inside_scope"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.24s",
+    "restored_summary": "1 passed, 108 deselected in 0.18s"
+  },
+  {
+    "guard": "gr07_validation_grant",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 329,
+    "guard_sha256": "3318775f2633a8d050aca6ddfcae13acac90236f28352cce43e98b01f11027de",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_validation_guards_are_independent_of_grant"
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.22s",
+    "restored_summary": "1 passed, 108 deselected in 0.19s"
+  },
+  {
+    "guard": "gr07_json_duplicate",
+    "file": "src/gruntime/worker_protocol.py",
+    "line": 49,
+    "guard_sha256": "772a5c0f393d324faed5be75b17c3877b18ccd673c7dcfba0e158499db0f693c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_protocol_guards - Failed: DID NOT RAI..."
+    ],
+    "mutant_summary": "1 failed, 108 deselected in 0.09s",
+    "restored_summary": "1 passed, 108 deselected in 0.07s"
+  },
+  {
+    "guard": "gr07_envelope_schema",
+    "file": "src/gruntime/worker_protocol.py",
+    "line": 59,
+    "guard_sha256": "5e7cef58a28e58c198280b1c0c5ab40c43b5572c20e1de51248c9a7810c70f67",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[unknown-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 4 passed, 91 deselected in 0.75s",
+    "restored_summary": "18 passed, 91 deselected in 2.38s"
+  },
+  {
+    "guard": "gr07_envelope_identity",
+    "file": "src/gruntime/worker_protocol.py",
+    "line": 60,
+    "guard_sha256": "33db0a53c3fd3db0a750500809619a6d57a9b421152b915f91f3115e83c753d7",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[identity-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 6 passed, 91 deselected in 0.99s",
+    "restored_summary": "18 passed, 91 deselected in 2.44s"
+  },
+  {
+    "guard": "gr07_envelope_reason",
+    "file": "src/gruntime/worker_protocol.py",
+    "line": 63,
+    "guard_sha256": "b52b8af7874aec3c655b333dd908e9e801a6cdafc5b9a51aa8d957f53883d82b",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[reason-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 8 passed, 91 deselected in 1.28s",
+    "restored_summary": "18 passed, 91 deselected in 2.41s"
+  },
+  {
+    "guard": "gr07_provider_idempotency",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 87,
+    "guard_sha256": "bfbc7acb0b9691d2d55c233f3d0e28610ceade7eeb1494abf54c19518dd5338c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_durable_lookup_and_recovery_never_execute[COMPLETED-COMPLETED-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 107 deselected in 0.40s",
+    "restored_summary": "10 passed, 107 deselected in 1.97s"
+  },
+  {
+    "guard": "gr07_provider_finished",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 89,
+    "guard_sha256": "c7c15875391218dec5b82cf8066821bcf23189457714feb9f679617b8c744a55",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_durable_lookup_and_recovery_never_execute[COMPLETED-COMPLETED-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 107 deselected in 0.42s",
+    "restored_summary": "10 passed, 107 deselected in 1.28s"
+  },
+  {
+    "guard": "gr07_transport_timeout",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 102,
+    "guard_sha256": "edcb48d821624c6540cbccf8b26bebe3fc4ef32514658facc3cb73781a095e03",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_transport_timeout_cannot_become_success"
+    ],
+    "mutant_summary": "1 failed, 116 deselected in 0.25s",
+    "restored_summary": "1 passed, 116 deselected in 0.20s"
+  },
+  {
+    "guard": "gr07_transport_cancel",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 105,
+    "guard_sha256": "dae9e4758e9f41652070a923859ba309722ba90dcc10fef4d277f98eed7360e0",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_cancellation_is_durable_and_bounded_to_live_invocation"
+    ],
+    "mutant_summary": "1 failed, 116 deselected in 0.27s",
+    "restored_summary": "1 passed, 116 deselected in 0.23s"
+  },
+  {
+    "guard": "gr07_lookup_absent",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 147,
+    "guard_sha256": "5f67cf949fe0b677458d61bfb3fc332d39c84832ea66bff9b8a7ca292505c4e3",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_durable_lookup_and_recovery_never_execute[COMPLETED-COMPLETED-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 107 deselected in 0.22s",
+    "restored_summary": "10 passed, 107 deselected in 1.31s"
+  },
+  {
+    "guard": "gr07_lookup_finished",
+    "file": "src/gruntime/adapters/journaled_worker.py",
+    "line": 149,
+    "guard_sha256": "5502256d98b3c752d57931e7218c3731427429dc8ab257ee29114db2534f91ad",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_durable_lookup_and_recovery_never_execute[COMPLETED-COMPLETED-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 107 deselected in 0.23s",
+    "restored_summary": "10 passed, 107 deselected in 1.25s"
+  },
+  {
+    "guard": "gr07_force_terminate",
+    "file": "src/gruntime/adapters/worker_process.py",
+    "line": 88,
+    "guard_sha256": "36a2e4632a1940e4aa9f6a364852b3b95505a6358e2fd7ae16e8c2dd45f1a48f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_force_termination_on_monitor_failure"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 116 deselected in 2.26s",
+    "restored_summary": "2 passed, 116 deselected in 0.19s"
+  },
+  {
+    "guard": "gr07_structured_recovery",
+    "file": "src/gruntime/controller.py",
+    "line": 1637,
+    "guard_sha256": "ff24ace43efda5523328dd269e4e0d03930bd6e3dabad073c1981f2809417731",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_recovery_rejects_session_reuse - Asse..."
+    ],
+    "mutant_summary": "1 failed, 117 deselected in 0.25s",
+    "restored_summary": "1 passed, 117 deselected in 0.20s"
+  },
+  {
+    "guard": "gr07_tool_replay",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 67,
+    "guard_sha256": "8ad6fa10e0c8a39c6a9665980b1a05e9d58c0f67cf8785c8abe9b843d0f81a9f",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_bridge_fences_invocation_and_rechecks_authority[duplicate]"
+    ],
+    "mutant_summary": "1 failed, 8 passed, 109 deselected in 1.13s",
+    "restored_summary": "9 passed, 109 deselected in 1.10s"
+  },
+  {
+    "guard": "gr07_tool_path",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 77,
+    "guard_sha256": "d9bcdc810f787077db1f97b3212d2f15178faadc805afdf8565f00eb6e0d6724",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_repository_injection_cannot_change_contract_or_grant[ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 116 deselected in 0.29s",
+    "restored_summary": "2 passed, 116 deselected in 0.47s"
+  },
+  {
+    "guard": "gr07_tool_validation",
+    "file": "src/gruntime/worker_bridge.py",
+    "line": 84,
+    "guard_sha256": "05561993d73ea316acf36a20c089b535aac5623ba37b16ff352d2c29d572a525",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_tool_validation_still_requires_a_pinned_spec"
+    ],
+    "mutant_summary": "1 failed, 117 deselected in 0.27s",
+    "restored_summary": "1 passed, 117 deselected in 0.22s"
+  },
+  {
+    "guard": "gr07_context_scope",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 94,
+    "guard_sha256": "ab036f32052174b03eb3e210ebac763c0e7943315013718b375b9ff39aabae86",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_excluded_context_is_never_given_to_provider"
+    ],
+    "mutant_summary": "1 failed, 117 deselected in 0.22s",
+    "restored_summary": "1 passed, 117 deselected in 0.17s"
+  },
+  {
+    "guard": "gr07_internal_context",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 99,
+    "guard_sha256": "d3fd407affb34e795a5045d02ee7f5aa2e78c1238cffafd350b7288e99efa502",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_internal_context_is_never_given_to_provider"
+    ],
+    "mutant_summary": "1 failed, 117 deselected in 0.17s",
+    "restored_summary": "1 passed, 117 deselected in 0.14s"
+  },
+  {
+    "guard": "gr07_review_import_boundary",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 220,
+    "guard_sha256": "0da924c48017bc8fd09616fee109fca5739167f3cd4150f067df4f7bd7badf72",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_review_evidence_cannot_be_forged[provenance]"
+    ],
+    "mutant_summary": "1 failed, 1 passed, 113 deselected in 0.50s",
+    "restored_summary": "5 passed, 113 deselected in 1.12s"
+  },
+  {
+    "guard": "gr07_receipt_reuse",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 244,
+    "guard_sha256": "57298f1d4deb16d468a01cbfd647eefb1abc15a7d3d2bf3555c0f2bec8c6ad1c",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_dispatch_is_durable_grant_bound_and_receipt_is_measured[ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 116 deselected in 0.29s",
+    "restored_summary": "2 passed, 116 deselected in 0.36s"
+  },
+  {
+    "guard": "gr07_structured_dispatch",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 290,
+    "guard_sha256": "528bef5b9696213c7b6664a79d2cee759f9ee6c327b608893543906f7207a888",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_unparseable_and_unbound_results_are_error_receipts[session-ClaudeCodeProvider]"
+    ],
+    "mutant_summary": "1 failed, 10 passed, 100 deselected in 1.57s",
+    "restored_summary": "18 passed, 100 deselected in 2.46s"
+  },
+  {
+    "guard": "gr07_rename_scope",
+    "file": "src/gruntime/worker_controller.py",
+    "line": 321,
+    "guard_sha256": "8ff69805a96029633a6892d525e03adbcb102b2e5a7be30008578df8a7ca2ee7",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_rename_destination_cannot_broaden_paths"
+    ],
+    "mutant_summary": "1 failed, 117 deselected in 0.29s",
+    "restored_summary": "1 passed, 117 deselected in 0.25s"
+  },
+  {
+    "guard": "gr07_grant_only_boundary",
+    "file": "src/gruntime/authority.py",
+    "line": 196,
+    "guard_sha256": "7fa87c3e24b61d613ddf510094a1050826a809534d81b0ca28bd2f982b8ad6f4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_grant_inspection_never_bypasses_path_enforcement"
+    ],
+    "mutant_summary": "1 failed, 118 deselected in 0.22s",
+    "restored_summary": "1 passed, 118 deselected in 0.83s"
+  },
+  {
+    "guard": "gr07_json_finite",
+    "file": "src/gruntime/worker_protocol.py",
+    "line": 53,
+    "guard_sha256": "b5a5392bc6cef46759c6dac0975455fa0540357f65387376bfac28abc7df17e4",
+    "killed": true,
+    "restored": true,
+    "failures": [
+      "FAILED tests/test_gr07_workers.py::test_protocol_guards - Failed: DID NOT RAI..."
+    ],
+    "mutant_summary": "1 failed, 118 deselected in 0.12s",
+    "restored_summary": "1 passed, 118 deselected in 0.09s"
+  }
+]

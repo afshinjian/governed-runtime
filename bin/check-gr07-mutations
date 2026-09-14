@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Weaken every marked GR-07 guard; require a test failure and green restoration.
+
+Mutants run sequentially in this checkout. The dedicated GR-07 suite covers
+these guards; the full regression suite is required before and after the batch.
+An import/collection failure is an invalid mutant, never counted as a kill.
+"""
+import argparse
+import ast
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+
+
+SELECTORS = {
+ 'gr07_json_finite':'protocol_guards',
+ 'gr07_grant_only_boundary':'grant_inspection',
+ 'gr07_tool_path':'repository_injection', 'gr07_tool_validation':'tool_validation',
+ 'gr07_provider_idempotency':'durable_lookup', 'gr07_provider_finished':'durable_lookup',
+ 'gr07_transport_timeout':'transport_timeout', 'gr07_transport_cancel':'cancellation_is_durable',
+ 'gr07_lookup_absent':'durable_lookup', 'gr07_lookup_finished':'durable_lookup',
+ 'gr07_context_scope':'excluded_context', 'gr07_internal_context':'internal_context',
+ 'gr07_review_import_boundary':'review_evidence', 'gr07_receipt_reuse':'dispatch_is_durable',
+ 'gr07_structured_dispatch':'unparseable', 'gr07_rename_scope':'rename_destination',
+ 'gr07_structured_recovery':'recovery_rejects_session', 'gr07_tool_replay':'bridge_fences',
+ 'gr07_force_terminate':'force_termination',
+
+ 'gr07_worker_classes':'worker_classes',
+ 'gr07_dispatch_reset':'dispatch_cannot_reset',
+ 'gr07_context_read':'no_read_grant', 'gr07_review_envelope':'review_evidence',
+ 'gr07_attest_provenance':'review_evidence', 'gr07_attest_binding':'review_evidence',
+ 'gr07_attest_contract':'review_evidence', 'gr07_independence_attestation':'independence_attestation',
+ 'gr07_request_identity':'identity_epoch', 'gr07_result_budget':'identity_epoch', 'gr07_receipt_epoch':'identity_epoch',
+ 'gr07_cancel_live':'cancellation_is_durable', 'gr07_cancel_reason':'cancellation_is_durable',
+
+ 'gr07_claude_result': 'unparseable', 'gr07_codex_terminal':'unparseable', 'gr07_codex_message':'unambiguous',
+ 'gr07_transport_context':'context_limit', 'gr07_adapter_preflight':'nonfresh', 'gr07_key_binding':'same_key',
+ 'gr07_adapter_output':'unparseable', 'gr07_process_exit':'unparseable', 'gr07_lookup_expiry':'reservation',
+ 'gr07_process_isolation':'process_contains', 'gr07_process_environment':'process_contains',
+ 'gr07_process_deadline':'process_timeout', 'gr07_process_output_bound':'process_timeout',
+ 'gr07_json_duplicate':'protocol_guards', 'gr07_envelope_schema':'unparseable', 'gr07_envelope_identity':'unparseable', 'gr07_envelope_reason':'unparseable',
+ 'gr07_bridge_closed':'bridge_fences', 'gr07_bridge_expiry':'bridge_fences', 'gr07_bridge_epoch':'bridge_fences',
+ 'gr07_bridge_suspension':'bridge_fences', 'gr07_bridge_observation':'bridge_read', 'gr07_bridge_grant':'bridge_subset',
+ 'gr07_bridge_surface':'bridge_fences', 'gr07_tool_identity':'bridge_fences', 'gr07_tool_arguments':'bridge_fences',
+ 'gr07_tool_authority':'bridge_fences', 'gr07_tool_read_scope':'bridge_read', 'gr07_lookup_registration':'admissibility',
+ 'gr07_provider_pin':'dispatch_guards', 'gr07_activation':'creation_guards', 'gr07_activation_live':'creation_guards',
+ 'gr07_activation_replay':'creation_guards', 'gr07_dispatch_barrier':'creation_guards', 'gr07_dispatch_observation':'creation_guards',
+ 'gr07_run_suspension':'creation_guards', 'gr07_snapshot':'creation_guards', 'gr07_registered':'creation_guards',
+ 'gr07_role':'creation_guards', 'gr07_binding':'creation_guards', 'gr07_invocation_budget':'creation_guards',
+ 'gr07_refusal_retry':'creation_guards', 'gr07_scope_snapshot':'creation_guards', 'gr07_context_budget':'creation_guards',
+ 'gr07_proposal_scope':'rename_destination', 'gr07_roadmap':'mutations_are_scope', 'gr07_validation_pin':'validation_guards',
+ 'gr07_review_stage':'shared_provenance', 'gr07_review_role':'shared_provenance', 'gr07_review_session':'shared_provenance',
+ 'gr07_review_provider':'shared_provenance', 'gr07_review_context':'shared_provenance',
+ 'gr07_review_receipt':'review_receipt', 'gr07_review_spec':'review_receipt', 'gr07_review_grant':'review_grant',
+ 'gr07_result_session':'unparseable', 'gr07_request_grant':'dispatch_guards', 'gr07_request_snapshot':'dispatch_guards',
+ 'gr07_dispatch_once':'dispatch_guards', 'gr07_deadline':'dispatch_guards', 'gr07_preflight':'dispatch_guards',
+ 'gr07_dispatch_cas':'dispatch_guards', 'gr07_durable_before_launch':'dispatch_is_durable',
+ 'gr07_result_deadline':'dispatch_guards', 'gr07_mutation_grant':'mutation_grant', 'gr07_validation_grant':'validation_guards',
+}
+
+ROOT = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--only', nargs='+')
+parser.add_argument('--resume', action='store_true', help='skip unchanged guards already killed with a green restoration')
+args = parser.parse_args()
+selected = set(args.only) if args.only else None
+output = ROOT / '.evidence/gr07'
+output.mkdir(parents=True, exist_ok=True)
+manifest = output/'mutations.json'
+results = json.loads(manifest.read_text()) if manifest.exists() and (args.only or args.resume) else []
+for path in sorted((ROOT / 'src/gruntime').rglob('*.py')):
+    original = path.read_text()
+    lines = original.splitlines(keepends=True)
+    tree = ast.parse(original)
+    for number, line in enumerate(lines, 1):
+        match = re.search(r'# guard:(gr07_[a-z_]+)', line)
+        if not match or selected is not None and match[1] not in selected:
+            continue
+        name = match[1]
+        nodes = [n for n in ast.walk(tree) if isinstance(n, ast.stmt) and n.lineno <= number <= n.end_lineno]
+        if not nodes:
+            raise RuntimeError(f'guard without statement: {name}')
+        node = min(nodes, key=lambda n: n.end_lineno - n.lineno)
+        fingerprint = hashlib.sha256(''.join(lines[node.lineno-1:node.end_lineno]).encode()).hexdigest()
+        if args.resume and any(r['guard'] == name and r['guard_sha256'] == fingerprint and r['killed'] and r['restored'] for r in results):
+            continue
+        if isinstance(node, ast.If):
+            # Preserve the branch structure and disable this particular gate.
+            start, end = node.test.lineno, node.test.end_lineno
+            prefix = lines[start-1][:node.test.col_offset]
+            suffix = lines[end-1][node.test.end_col_offset:]
+            condition = 'True' if name in ('gr07_review_import_boundary', 'gr07_grant_only_boundary') else 'False'
+            replacement = prefix + condition + suffix
+        elif name == 'gr07_process_isolation':
+            start, end = node.lineno, node.end_lineno
+            replacement = lines[start-1].replace("'--unshare-all', ", '')
+        elif name == 'gr07_process_environment':
+            start, end = node.lineno, node.end_lineno
+            replacement = ''.join(lines[start-1:end]).replace("'--clearenv',", '').replace("'--setenv', 'HOME', '/home/worker',", '')
+        else:
+            start, end = node.lineno, node.end_lineno
+            indent = lines[start-1][:node.col_offset]
+            replacement = indent + ('return True' if isinstance(node, ast.Return) else 'pass') + '\n'
+        mutant = ''.join(lines[:start-1]) + replacement + ''.join(lines[end:])
+        ast.parse(mutant)
+        print(f'Checking {name}', flush=True)
+        with tempfile.TemporaryDirectory(prefix='gr07-mutation-') as cache:
+            env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONPYCACHEPREFIX=cache)
+            cmd = [str(ROOT/'.venv/bin/python'), '-B', '-m', 'pytest', '-q', '-ra', '--color=no', '-p', 'no:cacheprovider', 'tests/test_gr07_workers.py']
+            selector = SELECTORS.get(name)
+            if selector:
+                cmd += ['-k', selector]
+            try:
+                path.write_text(mutant)
+                run = subprocess.run(cmd + ['--maxfail=1'], cwd=ROOT, env=env, capture_output=True, text=True)
+            finally:
+                path.write_text(original)
+            restored = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True)
+        (output/f'{name}-mutant.log').write_text(run.stdout+run.stderr)
+        (output/f'{name}-restored.log').write_text(restored.stdout+restored.stderr)
+        failures = [line for line in run.stdout.splitlines() if line.startswith('FAILED ')]
+        valid = run.returncode == 1 and bool(failures) and 'ERROR collecting' not in run.stdout
+        passed = valid and restored.returncode == 0
+        results = [r for r in results if r['guard'] != name]
+        results.append(dict(guard=name, file=str(path.relative_to(ROOT)), line=number,
+            guard_sha256=fingerprint,
+            killed=valid, restored=restored.returncode == 0, failures=failures,
+            mutant_summary=run.stdout.strip().splitlines()[-1], restored_summary=restored.stdout.strip().splitlines()[-1]))
+        (output/'mutations.json').write_text(json.dumps(results, indent=2)+'\n')
+        print(f'  {results[-1]["mutant_summary"]}; restored: {restored.returncode}', flush=True)
+        if not passed:
+            print(f'Failed mutation check: {name}. Original source restored.', flush=True)
+            sys.exit(1)
+print(f'All {len(results)} guards killed; all restored GR-07 suites passed.', flush=True)

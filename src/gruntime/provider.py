@@ -127,6 +127,9 @@ class InvocationRequest:
     scope_view: ScopeView
     idempotency_key: Hash
     deadline_at: Ts
+    session_id: str = ""
+    fresh_session: bool = True
+    contract_hash: Hash = ""
     context_refs: Sequence[ArtifactRef] = ()
     granted_capabilities: frozenset[CapabilityId] = frozenset()
     tool_surface: Sequence[ToolDescriptor] = ()

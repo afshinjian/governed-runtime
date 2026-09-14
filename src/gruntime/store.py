@@ -84,6 +84,7 @@ from .models import (
     Verdict,
     Verification,
     VcsKind,
+    Claim,
     WorkerInvocation,
     WorkerReceipt,
     WorkerRole,
@@ -111,8 +112,8 @@ SCHEMA_VERSION = "0.1.0"
 #: Physical layout version, kept in `PRAGMA user_version` — the place SQLite
 #: provides for exactly this, and separate from `SCHEMA_VERSION` because the
 #: two answer different questions: which domain model this database speaks,
-#: and which columns it actually has. GR-06 is version 4.
-STORAGE_VERSION = 4
+#: and which columns it actually has. GR-07 is version 5.
+STORAGE_VERSION = 5
 
 #: Columns this build reads that a pre-`STORAGE_VERSION` database lacks.
 #: Checked structurally as well as by version, because `user_version` defaults
@@ -120,6 +121,7 @@ STORAGE_VERSION = 4
 #: columns are what make it true, and a structural check cannot drift out of
 #: step with the schema above.
 REQUIRED_COLUMNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("worker_receipts", ("details",)),
     ("projects", ("capability_ceiling", "budget", "budget_used")),
     ("decisions", ("grants", "revokes", "signature")),
     ("commit_receipts", ("tree_id", "subject", "body_hash", "committed_paths", "files_changed")),
@@ -220,7 +222,7 @@ SCHEMA: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS worker_receipts (
         receipt_id TEXT PRIMARY KEY,
-        invocation_id TEXT NOT NULL,
+        invocation_id TEXT NOT NULL UNIQUE,
         project_id TEXT NOT NULL,
         ended_at TEXT NOT NULL,
         duration_ms INTEGER NOT NULL,
@@ -233,6 +235,7 @@ SCHEMA: tuple[str, ...] = (
         attested_by TEXT NOT NULL,
         receipt_hash TEXT NOT NULL,
         prev_event_hash TEXT NOT NULL,
+        details TEXT NOT NULL,
         ordinal INTEGER NOT NULL
     ) STRICT
     """,
@@ -1135,6 +1138,8 @@ class StateStore(ContractStore):
             media_type="application/json",
             byte_len=0,
         )
+        from .worker_protocol import request_from_bytes
+        request = request_from_bytes(self.artifact_bytes(row["request_digest"]))
         return WorkerInvocation(
             invocation_id=row["invocation_id"],
             run_id=row["run_id"],
@@ -1142,7 +1147,11 @@ class StateStore(ContractStore):
             provider_id=row["provider_id"],
             provider_version=row["provider_version"],
             worker_role=WorkerRole(row["worker_role"]),
-            prompt_bundle_ref=prompt_ref,
+            prompt_bundle_ref=request.prompt_bundle_ref,
+            execution_binding=request.binding_id,
+            context_refs=request.context_refs,
+            granted_capabilities=request.granted_capabilities,
+            budget_allocated=request.budget,
             request_ref=request_ref,
             request_digest=row["request_digest"],
             context_digest=row["context_digest"],
@@ -1199,8 +1208,8 @@ class StateStore(ContractStore):
             "INSERT INTO worker_receipts (receipt_id, invocation_id, project_id,"
             " ended_at, duration_ms, usage, output_digest, output_media_type,"
             " output_byte_len, termination_reason, attribution, attested_by,"
-            " receipt_hash, prev_event_hash, ordinal)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+            " receipt_hash, prev_event_hash, details, ordinal)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
             " (SELECT COUNT(*) FROM worker_receipts))",
             (
                 receipt.receipt_id,
@@ -1225,11 +1234,15 @@ class StateStore(ContractStore):
                 actor_to_json(receipt.attested_by),
                 receipt.receipt_hash,
                 receipt.prev_event_hash,
+                canonical_json({k: _worker_value(getattr(receipt, k)) for k in ("claims", "proposed_mutations", "requested_validations", "capability_violations_attempted", "scope_breaches_attempted")}).decode(),
             ),
         )
 
     def _worker_receipt_from_row(self, row: sqlite3.Row) -> WorkerReceipt:
         usage = json.loads(row["usage"])
+        details = json.loads(row["details"])
+        details["claims"] = tuple(Claim(**dict(c, offered_evidence=tuple(ArtifactRef(**a) for a in c["offered_evidence"]))) for c in details["claims"])
+        details["proposed_mutations"] = tuple(MutationProposal(**dict(m, op=MutationOp(m["op"]), after_ref=ArtifactRef(**m["after_ref"]) if m["after_ref"] else None)) for m in details["proposed_mutations"])
         return WorkerReceipt(
             receipt_id=row["receipt_id"],
             invocation_id=row["invocation_id"],
@@ -1247,6 +1260,7 @@ class StateStore(ContractStore):
             attested_by=actor_from_json(row["attested_by"]),
             receipt_hash=row["receipt_hash"],
             prev_event_hash=row["prev_event_hash"],
+            **details,
         )
 
     def list_worker_receipts(self, invocation_id: Id) -> list[WorkerReceipt]:
@@ -1900,3 +1914,12 @@ class StateStore(ContractStore):
             "UPDATE commit_intents SET preconditions=? WHERE intent_id=?",
             (canonical_json(raw).decode("utf-8"), intent_id),
         )
+
+
+def _worker_value(value):
+    from dataclasses import asdict, is_dataclass
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, (tuple, list)):
+        return [_worker_value(v) for v in value]
+    return value

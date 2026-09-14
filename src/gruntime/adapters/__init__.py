@@ -7,4 +7,8 @@ returns as `Opaque`.
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from .claude_code import ClaudeCodeProvider
+from .codex import CodexProvider
+from .worker_process import ProcessTransport
+
+__all__ = ['ClaudeCodeProvider', 'CodexProvider', 'ProcessTransport']

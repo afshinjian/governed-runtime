@@ -1188,9 +1188,21 @@ _VALIDATION_RULES = (
 
 # --- §7.2 — WorkerInvocation.status ---------------------------------------
 
-_UNSETTLED_INVOCATION = (_I.PENDING, _I.DISPATCHED, _I.RUNNING)
+_UNSETTLED_INVOCATION = (_I.PENDING, _I.DISPATCHING, _I.DISPATCHED, _I.RUNNING)
 
 _INVOCATION_RULES = (
+    # GR-07's explicit write-intent state refines dispatch without changing
+    # any frozen recovery rule or granting recovery executable authority.
+    _rule(
+        Axis.INVOCATION, (_I.PENDING, _I.DISPATCHED), _I.DISPATCHING, row="gr07-dispatch-intent",
+        pre=(_P.PROVIDER_ACCEPTED_INVOCATION, _P.BARRIER_CLEAR),
+        ev=(_E.ACT, _E.REQUEST_REF), cap="worker.invoke", sup=AUTO, auto=AUTO,
+    ),
+    _rule(
+        Axis.INVOCATION, _I.DISPATCHING, _I.DISPATCHED, row="gr07-dispatch-returned",
+        pre=(_P.PROVIDER_ACCEPTED_INVOCATION,),
+        ev=(_E.REQUEST_REF,), cap="worker.invoke", sup=AUTO, auto=AUTO,
+    ),
     _rule(
         Axis.INVOCATION, ORIGIN, _I.PENDING, row="7.2-1",
         pre=(_P.RUN_ALLOCATED_OR_WORKING, _P.BUDGET_HEADROOM, _P.BARRIER_CLEAR),
