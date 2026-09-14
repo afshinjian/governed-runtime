@@ -16,8 +16,11 @@ Rules:
 - Validation: [suspension closure](docs/suspension-validation.md).
 
 ## Known gaps
-- GR-09: network ALLOWLIST fails closed (declared, not implemented). Any
-  validation needing network egress is currently impossible, not merely denied.
+- GR-09: network policy has no constrained middle. ALLOWLIST is refused outright
+  (validation.py:130 — no enforcing adapter), so scoped egress is unavailable,
+  not merely denied. ANY adds `--share-net` (validation.py:133) with no
+  require_authority on the execute_validation path, so the only way to get
+  network is the unconstrained one, and it is ungated.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
   exercises the ERROR receipt. Verify before running on another host.
 - Storage v1→v2→v3→v4 all refuse older schemas with no migration path. Acceptable
@@ -36,8 +39,17 @@ Rules:
   cannot be closed by wiring alone. Requires DESIGN-02.
 
 ## Design baseline
-design-01-frozen is amended by design-02-frozen in three places:
-- W-INV-2 (domain-model.md:611) — precommit kernel staging now permitted
-- transition-matrix.md:429 — commit allowed during AWAITING_VALIDATION
-- CM-INV-3 — attributable staging distinguished from an unknown commit
-Any review or implementation must read BOTH. design-01-frozen alone is stale.
+design-01-frozen is the frozen design and is unchanged. `git diff
+design-01-frozen design-02-frozen -- design/` shows only two ADDED documents
+(387 insertions, 0 deletions); no frozen file was edited.
+
+DESIGN-02 records a proposed amendment in three places, as a design document
+only — not yet reflected in frozen text and not implemented:
+- W-INV-2 (domain-model.md:611) — proposes permitting precommit kernel staging
+- transition-matrix.md:429 — proposes allowing commit during AWAITING_VALIDATION
+- CM-INV-3 — proposes distinguishing attributable staging from an unknown commit
+
+Until those edits land in the frozen files, design-01-frozen remains the
+authoritative baseline and the amendment lives only in
+design/DESIGN-02-candidate-observation.md. Read both: the frozen baseline for
+what the design says, DESIGN-02 for what is proposed to change.
