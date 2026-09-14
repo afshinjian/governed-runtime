@@ -22,3 +22,6 @@ Rules:
   exercises the ERROR receipt. Verify before running on another host.
 - Storage v1→v2→v3→v4 all refuse older schemas with no migration path. Acceptable
   while pre-release; must be resolved before the first persistent pilot database.
+- GR-07: no test exercises a live provider. The subprocess transport is offline;
+  the full chain has never run against real Claude/Codex output. First live
+  invocation is unproven territory.
