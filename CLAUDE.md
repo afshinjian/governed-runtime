@@ -28,3 +28,9 @@ Rules:
 - GR-08: ToolBridge now provides the governed inference relay. Worker egress
   requires a live grant and stays within one HTTPS origin; ProcessTransport
   and validation isolation are unchanged. See [relay evidence](docs/gr08-validation.md).
+- DESIGN gap: no candidate observation exists. W-INV-2 keeps proposals out of the
+  workspace until apply_commit, which materializes and commits in one step, so
+  there is no moment at which proposed contents are on disk and uncommitted.
+  Precommit validation is therefore unimplementable as designed. RealitySnapshot
+  has no root field and scope is [Glob] over workspace-relative paths, so this
+  cannot be closed by wiring alone. Requires DESIGN-02.
