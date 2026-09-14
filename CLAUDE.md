@@ -1,6 +1,6 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-20 (DESIGN-02 candidate observation).
+Phase: GR-17 (validation execution authority gate).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
