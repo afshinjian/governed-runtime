@@ -1,6 +1,6 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-23 (DESIGN-04: correct design-01-frozen across the provisioning-critical confirmed findings).
+Phase: GR-23 (DESIGN-04 freeze and creation-path implementation).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
