@@ -62,6 +62,20 @@ authoritative baseline and the amendment lives only in
 design/DESIGN-02-candidate-observation.md. Read both: the frozen baseline for
 what the design says, DESIGN-02 for what is proposed to change.
 
+## Review method
+- A record freezes findings, not dispositions. Blocking flags are the owner's
+  and are set before the record is committed.
+- Re-review after a revision covers the fix and everything it touches: verify
+  each claimed-closed finding against the frozen text rather than against the
+  new wording, read every section the fix edited in full, check what the fix
+  cites, and ask explicitly whether the fix introduced new material. A fix to
+  one finding has twice introduced a defect in an adjacent cell the finding
+  never named.
+- Delta review does not replace a full independent pass before a freeze. Take
+  one full pass at the end, not one per revision.
+- The reviewer of a revision is the reviewer that raised the findings; the
+  author of a document never reviews it.
+
 ## Tooling
 - bin/mutate deletes the matched line, so a guard must be a single deletable
   line. A multi-line guard orphans its condition or its body and fails as a
