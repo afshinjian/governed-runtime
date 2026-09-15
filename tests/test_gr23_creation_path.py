@@ -163,30 +163,58 @@ def test_the_creation_approval_is_consumed_by_the_creation(h):
 # --- one transaction: a failure publishes nothing ---------------------------
 
 
+def _counts(store, *tables) -> dict:
+    return {
+        table: store.raw_execute(f"SELECT COUNT(*) FROM {table}")[0][0]
+        for table in tables
+    }
+
+
 def test_a_failed_genesis_publishes_nothing(h):
     """The whole creation is one store transaction.
 
     The workspace here is a directory the git adapter cannot read, so event 0
     is a `FAILED` observation and the snapshot-bound approval has nothing to
-    bind to. The refusal leaves no project, no event and no snapshot — read
-    back on the same connection, which is where an unrolled transaction would
-    still be visible. (Content-addressed artifacts written before the refusal
-    are unreferenced, not published state.)
+    bind to. The failure is therefore raised *after* an append, which is the
+    only interesting case: the refusal leaves no project row, no event and no
+    snapshot, and advances no existing chain.
+
+    Everything is read back on the **same connection**, which is where an
+    unrolled transaction would still be visible; a second connection would
+    read the last committed state and could not tell the difference.
+    (Content-addressed artifacts written before the refusal are unreferenced,
+    not published state.)
     """
     h.repo_dir.mkdir(parents=True, exist_ok=True)
+    with h.controller() as controller:
+        neighbour = controller.create_project(
+            name="Neighbour", slug="neighbour",
+            workspace_root=str(h.root), approved_by=OWNER,
+        )
+        before = controller.store.get_project(neighbour)
+        settled = _counts(
+            controller.store, "projects", "audit_events", "snapshots", "decisions"
+        )
+
     with h.controller(with_repo=True) as controller:
         with pytest.raises(IntegrityViolation):
             controller.create_project(
                 name="Unseen", slug="unseen",
                 workspace_root=str(h.repo_dir), approved_by=OWNER,
             )
-        counts = {
-            table: controller.store.raw_execute(f"SELECT COUNT(*) FROM {table}")[0][0]
-            for table in ("projects", "audit_events", "snapshots", "decisions")
-        }
-        assert counts == {
-            "projects": 0, "audit_events": 0, "snapshots": 0, "decisions": 0
-        }
+        # No row of the refused project, and nothing appended anywhere.
+        assert _counts(
+            controller.store, "projects", "audit_events", "snapshots", "decisions"
+        ) == settled
+        assert controller.store.raw_execute(
+            "SELECT COUNT(*) FROM projects WHERE slug='unseen'"
+        )[0][0] == 0
+        # No head advance on the chain that already existed.
+        after = controller.store.get_project(neighbour)
+        assert (after.event_seq, after.event_head) == (
+            before.event_seq, before.event_head
+        )
+        controller.store.verify_chain(neighbour)
 
 
 # --- AX-14: who may approve a creation --------------------------------------
