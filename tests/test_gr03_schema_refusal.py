@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from genesis_support import OWNER
 from gruntime.errors import SchemaTooOld
 from gruntime.store import (
     REQUIRED_COLUMNS,
@@ -53,7 +54,8 @@ def _legacy_database(h, *, table: str, column: str) -> None:
     """A populated database in the shape GR-01/GR-02 left behind."""
     with h.controller() as controller:
         controller.create_project(
-            name="Legacy", slug="legacy", workspace_root=str(h.root)
+            name="Legacy", slug="legacy", workspace_root=str(h.root),
+            approved_by=OWNER,
         )
     _drop_column(h.db_path, table, column)
 
@@ -133,7 +135,8 @@ def test_a_populated_current_database_reads_back(h):
     """The columns the check insists on are the ones a read actually needs."""
     with h.controller() as controller:
         project_id = controller.create_project(
-            name="Current", slug="current", workspace_root=str(h.root)
+            name="Current", slug="current", workspace_root=str(h.root),
+            approved_by=OWNER,
         )
     store = StateStore.open(h.db_path)
     try:
@@ -162,7 +165,8 @@ def test_the_storage_version_is_not_the_domain_model_version(h):
     """
     with h.controller() as controller:
         project_id = controller.create_project(
-            name="Anchor", slug="anchor", workspace_root=str(h.root)
+            name="Anchor", slug="anchor", workspace_root=str(h.root),
+            approved_by=OWNER,
         )
     store = StateStore.open(h.db_path)
     try:

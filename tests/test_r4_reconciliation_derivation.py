@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from genesis_support import OWNER
 from gruntime.errors import IntegrityViolation
 from gruntime.models import (
     CommitIntentStatus,
@@ -137,7 +138,8 @@ def test_pre_applying_intents_reconcile_to_orphaned_without_changing_status(h):
     h.init_repo()
     with h.controller(with_repo=True) as c:
         project_id = c.create_project(
-            name="R4", slug="r4", workspace_root=str(h.repo_dir)
+            name="R4", slug="r4", workspace_root=str(h.repo_dir),
+            approved_by=OWNER,
         )
         c.start(project_id)
         run_id = c.open_run(project_id)

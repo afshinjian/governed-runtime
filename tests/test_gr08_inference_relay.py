@@ -25,6 +25,7 @@ from gruntime.inference_relay import CAPABILITY, TOOL, InferenceRelay, destinati
 from gruntime.models import (ActorKind, ActorRef, AuthMethod, Budget, DecisionKind, DecisionScope,
     DecisionState, DecisionSubjectKind, EpistemicClass, GovernanceMode, InvocationStatus, TerminationReason)
 from gruntime.provider import ToolCall
+from genesis_support import OWNER
 from gruntime.secret_guard import SecretGuard, SecretLeak
 from gruntime.store import StateStore, now_ts
 from gruntime.worker_bridge import InvocationBridge, WorkerLease
@@ -109,7 +110,8 @@ def ctx(h):
     h.init_repo()
     (h.repo_dir/'src').mkdir()
     with h.controller(with_repo=True) as c:
-        project = c.create_project(name='Relay', slug='relay', workspace_root=str(h.repo_dir))
+        project = c.create_project(name='Relay', slug='relay', workspace_root=str(h.repo_dir),
+                                   approved_by=OWNER)
         c.start(project)
         run = Controller.open_run(c, project)
         c.take_snapshot(project)

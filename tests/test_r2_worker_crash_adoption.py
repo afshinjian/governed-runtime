@@ -15,6 +15,7 @@ mapped to `FAILED`, never upgrade it to `COMPLETED` (D3, W-INV-4).
 
 from __future__ import annotations
 
+from genesis_support import OWNER
 from gruntime.models import (
     Attribution,
     InvocationStatus,
@@ -32,7 +33,8 @@ def _setup(h):
         output=b"declined: outside the contract objective",
     )
     with h.controller() as c:
-        project_id = c.create_project(name="R2", slug="r2", workspace_root=str(h.root))
+        project_id = c.create_project(name="R2", slug="r2", workspace_root=str(h.root),
+                                      approved_by=OWNER)
         c.start(project_id)
         run_id = c.open_run(project_id)
     return project_id, run_id

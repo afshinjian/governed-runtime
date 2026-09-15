@@ -132,16 +132,20 @@ def test_a_later_complete_observation_lifts_the_gate(h):
         assert store.get_project(project_id).suspension is SuspensionState.NONE
 
 
-def test_a_project_that_has_never_been_observed_is_not_gated(h):
-    """Absence of an observation is not a failed one.
+def test_a_project_is_not_gated_by_its_genesis_observation(h):
+    """Absence of a *failed* observation is what the gate reads.
 
-    Requiring a snapshot before any effect is a different rule — a `SNAP`
-    precondition — and GR-03 does not implement it. Conflating the two here
-    would bar the first action of every project.
+    Since GR-23 a project is observed as it is created, so "never observed"
+    is no longer reachable through `create_project`. What the gate must still
+    not do is bar the first action of a project whose only look at the
+    workspace is that genesis one. Requiring a *fresh* snapshot before any
+    effect is a different rule — a `SNAP` precondition — and GR-03 does not
+    implement it.
     """
     project_id = project_with_repo(h, slug="never-looked")
     with h.store() as store:
-        assert store.latest_snapshot(project_id) is None
+        observations = store.list_snapshots(project_id)
+        assert [s.completeness for s in observations] == [Completeness.COMPLETE]
 
     with h.controller(with_repo=True) as controller:
         run_id = controller.open_run(project_id)
@@ -193,7 +197,8 @@ def test_a_failed_observation_is_still_recorded_as_evidence(h):
             for event in store.list_events(project_id)
             if event.event_type == "snapshot.taken"
         ]
-        assert len(taken) == 2
+        # The genesis observation, the explicit one, and the blind one.
+        assert len(taken) == 3
         store.verify_chain(project_id)
 
 

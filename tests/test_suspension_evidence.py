@@ -5,6 +5,7 @@ import sqlite3
 
 import pytest
 
+from genesis_support import OWNER
 from gruntime.controller import Controller
 from gruntime.errors import IntegrityViolation, PolicyDenied, ProviderUnavailable
 from gruntime.models import (
@@ -16,7 +17,8 @@ from gruntime.models import (
 @pytest.fixture
 def runtime(h):
     with h.controller() as c:
-        project = c.create_project(name="suspension", slug="suspension", workspace_root=str(h.root))
+        project = c.create_project(name="suspension", slug="suspension", workspace_root=str(h.root),
+                                   approved_by=OWNER)
         c.start(project)
         run = Controller.open_run(c, project)
         yield h, c, project, run
@@ -178,7 +180,8 @@ def test_same_state_transition_cannot_drop_the_reference(runtime):
 
 def test_unanswerable_worker_recovery_suspends_run_and_project(h, monkeypatch):
     with h.controller() as c:
-        project = c.create_project(name="recovery", slug="recovery", workspace_root=str(h.root))
+        project = c.create_project(name="recovery", slug="recovery", workspace_root=str(h.root),
+                                   approved_by=OWNER)
         c.start(project)
         run = c.open_run(project)
         other_run = c.open_run(project)

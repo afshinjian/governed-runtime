@@ -88,10 +88,11 @@ def test_an_unchanged_index_produces_no_drift():
 
 
 def test_the_first_snapshot_of_a_project_has_nothing_to_drift_against(h):
+    # Since GR-23 the first snapshot is the genesis observation taken inside
+    # the creating transaction, not one a caller takes afterwards.
     project_id = project_with_repo(h)
-    first = snapshot(h, project_id)
     with h.store() as store:
-        record = store.get_snapshot(first)
+        record = store.list_snapshots(project_id)[0]
     assert record.drift_vs is None
     assert record.drift_summary is None
     assert _suspension(h, project_id) is SuspensionState.NONE

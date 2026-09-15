@@ -301,9 +301,11 @@ def test_the_staling_is_audited(h):
             event
             for event in store.list_events(project_id)
             if event.event_type == "decision.state_derived"
+            # Genesis derives one of its own — the creation approval reaching
+            # `CONSUMED` — over a different subject.
+            and event.subject["decision_id"] == decision.decision_id
         ]
         assert len(derived) == 1
-        assert derived[0].subject["decision_id"] == decision.decision_id
         store.verify_chain(project_id)
 
 

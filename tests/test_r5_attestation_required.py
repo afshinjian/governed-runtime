@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from genesis_support import OWNER
 from gruntime.errors import IntegrityViolation
 from gruntime.models import (
     CommitPreconditions,
@@ -35,7 +36,8 @@ def _project(h, with_repo=True):
         h.init_repo()
     with h.controller(with_repo=with_repo) as c:
         project_id = c.create_project(
-            name="R5", slug="r5", workspace_root=str(h.repo_dir)
+            name="R5", slug="r5", workspace_root=str(h.repo_dir),
+            approved_by=OWNER,
         )
         c.start(project_id)
         run_id = c.open_run(project_id)

@@ -49,6 +49,8 @@ from gruntime.transitions import (
     Precondition,
 )
 
+from genesis_support import OWNER
+
 SUBJECT = "subj-gr02"
 
 #: Every capability the legal graph names. `NONE_GRANTABLE` is never held: it
@@ -147,7 +149,8 @@ class Governor:
 def governed(h):
     with h.controller() as controller:
         project_id = controller.create_project(
-            name="GR-02", slug="gr-02", workspace_root=str(h.root)
+            name="GR-02", slug="gr-02", workspace_root=str(h.root),
+            approved_by=OWNER,
         )
         yield Governor(controller=controller, project_id=project_id)
 

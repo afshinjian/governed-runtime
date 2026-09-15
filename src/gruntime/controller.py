@@ -183,8 +183,30 @@ def _runtime_actor(component: str) -> ActorRef:
     )
 
 
+#: Authentication methods that identify a principal. `NONE` and `DELEGATED`
+#: do not: unauthenticated authority is indistinguishable from forged
+#: authority (`HD-INV-1`).
+AUTHENTICATED_METHODS: frozenset[AuthMethod] = frozenset(
+    {AuthMethod.SESSION, AuthMethod.SIGNATURE, AuthMethod.MTLS}
+)
+
+
+def _is_authenticated_human(actor: ActorRef) -> bool:
+    """Whether `actor` can hold a `HUMAN`-class exercise decision.
+
+    A named principal, not merely a human-shaped record: the decision this
+    actor authorizes is the whole authority for `∅ → DRAFT`, and an approval
+    naming no key cannot be attributed to anyone afterwards.
+    """
+    return (
+        actor.actor_kind is ActorKind.HUMAN
+        and actor.auth_method in AUTHENTICATED_METHODS
+        and bool(actor.principal_key_id)
+    )
+
+
 from .contract_controller import ContractController
-from .contracts import new_id
+from .contracts import new_id, require
 from .decision import decision_content_hash
 
 
@@ -281,6 +303,8 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         subject: dict,
         payload: dict,
         capability_used: Optional[str] = None,
+        authority_ref: Optional[Id] = None,
+        causal_parent: Optional[Id] = None,
         component: str = "controller",
     ):
         return self.store.append_event(
@@ -291,6 +315,8 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             subject={key: str(value) for key, value in subject.items()},
             payload=canonical_json(payload),
             capability_used=capability_used,
+            authority_ref=authority_ref,
+            causal_parent=causal_parent,
         )
 
     def _project_of_run(self, run_id: Id) -> Id:
@@ -486,11 +512,119 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
 
     # -- project and run ---------------------------------------------------
 
-    def create_project(self, *, name: str, slug: str, workspace_root: str) -> Id:
-        """Create a project and anchor its chain with the genesis event."""
+    def create_project(
+        self,
+        *,
+        name: str,
+        slug: str,
+        workspace_root: str,
+        approved_by: ActorRef,
+        justification: str = "project creation approved",
+    ) -> Id:
+        """Create a project at `DRAFT`, under the four-event genesis witness.
+
+        `∅ → DRAFT` is a `HUMAN`-class row whose policy verdict is `AUTO`, so
+        the policy engine contributes nothing to its authority and a
+        `HumanDecision{kind: APPROVE}` over the project is what authorizes it
+        (`AX-14`, `R3.6`). `approved_by` is the human who made it.
+
+        One store transaction, four ordered events (`AX-17`):
+
+        ===  ===============================  ====================
+        seq  event                            capability
+        ===  ===============================  ====================
+        0    the `RealitySnapshot`            `snapshot.take`
+        1    the approval reaching `VALID`    `decision.record`
+        2    `∅ → DRAFT`                      `project.create`
+        3    the approval `VALID → CONSUMED`  `audit.append`
+        ===  ===============================  ====================
+
+        Each event names exactly one capability (`G-4`), which is why the
+        recording cannot be merged into the creation. The project row is
+        installed by the `seq = 0` write, so the chain state is never
+        uninitialized for any reader (evidence-model §3.1 step 6 as amended),
+        and at commit `event_seq = 3` with `event_head` at event 3.
+
+        Nothing is observable until the transaction commits: a failure
+        anywhere in the four publishes no project, no event and no snapshot.
+        The approval is snapshot-bound (`R3.7`), so it binds to event 0's
+        snapshot and an observation that did not succeed refuses the creation
+        rather than approving an unknown workspace.
+        """
+        require(_is_authenticated_human(approved_by), "project creation requires an authenticated human approval (AX-14)", IntegrityViolation)  # guard:genesis_approver
         project_id = new_id()
+        db = self.store.connection
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            self._genesis(
+                project_id,
+                name=name,
+                slug=slug,
+                workspace_root=workspace_root,
+                approved_by=approved_by,
+                justification=justification,
+            )
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")  # guard:genesis_rollback
+            raise
+        return project_id
+
+    def _genesis(
+        self,
+        project_id: Id,
+        *,
+        name: str,
+        slug: str,
+        workspace_root: str,
+        approved_by: ActorRef,
+        justification: str,
+    ) -> None:
+        """The four appends of `AX-17`, inside the caller's transaction."""
         created_at = now_ts()
-        event = self._append(
+        snapshot, fingerprint, _ = self._observe_reality(
+            project_id,
+            workspace_root=workspace_root,
+            trigger=SnapshotTrigger.ON_DEMAND,
+            previous=None,
+            attributed=(),
+        )
+        genesis = self._append_snapshot(project_id, snapshot, fingerprint)
+        # The `seq = 0` write installs the project and initializes its chain
+        # state together; events 1-3 reserve their `seq` from this row.
+        self.store.put_project(
+            Project(
+                project_id=project_id,
+                name=name,
+                slug=slug,
+                schema_version=SCHEMA_VERSION,
+                lifecycle=ProjectLifecycle.DRAFT,
+                suspension=SuspensionState.NONE,
+                governance_mode=GovernanceMode.AUTONOMOUS,
+                workspace_root=workspace_root,
+                created_at=created_at,
+                updated_at=created_at,
+                created_by=_runtime_actor("controller"),
+                event_head=genesis.event_hash,
+                event_seq=genesis.seq,
+                controller_epoch=0,
+            )
+        )
+        self._publish_snapshot(project_id, snapshot)
+        approval = self.record_decision(
+            project_id,
+            decision_kind=DecisionKind.APPROVE,
+            subject_kind=DecisionSubjectKind.PROJECT,
+            subject_id=project_id,
+            question=f"Create project {name} ({slug}) at {workspace_root}?",
+            chosen="CREATE",
+            justification=justification,
+            decided_by=approved_by,
+            # What the human was shown is the observation event 0 recorded:
+            # the index of the workspace being taken under governance.
+            evidence_shown=(snapshot.file_index_ref,),
+        )
+        created = self._append(
             project_id,
             event_type="project.created",
             epistemic_class=EpistemicClass.AUTHORITY,
@@ -500,28 +634,40 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "slug": slug,
                 "workspace_root": workspace_root,
                 "schema_version": SCHEMA_VERSION,
+                "lifecycle": ProjectLifecycle.DRAFT.value,
+                "snapshot_id": snapshot.snapshot_id,
             },
             capability_used="project.create",
+            authority_ref=approval.decision_id,  # guard:genesis_authority_ref
         )
-        self.store.put_project(
-            Project(
-                project_id=project_id,
-                name=name,
-                slug=slug,
-                schema_version=SCHEMA_VERSION,
-                lifecycle=ProjectLifecycle.ACTIVE,
-                suspension=SuspensionState.NONE,
-                governance_mode=GovernanceMode.AUTONOMOUS,
-                workspace_root=workspace_root,
-                created_at=created_at,
-                updated_at=created_at,
-                created_by=_runtime_actor("controller"),
-                event_head=event.event_hash,
-                event_seq=event.seq,
-                controller_epoch=0,
-            )
+        self._consume_decision(project_id, approval, discharged=created)  # guard:genesis_consumed
+
+    def _consume_decision(
+        self, project_id: Id, decision: HumanDecision, *, discharged
+    ) -> None:
+        """`VALID → CONSUMED` (transition-matrix §7.5-2).
+
+        A decision recorded for a transition is spent by the transition it
+        discharged; the event cites that transition's event and the nonce is
+        never replayable (`HD-INV-3`).
+        """
+        state = derive_decision_state(decision, now=now_ts(), consumed=True)
+        self._append(
+            project_id,
+            event_type="decision.state_derived",
+            epistemic_class=EpistemicClass.EVIDENCE,
+            subject={"decision_id": decision.decision_id},
+            payload={
+                "from": decision.decision_state.value,
+                "to": state.value,
+                "discharged": discharged.event_id,
+            },
+            capability_used="audit.append",
+            causal_parent=discharged.event_id,
+            component="decision",
         )
-        return project_id
+        decision.decision_state = state
+        self.store.put_decision(decision)
 
     def start(self, project_id: Id) -> int:
         """Increment `controller_epoch` and return the new value.
@@ -598,19 +744,21 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
 
     # -- reality (domain-model §9.D) ---------------------------------------
 
-    def _observe(self, project_id: Id):
+    def _observe(self, workspace_root: str):
         """Fingerprint the workspace: tracked reality only.
 
         The user's checkout is what is measured, never the governed worktree:
         the worktree is the runtime's own scratch space and measuring it would
         make the runtime's activity indistinguishable from the world's.
+
+        Takes the root rather than a project id because the genesis
+        observation happens before the project row exists (`AX-17`).
         """
-        project = self.store.get_project(project_id)
         if self.repo is not None:
-            workspace = Path(project.workspace_root).resolve()
+            workspace = Path(workspace_root).resolve()
             if workspace == Path(self.repo.root).resolve():
                 return observe_repository(self.repo, scope=WHOLE_WORKSPACE)
-        return observe_filesystem(Path(project.workspace_root), scope=WHOLE_WORKSPACE)
+        return observe_filesystem(Path(workspace_root), scope=WHOLE_WORKSPACE)
 
     def _attributed_globs(self, project_id: Id) -> tuple[str, ...]:
         """The paths the runtime declared it was changing.
@@ -653,16 +801,47 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         (§0.1): observing reality is the only way a suspension raised by drift
         is ever cleared.
         """
-        fingerprint = self._observe(project_id)
-        index_ref = self.store.store_artifact(
-            canonical_json(fingerprint.document()), media_type="application/json"
-        )
+        project = self.store.get_project(project_id)
         # The baseline is the newest `COMPLETE` snapshot, not merely the last
         # one: a failed observation is neither a baseline nor a comparand
         # (`RS-INV-1`). Comparing against one would report the whole workspace
         # as having vanished and then reappeared.
         previous = self.store.newest_complete_snapshot(project_id)
-        attributed = self._attributed_globs(project_id)
+        snapshot, fingerprint, drifted = self._observe_reality(
+            project_id,
+            workspace_root=project.workspace_root,
+            trigger=trigger,
+            previous=previous,
+            attributed=self._attributed_globs(project_id),
+        )
+        self._append_snapshot(project_id, snapshot, fingerprint)
+        self._publish_snapshot(project_id, snapshot)
+        # A derived `drift_summary` is exactly the comparable case: both ends
+        # were real observations of the same project.
+        if snapshot.drift_summary is not None:
+            self._stale_decisions_against(project_id, previous, snapshot)
+        if drifted:
+            self._on_reality_drift(project_id, snapshot, drifted)
+        return snapshot.snapshot_id
+
+    def _observe_reality(
+        self,
+        project_id: Id,
+        *,
+        workspace_root: str,
+        trigger: SnapshotTrigger,
+        previous: Optional[RealitySnapshot],
+        attributed: Sequence[str],
+    ) -> tuple[RealitySnapshot, object, tuple[str, ...]]:
+        """Fingerprint the workspace and derive the `RealitySnapshot` for it.
+
+        Nothing here reads or writes the project row, which is what lets the
+        genesis observation precede the project's existence (`AX-17`).
+        """
+        fingerprint = self._observe(workspace_root)
+        index_ref = self.store.store_artifact(
+            canonical_json(fingerprint.document()), media_type="application/json"
+        )
         drift = None
         drifted: tuple[str, ...] = ()
         after = fingerprint.effective_index()
@@ -678,9 +857,8 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             drift = derive_drift(before, after, attributed=attributed)
             drifted = unattributed_paths(before, after, attributed=attributed)
 
-        snapshot_id = f"snap-{uuid.uuid4().hex}"
         snapshot = RealitySnapshot(
-            snapshot_id=snapshot_id,
+            snapshot_id=f"snap-{uuid.uuid4().hex}",
             project_id=project_id,
             taken_at=now_ts(),
             taken_by=_runtime_actor("snapshot"),
@@ -696,13 +874,18 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             drift_vs=None if previous is None else previous.snapshot_id,
             drift_summary=drift,
         )
-        self._append(
+        return snapshot, fingerprint, drifted
+
+    def _append_snapshot(self, project_id: Id, snapshot: RealitySnapshot, fingerprint):
+        """Record the observation under `snapshot.take`."""
+        drift = snapshot.drift_summary
+        return self._append(
             project_id,
             event_type="snapshot.taken",
             epistemic_class=EpistemicClass.EVIDENCE,
-            subject={"snapshot_id": snapshot_id},
+            subject={"snapshot_id": snapshot.snapshot_id},
             payload={
-                "trigger": trigger.value,
+                "trigger": snapshot.trigger.value,
                 "completeness": snapshot.completeness.value,
                 "snapshot_hash": snapshot.snapshot_hash,
                 "tree_digest": snapshot.tree_digest,
@@ -723,19 +906,20 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             capability_used="snapshot.take",
             component="snapshot",
         )
-        self.store.put_snapshot(snapshot)
-        # A failed observation is recorded as evidence — it is a true fact
-        # about a moment — but it never becomes the current reality. Pointing
-        # `snapshot_current` at a snapshot that saw nothing would make "the
-        # workspace as the runtime last knew it" mean "nothing is there".
-        if snapshot.completeness is Completeness.COMPLETE:
-            self.store.set_project_snapshot_current(project_id, snapshot_id)
 
-        if comparable:
-            self._stale_decisions_against(project_id, previous, snapshot)
-        if drifted:
-            self._on_reality_drift(project_id, snapshot, drifted)
-        return snapshot_id
+    def _publish_snapshot(self, project_id: Id, snapshot: RealitySnapshot) -> None:
+        """Persist the snapshot, and point the project at it if it is real.
+
+        A failed observation is recorded as evidence — it is a true fact about
+        a moment — but it never becomes the current reality. Pointing
+        `snapshot_current` at a snapshot that saw nothing would make "the
+        workspace as the runtime last knew it" mean "nothing is there".
+        """
+        self.store.put_snapshot(snapshot)
+        if snapshot.completeness is Completeness.COMPLETE:
+            self.store.set_project_snapshot_current(
+                project_id, snapshot.snapshot_id
+            )
 
     def _effective_index_of(self, snapshot: RealitySnapshot) -> dict:
         """A stored snapshot's committed index overlaid with its dirty index."""

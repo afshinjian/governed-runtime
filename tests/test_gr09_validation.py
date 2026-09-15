@@ -18,6 +18,7 @@ from gruntime.errors import BarrierViolation, PolicyDenied
 from gruntime.models import Completeness, EpistemicClass
 from gruntime.validation import ValidationExecutor
 from gruntime.validation_catalog import ParameterRef, ParameterSchema, ValidationCatalog, ValidationOperation
+from genesis_support import OWNER
 
 PYTHON = str(Path(sys.executable).resolve())
 
@@ -38,7 +39,8 @@ def runtime(h):
     (workspace / 'src').mkdir(parents=True)
     (workspace / 'src' / 'input.txt').write_text('observed')
     with h.controller() as c:
-        project = c.create_project(name='Validation', slug='validation', workspace_root=str(workspace))
+        project = c.create_project(name='Validation', slug='validation', workspace_root=str(workspace),
+                                   approved_by=OWNER)
         c.start(project)
         run = c.open_run(project)
         snapshot = c.take_snapshot(project)
@@ -315,7 +317,8 @@ def test_validation_requires_snapshot_even_before_first_observation(h):
     workspace = h.root / 'w'
     workspace.mkdir()
     with h.controller() as c:
-        project = c.create_project(name='No snapshot',slug='none',workspace_root=str(workspace))
+        project = c.create_project(name='No snapshot',slug='none',workspace_root=str(workspace),
+                                   approved_by=OWNER)
         run = c.open_run(project)
         bind(c, run)
         with pytest.raises(PolicyDenied):

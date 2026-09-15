@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pytest
 
+from genesis_support import OWNER
 from gruntime.errors import BarrierViolation
 from gruntime.models import (
     Attribution,
@@ -29,7 +30,8 @@ def _setup(h):
     h.init_repo()
     with h.controller(with_repo=True) as c:
         project_id = c.create_project(
-            name="R3", slug="r3", workspace_root=str(h.repo_dir)
+            name="R3", slug="r3", workspace_root=str(h.repo_dir),
+            approved_by=OWNER,
         )
         c.start(project_id)
         run_id = c.open_run(project_id)

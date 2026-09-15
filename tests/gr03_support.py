@@ -11,6 +11,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from genesis_support import OWNER
+
 
 def git(cwd: Path, *args: str) -> str:
     proc = subprocess.run(
@@ -24,7 +26,8 @@ def project_with_repo(h, *, slug: str = "gr-03") -> str:
     h.init_repo()
     with h.controller(with_repo=True) as controller:
         project_id = controller.create_project(
-            name="GR-03", slug=slug, workspace_root=str(h.repo_dir)
+            name="GR-03", slug=slug, workspace_root=str(h.repo_dir),
+            approved_by=OWNER,
         )
         controller.start(project_id)
     return project_id
