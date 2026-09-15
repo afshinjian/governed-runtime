@@ -30,19 +30,22 @@ def document(project_id=None, stage_id=None, **overrides):
     return doc
 
 
-def provision(c, run_id, **overrides):
+def provision(c, run_id, *, policy_grantable=('fs.delete',), **overrides):
     run = c.store.get_run(run_id)
     doc = document(run.project_id, run.stage_id, **overrides)
     project = c.store.get_project(run.project_id)
     project.capability_ceiling = project.capability_ceiling | frozenset(doc["capability_request"])
     project.budget = Budget(7200000, 1000, 1000, 1000, 1000, 1000)
     evaluation_ids = []
-    if 'fs.delete' in doc['capability_request']:
+    # Only requested capabilities are policy-granted, so the default leaves a
+    # contract that never asks for fs.delete without a policy at all.
+    grantable = [capability for capability in policy_grantable if capability in doc['capability_request']]
+    if grantable:
         policy = dict(authored_by=dict(actor_kind='HUMAN', actor_id='test-owner',
-            auth_method='SESSION', principal_key_id='test-key'), policy_grantable=['fs.delete'])
+            auth_method='SESSION', principal_key_id='test-key'), policy_grantable=grantable)
         project.policy_digest = c.store.store_artifact(canonical_json(policy), media_type='application/json').digest
     c.store.put_project(project)
-    if 'fs.delete' in doc['capability_request']:
+    if grantable:
         evaluation_ids.append(c.evaluate_grant_policy(run.project_id))
     if c.store.newest_complete_snapshot(run.project_id) is None:
         c.take_snapshot(run.project_id)

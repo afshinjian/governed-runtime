@@ -242,14 +242,25 @@ def test_write_policy_is_enforced_by_os(runtime, policy, side_effect, path, code
 
 @pytest.mark.parametrize('network,expected', [('NONE','FAIL'), ('ANY','PASS'), ('ALLOWLIST','ERROR')])
 def test_network_policy_is_enforced_by_os(runtime, network, expected):
-    h, _, run, _, _ = runtime
+    """What the sandbox does with a declared policy, once egress is permitted.
+
+    Whether the controller permits it is a separate question, gated since
+    GR-17 (test_gr17_validation_authority.py); the executor is called directly
+    here so this stays evidence about the namespace, not about authority.
+    """
+    h, _, run, snapshot_id, workspace = runtime
     with socket.socket() as listener:
         listener.bind(('127.0.0.1',0))
         listener.listen()
         script = f'import socket; socket.create_connection(("127.0.0.1",{listener.getsockname()[1]}),timeout=.2)'
         with h.controller() as c:
-            bind(c, run, operation(argv=(PYTHON,'-c',script), network=network, side_effect_class='EXTERNAL'))
-            receipt = c.execute_validation(run, 'check')
+            op = operation(argv=(PYTHON,'-c',script), network=network, side_effect_class='EXTERNAL')
+            c.validation_catalog.register(op)
+            snapshot = c.store.get_snapshot(snapshot_id)
+            receipt = ValidationExecutor(c.validation_catalog, c.artifacts).execute(
+                op.reference, {'value':'hello'}, snapshot=snapshot,
+                snapshot_document=c.store.snapshot_document(snapshot), workspace_root=workspace,
+                run_id=run, op_id='net', prev_event_hash='x')
             assert receipt.verdict == expected
             if network == 'ALLOWLIST':
                 assert receipt.exit_code is None

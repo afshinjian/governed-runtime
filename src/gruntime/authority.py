@@ -46,6 +46,15 @@ AUTONOMOUS_DENY = frozenset(("project.create", "fs.read.outside_scope", "proc.ex
 COST_CAPABILITIES = frozenset(("fs.write", "fs.delete", "proc.exec.validation", "proc.exec.arbitrary",
     "net.egress.allowlist", "net.egress.any", "secret.read", "validation.request", "commit.propose",
     "commit.publish", "roadmap.import", "roadmap.writeback", "contract.author", "contract.supersede"))
+# A declared network policy names the egress capability its execution needs.
+# One mapping serves both the activation-time request check and the
+# exercise-time authority check, so the two cannot drift apart.
+NETWORK_CAPABILITY = {"ANY": "net.egress.any", "ALLOWLIST": "net.egress.allowlist"}
+
+
+def network_capability(network):
+    """Egress capability required by a network policy; None when it needs none."""
+    return NETWORK_CAPABILITY.get(network)
 
 
 def runtime_actor(name):

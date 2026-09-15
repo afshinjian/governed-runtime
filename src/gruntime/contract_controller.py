@@ -4,7 +4,7 @@ from datetime import timedelta
 import json
 
 from .authority import (ContractActivationRecord, REGISTER, evaluate_authority,
-    parse_ts, resolve_grants, runtime_actor, ts)
+    network_capability, parse_ts, resolve_grants, runtime_actor, ts)
 from .canonical import canonical_json, digest_json
 from .contracts import StageContract, new_id, require
 from .decision import decision_content_hash, derive_decision_state
@@ -98,7 +98,7 @@ class ContractController:
             command = spec["command"]
             authorize_path(contract, root, command["cwd"], submodules=submodules)  # guard:gr06_validation_cwd
             require(command["timeout_ms"] <= contract.deadline_ms, "XC-7: validation exceeds deadline", PolicyDenied)  # guard:gr06_validation_deadline
-            needed = {"ANY": "net.egress.any", "ALLOWLIST": "net.egress.allowlist"}.get(command["network"])
+            needed = network_capability(command["network"])
             require(needed is None or needed in contract.capability_request, "XC-9: missing network request", PolicyDenied)  # guard:gr06_validation_network
         if contract.document().get("supersedes"):
             prior = self.store.get_contract(contract.supersedes)

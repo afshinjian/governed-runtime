@@ -16,11 +16,19 @@ Rules:
 - Validation: [suspension closure](docs/suspension-validation.md).
 
 ## Known gaps
-- GR-09: network policy has no constrained middle. ALLOWLIST is refused outright
-  (validation.py:130 — no enforcing adapter), so scoped egress is unavailable,
-  not merely denied. ANY adds `--share-net` (validation.py:133) with no
-  require_authority on the execute_validation path, so the only way to get
-  network is the unconstrained one, and it is ungated.
+- GR-09/GR-17: validation egress is gated but unavailable in both forms.
+  ALLOWLIST is refused outright (validation.py:130 — no enforcing adapter).
+  ANY adds `--share-net` (validation.py:134) and is now gated by
+  guard:execute_network_egress (GR-17), but net.egress.any is HUMAN-tier and
+  execute_validation has no parameter to present an exercise decision, so it
+  is unreachable rather than merely denied. Closing that needs an
+  exercise-decision parameter plumbed from the CLI plus atomic consumption in
+  the transition, mirroring relay_controller. Ungated egress is closed.
+- Validation execution does not check proc.exec.validation. transitions.py:1153
+  and :1158 declare it as the capability required by the validation
+  transitions; no require_authority call consumes that declaration. Same path
+  as FINDINGS-02 F02-001, not covered by it. Deferred from GR-17. Open
+  question: whether transitions.py `cap=` declarations are enforced anywhere.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
   exercises the ERROR receipt. Verify before running on another host.
 - Storage v1→v2→v3→v4 all refuse older schemas with no migration path. Acceptable
@@ -53,3 +61,10 @@ Until those edits land in the frozen files, design-01-frozen remains the
 authoritative baseline and the amendment lives only in
 design/DESIGN-02-candidate-observation.md. Read both: the frozen baseline for
 what the design says, DESIGN-02 for what is proposed to change.
+
+## Tooling
+- bin/mutate deletes the matched line, so a guard must be a single deletable
+  line. A multi-line guard orphans its condition or its body and fails as a
+  syntax error — pytest exit 4, reported as ERROR rather than KILLED, which
+  proves nothing about whether the guard is tested. Put any multi-step check
+  in a helper and leave one deletable call at the guard site.

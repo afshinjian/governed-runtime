@@ -11,6 +11,7 @@ from pathlib import Path
 from dataclasses import replace
 import uuid
 
+from .authority import network_capability
 from .canonical import digest_json
 from .errors import PolicyDenied
 from .gate import AFTER_VALIDATION_BEFORE_RECEIPT, gate
@@ -79,11 +80,26 @@ class ValidationController:
         return [a['op_id'] for a in self._validation_attempts(self._project_of_run(run_id), run_id).values()
                 if a['status'] in ('EXECUTING', 'UNRESOLVABLE')]
 
+    def _require_egress_authority(self, run_id, network):
+        """A catalog network policy declares egress; only the activation grants it.
+
+        NONE names no capability, so a confined validation is checked against
+        nothing. The mapping stays in authority.py beside the register, shared
+        with the activation-time request check.
+        """
+        egress = network_capability(network)
+        if egress is None:
+            return
+        self.require_authority(run_id, egress)
+
     def execute_validation(self, run_id, spec_id):
         run = self.store.get_run(run_id)
         self._assert_barrier_clear(run_id, 'executing validation')  # guard:execute_barrier
         self._assert_may_initiate_effect(run.project_id, 'executing validation')  # guard:effect_gate
         spec, operation = self._validation_spec(run_id, spec_id)
+        # Checked ahead of validation.executing, so a denial leaves no attempt
+        # for recovery to reconcile and no executor is ever built.
+        self._require_egress_authority(run_id, operation.network)  # guard:execute_network_egress
         snapshot = self.store.latest_snapshot(run.project_id)
         require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE, 'validation needs a COMPLETE snapshot')  # guard:controller_snapshot
         require(tuple(snapshot.scope) == WHOLE_WORKSPACE, 'validator requires a whole-workspace observation')  # guard:snapshot_scope
