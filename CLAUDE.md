@@ -27,12 +27,14 @@ Rules:
 - Validation execution does not check proc.exec.validation. transitions.py:1153
   and :1158 declare it as the capability required by the validation
   transitions; no require_authority call consumes that declaration. Same path
-  as FINDINGS-02 F02-001, not covered by it. Deferred from GR-17. Open
-  question: whether transitions.py `cap=` declarations are enforced anywhere.
+  as FINDINGS-02 F02-001, not covered by it. Deferred from GR-17. FINDINGS-03
+  answers the cap= question: policy.resolve enforces required_capability but
+  has no production caller (F03-001); F03-002 and F03-003 are also open.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
   exercises the ERROR receipt. Verify before running on another host.
-- Storage v1→v2→v3→v4 all refuse older schemas with no migration path. Acceptable
-  while pre-release; must be resolved before the first persistent pilot database.
+- Storage v1→…→v5 (STORAGE_VERSION = 5 since GR-07) all refuse older schemas
+  with no migration path. Acceptable while pre-release; must be resolved before
+  the first persistent pilot database.
 - GR-07: no test exercises a live provider. The subprocess transport is offline;
   the full chain has never run against real Claude/Codex output. First live
   invocation is unproven territory.
@@ -44,7 +46,27 @@ Rules:
   there is no moment at which proposed contents are on disk and uncommitted.
   Precommit validation is therefore unimplementable as designed. RealitySnapshot
   has no root field and scope is [Glob] over workspace-relative paths, so this
-  cannot be closed by wiring alone. Requires DESIGN-02.
+  cannot be closed by wiring alone. DESIGN-02 is frozen as a proposal
+  (design-02-frozen); its amendments are not in frozen text and not implemented.
+- GR-24: guard:controller_snapshot and guard:gr07_snapshot. Since GR-23 every
+  project has a genesis snapshot, so their `is None` conjunct is unreachable in
+  production, and a non-COMPLETE snapshot is refused first by
+  _assert_may_initiate_effect. Each guard acts only if a snapshot lands between
+  the gate's read and its own; tests cover that by monkeypatch.
+- record_decision (controller.py) accepts a HUMAN actor with no
+  principal_key_id; domain-model.md:58 requires one. Key presence is checked
+  where some decisions are used, not when one is recorded: genesis
+  (_is_authenticated_human), contract activation (contract_controller.py
+  approval; authority.py human_covers and basis check), exercise decisions
+  (guard:gr06_exercise_decision) and secret-read approval
+  (guard:gr08_secret_approval).
+- No per-stage mutation evidence file exists for GR-17, GR-23 or GR-24; their
+  kills are persisted only as bin/mutate summary lines in
+  docs/evidence/recheck-20260916.txt. Of the committed JSON records, gr07 and
+  gr08 inline their summaries and cite no logs; gr06 inlines summaries and also
+  cites logs; gr06, gr09, gr10 and suspension cite full logs that exist only
+  under the gitignored .evidence/ (gr09's paths are relative to
+  .evidence/gr09/, with no root field).
 
 ## Design baseline
 design-01-frozen is the frozen design and is unchanged. `git diff
@@ -61,6 +83,14 @@ Until those edits land in the frozen files, design-01-frozen remains the
 authoritative baseline and the amendment lives only in
 design/DESIGN-02-candidate-observation.md. Read both: the frozen baseline for
 what the design says, DESIGN-02 for what is proposed to change.
+
+design-04-frozen, like design-02-frozen, adds documents only; no
+design-01-frozen file changed. DESIGN-04's amendments live in
+design/DESIGN-04-baseline-correction-04.md; its §8 registers KD-1..KD-13 as not
+closed at freeze (KD-9 is closed only on chosen premises). GR-23 implements its
+AX-17 four-event genesis. DESIGN-03 is not frozen (DESIGN-03-FINDINGS-02: 3
+blocking) and per DESIGN-04 §5 must be revised against it, reviewed by the
+reviewer that raised DESIGN-03-FINDINGS-01.
 
 ## Review method
 - A record freezes findings, not dispositions. Blocking flags are the owner's
@@ -82,3 +112,14 @@ what the design says, DESIGN-02 for what is proposed to change.
   syntax error — pytest exit 4, reported as ERROR rather than KILLED, which
   proves nothing about whether the guard is tested. Put any multi-step check
   in a helper and leave one deletable call at the guard site.
+- bin/mutate takes the whole guard statement as its needle, never the `# guard:`
+  tag: a tag needle mutates only the comment and reports SURVIVED for a killed
+  guard. Build the needle from the AST (bin/check-gr09-mutations does).
+- An interrupted bin/mutate (timeout, SIGKILL) skips its restore trap and leaves
+  the mutant in src/. Allow at least 10 minutes. After any interruption, run
+  `git diff --quiet -- src` before anything else and restore from the retained
+  /tmp backup.
+- A later stage can hollow an earlier guard's killing test without failing it:
+  GR-23's genesis snapshot left guard:controller_snapshot surviving until
+  GR-24. A passing suite does not re-verify earlier kills. Assert refusals with
+  match=.
