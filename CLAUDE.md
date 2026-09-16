@@ -1,6 +1,6 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-23 (creation path: DRAFT lifecycle, snapshot, four-event genesis).
+Phase: GR-24 (restore snapshot-guard coverage lost at GR-23).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
