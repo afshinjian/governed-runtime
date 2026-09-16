@@ -1,0 +1,143 @@
+# bin/mutate re-verification, owner-run, 2026-09-16
+# gr-mut, gr-mut2, gr-mut3: at 89623a3 (gr-23-passed). gr24-mut: GR-24 working tree, committed as 7476cf1.
+# Summary lines only; full logs are in .evidence/ (gitignored).
+
+## gr-mut-20260916-1819.txt
+===== src/gruntime/controller.py :: require(_is_authenticated_human(approved_by), "project creation requires an authenticated human approval (AX-14)", IntegrityViolation)
+Mutant: 1 failed, 1216 passed in 146.02s (0:02:26)
+Red: FAILED tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval[keyless]
+Restored: 1217 passed in 146.60s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/controller.py :: db.execute("ROLLBACK")
+Mutant: 1 failed, 1216 passed in 146.24s (0:02:26)
+Red: FAILED tests/test_gr23_creation_path.py::test_a_failed_genesis_publishes_nothing
+Restored: 1217 passed in 143.69s (0:02:23)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/controller.py :: authority_ref=approval.decision_id,
+Mutant: 1 failed, 1216 passed in 146.38s (0:02:26)
+Red: FAILED tests/test_gr23_creation_path.py::test_creation_cites_its_authority_and_its_snapshot
+Restored: 1217 passed in 146.56s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/controller.py :: self._consume_decision(project_id, approval, discharged=created)
+Mutant: 4 failed, 1213 passed in 146.42s (0:02:26)
+Red: FAILED tests/test_gr23_creation_path.py::test_genesis_writes_four_ordered_events
+Red: FAILED tests/test_gr23_creation_path.py::test_the_chain_is_anchored_and_the_head_is_the_fourth_event
+Red: FAILED tests/test_gr23_creation_path.py::test_creation_cites_its_authority_and_its_snapshot
+Red: FAILED tests/test_gr23_creation_path.py::test_the_creation_approval_is_consumed_by_the_creation
+Restored: 1217 passed in 146.75s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/validation_controller.py :: self._require_egress_authority(run_id, operation.network)
+Mutant: 3 failed, 1214 passed in 147.53s (0:02:27)
+Red: FAILED tests/test_gr17_validation_authority.py::test_declared_egress_without_a_grant_never_reaches_the_executor[ANY]
+Red: FAILED tests/test_gr17_validation_authority.py::test_declared_egress_without_a_grant_never_reaches_the_executor[ALLOWLIST]
+Red: FAILED tests/test_gr17_validation_authority.py::test_a_revoked_contract_stops_further_egress_validation
+Restored: 1217 passed in 146.81s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+
+## gr-mut2-20260916-1848.txt
+===== src/gruntime/validation_controller.py :: require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE, 'validation needs a COMPLETE snapshot')
+Mutant: 1217 passed in 146.49s (0:02:26)
+Restored: 1217 passed in 148.42s (0:02:28)
+Mutation: SURVIVED; no tests went red
+exit=1
+===== src/gruntime/validation_controller.py :: require(tuple(snapshot.scope) == WHOLE_WORKSPACE, 'validator requires a whole-workspace observation')
+Mutant: 1 failed, 1216 passed in 146.46s (0:02:26)
+Red: FAILED tests/test_gr09_validation.py::test_partial_scope_and_missing_cwd_refused
+Restored: 1217 passed in 146.95s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+
+## gr-mut3-20260916-1902.txt
+===== src/gruntime/worker_controller.py :: gr07_snapshot
+require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE,
+                'worker requires COMPLETE observation', PolicyDenied)
+count=1
+Mutant: 1 failed, 1216 passed in 147.77s (0:02:27)
+Red: FAILED tests/test_gr07_workers.py::test_creation_guards[snapshot] - Attribute...
+Restored: 1217 passed in 148.09s (0:02:28)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/contract_controller.py :: gr06_activation_snapshot
+require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE, "activation requires COMPLETE snapshot", PolicyDenied)
+count=1
+Mutant: 1 failed, 1216 passed in 146.77s (0:02:26)
+Red: FAILED tests/test_gr06_contract_authority.py::test_activation_needs_complete_snapshot
+Restored: 1217 passed in 146.37s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+
+## gr24-mut-20260916-1943.txt
+===== src/gruntime/validation_controller.py :: require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE, 'validation needs a COMPLETE snapshot')
+Mutant: 2 failed, 1219 passed in 147.14s (0:02:27)
+Red: FAILED tests/test_gr09_validation.py::test_controller_snapshot_guard_refuses_a_store_with_no_observation
+Red: FAILED tests/test_gr09_validation.py::test_controller_snapshot_guard_refuses_a_snapshot_landing_after_the_gate
+Restored: 1221 passed in 145.25s (0:02:25)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/validation_controller.py :: self._assert_may_initiate_effect(run.project_id, 'executing validation')
+Mutant: 3 failed, 1218 passed in 146.06s (0:02:26)
+Red: FAILED tests/test_gr09_validation.py::test_controller_snapshot_guard_refuses_a_snapshot_landing_after_the_gate
+Red: FAILED tests/test_gr09_validation.py::test_effect_gate_refuses_a_real_partial_latest_snapshot
+Red: FAILED tests/test_gr09_validation.py::test_suspension_blocks_validation - Fai...
+Restored: 1221 passed in 146.07s (0:02:26)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/worker_controller.py :: require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE,
+                'worker requires COMPLETE observation', PolicyDenied)
+Mutant: 3 failed, 1218 passed in 146.50s (0:02:26)
+Red: FAILED tests/test_gr07_workers.py::test_creation_guards[snapshot] - Attribute...
+Red: FAILED tests/test_gr07_workers.py::test_worker_snapshot_guard_refuses_a_store_with_no_observation
+Red: FAILED tests/test_gr07_workers.py::test_worker_snapshot_guard_refuses_a_snapshot_landing_after_the_gate
+Restored: 1221 passed in 148.74s (0:02:28)
+Mutation: KILLED; restored suite is green
+exit=0
+===== src/gruntime/worker_controller.py :: self._assert_may_initiate_effect(run.project_id, 'worker dispatch')
+Mutant: 35 failed, 1186 passed in 146.70s (0:02:26)
+Red: FAILED tests/test_gr03_drift_detection.py::test_drift_suspension_bars_new_effects_but_never_observation
+Red: FAILED tests/test_gr03_observation_gate.py::test_a_failed_observation_bars_new_invocations
+Red: FAILED tests/test_gr07_workers.py::test_creation_guards[project_suspension]
+Red: FAILED tests/test_gr07_workers.py::test_worker_snapshot_guard_refuses_a_snapshot_landing_after_the_gate
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-CONTRACT_AMBIGUITY]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-CAPABILITY_DENIED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-SCOPE_BREACH_ATTEMPT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-BUDGET_EXHAUSTED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-DEADLINE_EXCEEDED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-REPEATED_FAILURE]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-VALIDATION_UNAVAILABLE]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-NONDETERMINISM]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-BLOCKER_FINDING]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-DECLARED_OBSERVED_CONFLICT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-REALITY_DRIFT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-ROADMAP_DIVERGED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-POLICY_CONFLICT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-INTEGRITY_VIOLATION]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[False-RECOVERY_AMBIGUITY]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-CONTRACT_AMBIGUITY]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-CAPABILITY_DENIED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-SCOPE_BREACH_ATTEMPT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-BUDGET_EXHAUSTED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-DEADLINE_EXCEEDED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-REPEATED_FAILURE]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-VALIDATION_UNAVAILABLE]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-NONDETERMINISM]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-BLOCKER_FINDING]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-DECLARED_OBSERVED_CONFLICT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-REALITY_DRIFT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-ROADMAP_DIVERGED]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-POLICY_CONFLICT]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-INTEGRITY_VIOLATION]
+Red: FAILED tests/test_suspension_evidence.py::test_every_escalation_class_applies_its_declared_suspension[True-RECOVERY_AMBIGUITY]
+Red: FAILED tests/test_suspension_evidence.py::test_unanswerable_worker_recovery_suspends_run_and_project
+Restored: 1221 passed in 144.19s (0:02:24)
+Mutation: KILLED; restored suite is green
+exit=0
+Collected: 1221 tests
+Baseline: 1221 passed in 139.84s (0:02:19)
+ tests/test_gr07_workers.py    | 37 ++++++++++++++++++++++++++++++
+ tests/test_gr09_validation.py | 53 +++++++++++++++++++++++++++++++++++++------
+ 2 files changed, 83 insertions(+), 7 deletions(-)
