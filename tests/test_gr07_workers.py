@@ -358,6 +358,43 @@ def test_creation_guards(ctx, monkeypatch, guard):
     with pytest.raises(error): c.create_invocation(run, **kwargs)
 
 
+def test_worker_snapshot_guard_refuses_a_store_with_no_observation(ctx, monkeypatch):
+    """Unreachable in production since GR-23: genesis takes the first snapshot
+    before a run exists, so `latest_snapshot` is never None here. The guard
+    still stands against a store with no observation, and only a fake store
+    reaches it. The effect gate lets None through, so this is the guard's kill.
+    """
+    c, project, run, contract, activation = ctx
+    provider, transport = install(ctx)
+    monkeypatch.setattr(c.store, 'latest_snapshot', lambda _: None)
+    with pytest.raises(PolicyDenied, match='worker requires COMPLETE observation'):
+        c.create_invocation(run, prompt=b'task', provider_id=provider.provider_id)
+
+
+def test_worker_snapshot_guard_refuses_a_snapshot_landing_after_the_gate(ctx, monkeypatch):
+    """A snapshot landing between the gate's read and the guard's.
+
+    The effect gate reads `latest_snapshot` and sees the COMPLETE observation;
+    a PARTIAL one lands before the guard reads it a second time. The gate
+    cannot catch this, so the guard is the only thing that does.
+    """
+    c, project, run, contract, activation = ctx
+    provider, transport = install(ctx)
+    complete = c.store.latest_snapshot(project)
+    assert complete.completeness is Completeness.COMPLETE
+    returns = [complete, replace(complete, completeness=Completeness.PARTIAL)]
+    calls = []
+
+    def latest_snapshot(project_id):
+        calls.append(project_id)
+        return returns[len(calls) - 1]
+
+    monkeypatch.setattr(c.store, 'latest_snapshot', latest_snapshot)
+    with pytest.raises(PolicyDenied, match='worker requires COMPLETE observation'):
+        c.create_invocation(run, prompt=b'task', provider_id=provider.provider_id)
+    assert len(calls) == 2
+
+
 @pytest.mark.parametrize('guard', ['pin','grant','snapshot','once','deadline','preflight','cas','late'])
 def test_dispatch_guards(ctx, monkeypatch, guard):
     c = ctx[0]

@@ -313,15 +313,54 @@ def test_incomplete_observations_block_controller_and_executor(runtime, complete
         assert not c._validation_attempts(project)
 
 
-def test_validation_requires_snapshot_even_before_first_observation(h):
-    workspace = h.root / 'w'
-    workspace.mkdir()
+def test_controller_snapshot_guard_refuses_a_store_with_no_observation(runtime, monkeypatch):
+    """Unreachable in production since GR-23: genesis takes the first snapshot
+    before a run exists, so `latest_snapshot` is never None here. The guard
+    still stands against a store with no observation, and only a fake store
+    reaches it. The effect gate lets None through, so this is the guard's kill.
+    """
+    h, _, run, _, _ = runtime
     with h.controller() as c:
-        project = c.create_project(name='No snapshot',slug='none',workspace_root=str(workspace),
-                                   approved_by=OWNER)
-        run = c.open_run(project)
         bind(c, run)
-        with pytest.raises(PolicyDenied):
+        monkeypatch.setattr(c.store, 'latest_snapshot', lambda _: None)
+        with pytest.raises(PolicyDenied, match='validation needs a COMPLETE snapshot'):
+            c.execute_validation(run, 'check')
+
+
+def test_controller_snapshot_guard_refuses_a_snapshot_landing_after_the_gate(runtime, monkeypatch):
+    """A snapshot landing between the gate's read and the guard's.
+
+    The effect gate reads `latest_snapshot` and sees the COMPLETE observation;
+    a PARTIAL one lands before the guard reads it a second time. The gate
+    cannot catch this, so the guard is the only thing that does.
+    """
+    h, _, run, snapshot_id, _ = runtime
+    with h.controller() as c:
+        bind(c, run)
+        complete = c.store.get_snapshot(snapshot_id)
+        assert complete.completeness is Completeness.COMPLETE
+        returns = [complete, replace(complete, completeness=Completeness.PARTIAL)]
+        calls = []
+
+        def latest_snapshot(project_id):
+            calls.append(project_id)
+            return returns[len(calls) - 1]
+
+        monkeypatch.setattr(c.store, 'latest_snapshot', latest_snapshot)
+        with pytest.raises(PolicyDenied, match='validation needs a COMPLETE snapshot'):
+            c.execute_validation(run, 'check')
+        assert len(calls) == 2
+
+
+def test_effect_gate_refuses_a_real_partial_latest_snapshot(runtime):
+    """The other half of the pair: a PARTIAL snapshot really in the store is
+    refused by the effect gate, before guard:controller_snapshot reads it.
+    """
+    h, project, run, _, _ = runtime
+    with h.controller() as c:
+        bind(c, run)
+        c.store.raw_execute("UPDATE snapshots SET completeness='PARTIAL' WHERE project_id=?", (project,))
+        with pytest.raises(PolicyDenied, match='last observation of the workspace'):
             c.execute_validation(run, 'check')
 
 
