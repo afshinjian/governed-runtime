@@ -87,10 +87,19 @@ what the design says, DESIGN-02 for what is proposed to change.
 design-04-frozen, like design-02-frozen, adds documents only; no
 design-01-frozen file changed. DESIGN-04's amendments live in
 design/DESIGN-04-baseline-correction-04.md; its §8 registers KD-1..KD-13 as not
-closed at freeze (KD-9 is closed only on chosen premises). GR-23 implements its
-AX-17 four-event genesis. DESIGN-03 is not frozen (DESIGN-03-FINDINGS-02: 3
-blocking) and per DESIGN-04 §5 must be revised against it, reviewed by the
-reviewer that raised DESIGN-03-FINDINGS-01.
+closed at freeze (KD-9 is closed only on chosen premises).
+DESIGN-04-FINDINGS-04 (review of revision 04) finds that design-04-frozen does
+not stand as an accepted corrective baseline; design-01-frozen remains
+operative. GR-23 implements the four-event genesis sequence but does not yet
+conform to AX-17's creation witness (DESIGN-04-032..036).
+
+DESIGN-03 is not frozen and, per DESIGN-04 §5, must be revised against
+DESIGN-04, reviewed by the reviewer that raised DESIGN-03-FINDINGS-01.
+
+Owner blocking flags: DESIGN-03-001..025 and DESIGN-04-001..028 are in
+design/review/DISPOSITION-01.md (its prose at :20–21 still says the cells are
+blank; the tables are authoritative); DESIGN-04-029..036 are in
+DESIGN-04-FINDINGS-04.
 
 ## Review method
 - A record freezes findings, not dispositions. Blocking flags are the owner's
