@@ -1,6 +1,6 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-25 (DESIGN-04 revision 04 review (F04-005)).
+Phase: GR-26 (DESIGN-04 revision 05).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
