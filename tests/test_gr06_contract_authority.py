@@ -634,6 +634,36 @@ def test_supervised_activation_requires_live_approval(ctx):
     assert c.store.get_decision(approval.decision_id).decision_state is DecisionState.CONSUMED
 
 
+def test_supervised_activation_refuses_a_stale_contract_approval(ctx):
+    """`live` is the whole of it.
+
+    A real `APPROVE` over this contract, by a keyed human, with evidence —
+    but taken over an observation that has since been superseded. `HD-INV-4`
+    makes it `STALE`, and a `STALE` decision is authority for nothing. The
+    refusal is asserted by what did not happen — no activation, and the
+    decision left unconsumed — so removing the guard loses the invariant
+    itself rather than a message: the approval is present, so nothing
+    downstream dereferences `None`.
+    """
+    c, project_id, run = ctx
+    contract = setup_contract(ctx)
+    project = c.store.get_project(project_id)
+    project.governance_mode = GovernanceMode.SUPERVISED
+    c.store.put_project(project)
+    approval = human_grant(ctx, contract, scope=DecisionScope.SINGLE_ACTION,
+                           decision_kind=DecisionKind.APPROVE)
+    # Reality is observed again while the approval sits: what was approved is
+    # no longer the observation the activation would bind.
+    c.take_snapshot(project_id)
+    assert approval.subject_snapshot_id != c.store.newest_complete_snapshot(project_id).snapshot_id
+    with pytest.raises(CapabilityDenied) as refused:
+        c.activate_contract(contract.contract_id, run, approval_id=approval.decision_id)
+    assert c.store.activation_for_run(run) is None
+    assert c.store.get_contract(contract.contract_id).status == 'DRAFT'
+    assert c.store.get_decision(approval.decision_id).decision_state is DecisionState.VALID
+    refused.match('SUPERVISED activation requires live contract approval')
+
+
 def test_policy_document_requires_human_author(ctx):
     c, project_id, _ = ctx
     setup_contract(ctx)

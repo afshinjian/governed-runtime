@@ -17,7 +17,16 @@ from .scope import authorize_path
 
 class ContractController:
     def author_contract(self, document):
+        """Store a stage contract and record that it was authored.
+
+        The contract row is persisted before `contract.authored` is appended,
+        so the pending-genesis boundary is asked in front of the row rather
+        than in front of the append: a presenter that authored a contract
+        against the project being created and swallowed the append's refusal
+        would have committed a contract no event attests (`GR27-R4`).
+        """
         contract = StageContract.author(document)
+        require(self._genesis_admits(contract.project_id), f"project {contract.project_id} is mid-genesis: its creation transaction is open, and storing a contract against it would durably mutate a project that no commit has yet established", IntegrityViolation)  # guard:author_contract_pending_genesis
         self.store.get_project(contract.project_id)
         self.store.put_contract(contract)
         self._append(contract.project_id, event_type="contract.authored",

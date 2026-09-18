@@ -322,7 +322,9 @@ def test_a_runtime_cannot_manufacture_authority(h):
     )
     with h.controller(with_repo=True) as controller:
         evidence = controller.store.store_artifact(b"x", media_type="text/plain")
-        with pytest.raises(IntegrityViolation):
+        # `options_offered` is explicit so the refusal is provably `HD-INV-1`'s
+        # and not the option-membership guard's (`DESIGN-04-034`).
+        with pytest.raises(IntegrityViolation, match="must be decided by a HUMAN"):
             controller.record_decision(
                 project_id,
                 decision_kind=DecisionKind.APPROVE,
@@ -333,6 +335,7 @@ def test_a_runtime_cannot_manufacture_authority(h):
                 justification="because",
                 decided_by=robot,
                 evidence_shown=[evidence],
+                options_offered=("yes", "no"),
             )
 
 
@@ -345,7 +348,7 @@ def test_unauthenticated_authority_is_refused(h, method):
     )
     with h.controller(with_repo=True) as controller:
         evidence = controller.store.store_artifact(b"x", media_type="text/plain")
-        with pytest.raises(IntegrityViolation):
+        with pytest.raises(IntegrityViolation, match="unauthenticated authority"):
             controller.record_decision(
                 project_id,
                 decision_kind=DecisionKind.APPROVE,
@@ -356,6 +359,7 @@ def test_unauthenticated_authority_is_refused(h, method):
                 justification="because",
                 decided_by=actor,
                 evidence_shown=[evidence],
+                options_offered=("yes", "no"),
             )
 
 
@@ -364,7 +368,7 @@ def test_an_uninformed_approval_is_refused(h):
     project_id = project_with_repo(h, slug="uninformed")
     snapshot(h, project_id)
     with h.controller(with_repo=True) as controller:
-        with pytest.raises(IntegrityViolation):
+        with pytest.raises(IntegrityViolation, match="uninformed approval"):
             controller.record_decision(
                 project_id,
                 decision_kind=DecisionKind.APPROVE,
@@ -375,4 +379,5 @@ def test_an_uninformed_approval_is_refused(h):
                 justification="because",
                 decided_by=HUMAN,
                 evidence_shown=[],
+                options_offered=("yes", "no"),
             )

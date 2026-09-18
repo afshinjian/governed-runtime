@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 from gruntime.errors import IntegrityViolation
 from gruntime.models import (
     CommitIntentStatus,
@@ -137,7 +137,7 @@ def test_pre_applying_intents_reconcile_to_orphaned_without_changing_status(h):
     """The explicit PROPOSED/BLOCKED/AUTHORIZED -> ORPHANED requirement."""
     h.init_repo()
     with h.controller(with_repo=True) as c:
-        project_id = c.create_project(
+        project_id = create_project(c, then_mode=AUTONOMOUS,
             name="R4", slug="r4", workspace_root=str(h.repo_dir),
             approved_by=OWNER,
         )

@@ -28,12 +28,13 @@ from gruntime.models import (
     ProjectLifecycle,
 )
 
-from genesis_support import OWNER
+from genesis_support import OWNER, create_project
 
 
 def _created(h, **overrides) -> str:
     with h.controller() as controller:
-        return controller.create_project(
+        return create_project(
+            controller,
             name=overrides.pop("name", "GR-23"),
             slug=overrides.pop("slug", "gr-23"),
             workspace_root=overrides.pop("workspace_root", str(h.root)),
@@ -187,7 +188,7 @@ def test_a_failed_genesis_publishes_nothing(h):
     """
     h.repo_dir.mkdir(parents=True, exist_ok=True)
     with h.controller() as controller:
-        neighbour = controller.create_project(
+        neighbour = create_project(controller,
             name="Neighbour", slug="neighbour",
             workspace_root=str(h.root), approved_by=OWNER,
         )
@@ -198,7 +199,7 @@ def test_a_failed_genesis_publishes_nothing(h):
 
     with h.controller(with_repo=True) as controller:
         with pytest.raises(IntegrityViolation):
-            controller.create_project(
+            create_project(controller,
                 name="Unseen", slug="unseen",
                 workspace_root=str(h.repo_dir), approved_by=OWNER,
             )
@@ -256,7 +257,7 @@ def test_creation_requires_an_authenticated_human_approval(h, approver):
     nobody afterwards."""
     with h.controller() as controller:
         with pytest.raises(IntegrityViolation):
-            controller.create_project(
+            create_project(controller,
                 name="GR-23", slug="gr-23",
                 workspace_root=str(h.root), approved_by=approver,
             )

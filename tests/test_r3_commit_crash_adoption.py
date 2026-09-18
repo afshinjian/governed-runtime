@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 from gruntime.errors import BarrierViolation
 from gruntime.models import (
     Attribution,
@@ -29,7 +29,7 @@ from gruntime.models import (
 def _setup(h):
     h.init_repo()
     with h.controller(with_repo=True) as c:
-        project_id = c.create_project(
+        project_id = create_project(c, then_mode=AUTONOMOUS,
             name="R3", slug="r3", workspace_root=str(h.repo_dir),
             approved_by=OWNER,
         )

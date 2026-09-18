@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 from gruntime.errors import IntegrityViolation
 from gruntime.models import (
     CommitPreconditions,
@@ -35,7 +35,7 @@ def _project(h, with_repo=True):
     if with_repo:
         h.init_repo()
     with h.controller(with_repo=with_repo) as c:
-        project_id = c.create_project(
+        project_id = create_project(c, then_mode=AUTONOMOUS,
             name="R5", slug="r5", workspace_root=str(h.repo_dir),
             approved_by=OWNER,
         )

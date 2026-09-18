@@ -18,7 +18,7 @@ from gruntime.errors import BarrierViolation, PolicyDenied
 from gruntime.models import Completeness, EpistemicClass
 from gruntime.validation import ValidationExecutor
 from gruntime.validation_catalog import ParameterRef, ParameterSchema, ValidationCatalog, ValidationOperation
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 
 PYTHON = str(Path(sys.executable).resolve())
 
@@ -39,7 +39,7 @@ def runtime(h):
     (workspace / 'src').mkdir(parents=True)
     (workspace / 'src' / 'input.txt').write_text('observed')
     with h.controller() as c:
-        project = c.create_project(name='Validation', slug='validation', workspace_root=str(workspace),
+        project = create_project(c, then_mode=AUTONOMOUS, name='Validation', slug='validation', workspace_root=str(workspace),
                                    approved_by=OWNER)
         c.start(project)
         run = c.open_run(project)
@@ -350,6 +350,32 @@ def test_controller_snapshot_guard_refuses_a_snapshot_landing_after_the_gate(run
         with pytest.raises(PolicyDenied, match='validation needs a COMPLETE snapshot'):
             c.execute_validation(run, 'check')
         assert len(calls) == 2
+
+
+def test_controller_snapshot_guard_opens_no_attempt_against_a_partial_observation(runtime, monkeypatch):
+    """The guard's own effect, asserted before its wording.
+
+    `validation.executing` is an AUTHORITY event: it claims this run began
+    executing `check` against `input_snapshot_id`. The guard stands before
+    that append, so an observation landing after the effect gate's read
+    leaves no attempt in the chain at all. The executor's own
+    `guard:executor_complete` refuses the same observation, but only once
+    the claim is already recorded — which is why the absence of an attempt,
+    and not the refusal, is what this test asserts first.
+    """
+    h, project, run, snapshot_id, _ = runtime
+    with h.controller() as c:
+        bind(c, run)
+        complete = c.store.get_snapshot(snapshot_id)
+        assert complete.completeness is Completeness.COMPLETE
+        # COMPLETE to the gate; PARTIAL to every read after it.
+        returns = [complete, replace(complete, completeness=Completeness.PARTIAL)]
+        monkeypatch.setattr(c.store, 'latest_snapshot',
+                            lambda _: returns.pop(0) if len(returns) > 1 else returns[0])
+        with pytest.raises(PolicyDenied) as refusal:
+            c.execute_validation(run, 'check')
+        assert not c._validation_attempts(project)
+        refusal.match('validation needs a COMPLETE snapshot')
 
 
 def test_effect_gate_refuses_a_real_partial_latest_snapshot(runtime):

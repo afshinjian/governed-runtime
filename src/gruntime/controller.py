@@ -40,9 +40,11 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Sequence
+from dataclasses import dataclass
+from typing import Callable, Optional, Sequence
 
 from .artifacts import ArtifactStore
 from .canonical import canonical_json, digest_json
@@ -157,6 +159,7 @@ from .reconciliation import (
 from .recovery import RecoveryOutcome, Resolution, Settlement, run_recovery
 from .review import ATTEST_CAPABILITY, mint_attestation
 from .store import SCHEMA_VERSION, StateStore, now_ts
+from .transitions import ORIGIN, Axis, PolicyVerdict, rules_for
 from .validation_controller import ValidationController
 
 #: The binding the reference controller asks every provider for. Opaque to
@@ -174,6 +177,140 @@ EFFECT_BARRING_SUSPENSIONS: frozenset[SuspensionState] = frozenset(
 )
 
 
+@dataclass(frozen=True)
+class CreationObservation:
+    """What a human is shown before they decide whether to create a project.
+
+    Every field is taken from the observation event 0 actually recorded. It
+    is the presentation, not a summary of one: `evidence_shown` carries the
+    artifacts themselves, and `snapshot_id` names the reality they measure
+    (domain-model.md:703, :709).
+    """
+
+    project_id: Id
+    name: str
+    slug: str
+    workspace_root: str
+    #: The governance mode the creating act would establish. Part of the
+    #: presentation because it is part of the act: §2.23 row 1 makes the mode
+    #: a predicate of `project.create` itself, so an approval that did not
+    #: name it would be an approval of something less than the act.
+    initial_mode: GovernanceMode
+    snapshot_id: Id
+    question: str
+    options_offered: tuple[str, ...]
+    evidence_shown: tuple[ArtifactRef, ...]
+
+
+@dataclass(frozen=True)
+class CreationResponse:
+    """A human's answer, bound to the observation they were shown.
+
+    `snapshot_id` is the answer's own statement of what it answers, and it is
+    checked against the observation that was presented: an answer that names
+    a different reality approves an unknown workspace. `signature` carries
+    signature evidence where the approver authenticates by `SIGNATURE`.
+    """
+
+    snapshot_id: Id
+    chosen: str
+    justification: Optional[str] = None
+    signature: Optional[str] = None
+
+
+#: The presentation boundary: shown one observation, it returns the human's
+#: answer to it. Mandatory — `HD-INV-2` makes an uninformed approval discharge
+#: nothing, and a runtime-selected artifact index is a record of what the
+#: runtime chose to show, not evidence that a human saw it (`DESIGN-04-036`).
+CreationPresenter = Callable[[CreationObservation], Optional[CreationResponse]]
+
+
+def _is_inert(value) -> bool:
+    """Whether `value` is a built-in the runtime can hold without holding code.
+
+    `type(value) is str` and not `isinstance`: a `str` subclass is a `str`
+    everywhere except where it matters here, since it may define `__bool__`,
+    `__str__`, `__eq__` or a property and take control at the moment the
+    runtime evaluates it.
+    """
+    return value is None or type(value) is str
+
+
+def _materialize(response: CreationResponse) -> CreationResponse:
+    """The response's values, read once each and held as inert built-ins.
+
+    A response arrives from outside the runtime, and every field on it is a
+    place where someone else's code can run: an attribute access can be a
+    property, a truthiness test can be `__bool__`, a format can be `__str__`.
+    Evaluating any of them late — after the observation's freshness has been
+    rechecked — would let the answer supersede the very thing it answers, and
+    the approval would commit bound to a reality the human never saw
+    (`GR27-R3`).
+
+    So each field is read exactly once, here, while the project is still held
+    against mutation (`_pending_genesis`) and before the freshness recheck;
+    each must already be a plain built-in; and what the rest of the
+    transaction sees is this record, on which nothing further can execute.
+    A value-bearing field is refused at the read, so its code never runs at
+    all rather than running somewhere the runtime has decided is safe.
+
+    The refusal says so in constants. Naming the offending values' types
+    would look up `__name__` on classes the same caller defined, and a
+    metaclass property answers that lookup with code: diagnosing the refusal
+    would be one more evaluation of the thing being refused, on the one path
+    that exists precisely because the value must not be evaluated
+    (`GR27-R6`). Which field is at fault is recoverable from the response the
+    caller still holds; it is not worth an execution.
+    """
+    fields = (
+        response.snapshot_id,
+        response.chosen,
+        response.justification,
+        response.signature,
+    )
+    require(all(_is_inert(field) for field in fields), "a creation response carries plain built-in values and nothing that executes when it is read: each of (snapshot_id, chosen, justification, signature) must be a str, or None where the field is optional (GR27-R3)", IntegrityViolation)  # guard:creation_response_inert
+    return CreationResponse(*fields)
+
+
+def _answers(response: CreationResponse, observation: CreationObservation) -> bool:
+    """Whether `response` is this observation's own answer.
+
+    Binding only. That `response` is a `CreationResponse` at all is
+    `guard:creation_response`'s invariant, and that its values are inert is
+    `guard:creation_response_inert`'s; both are established before this is
+    called, and re-checking either here would make its deletion unobservable.
+    """
+    return response.snapshot_id == observation.snapshot_id
+
+
+#: The governance mode a creating act establishes. `AX-14`'s approval
+#: authorizes the act; it does not choose the mode, and neither does the
+#: runtime. A project reaches any other mode only by a later `SET_MODE`
+#: decision under `project.mode.set`, which has no legal transition row in the
+#: frozen matrix and is not implemented (DESIGN-04 §2.23 row 1, §6.1).
+GENESIS_MODE = GovernanceMode.SUPERVISED
+
+
+def creation_is_permitted_in(mode: GovernanceMode) -> bool:
+    """Whether the `∅ → DRAFT` row admits `project.create` in `mode`.
+
+    Read off row 2-1's own verdict column rather than copied from it, so the
+    gate cannot drift away from the frozen cell it enforces
+    (transition-matrix.md:84, authority-matrix.md:157). `AX-14`'s approval
+    authorizes the act; it does not lift a `DENY`.
+    """
+    (rule,) = rules_for(Axis.PROJECT, ORIGIN, ProjectLifecycle.DRAFT.value)
+    return rule.policy(mode).settle(()).verdict is not PolicyVerdict.DENY
+
+
+#: The choices a creation presentation offers. `chosen` must be one of them
+#: (domain-model.md:695-696, DESIGN-04 §2.23 row 5): a creation nobody could
+#: have declined is not a decision.
+CREATE_CHOICE = "CREATE"
+DECLINE_CHOICE = "DECLINE"
+CREATION_OPTIONS: tuple[str, ...] = (CREATE_CHOICE, DECLINE_CHOICE)
+
+
 def _runtime_actor(component: str) -> ActorRef:
     """The kernel acting as itself. Never a worker, never a human."""
     return ActorRef(
@@ -181,6 +318,36 @@ def _runtime_actor(component: str) -> ActorRef:
         actor_id=f"gruntime.{component}",
         auth_method=AuthMethod.NONE,
     )
+
+
+#: `AX-16` caps a delegation chain at two links: the actor performing the act
+#: and the principal whose decision authorizes it. Nobody acts for someone who
+#: is themselves acting for a third party.
+MAX_DELEGATION_DEPTH = 2
+
+
+def _delegated_actor(component: str, principal: ActorRef) -> ActorRef:
+    """The kernel performing an act the named principal decided (`AX-16`).
+
+    The act stays the runtime's — it is the runtime that writes — but the
+    authority is the human's, and the event says so rather than leaving the
+    reader to find a `HUMAN` on some other record.
+    """
+    return ActorRef(
+        actor_kind=ActorKind.RUNTIME,
+        actor_id=f"gruntime.{component}",
+        auth_method=AuthMethod.DELEGATED,
+        on_behalf_of=principal,
+    )
+
+
+def delegation_depth(actor: ActorRef) -> int:
+    """Links in this actor's delegation chain, the actor itself counting as 1."""
+    depth = 1
+    while actor.on_behalf_of is not None:
+        depth += 1
+        actor = actor.on_behalf_of
+    return depth
 
 
 #: Authentication methods that identify a principal. `NONE` and `DELEGATED`
@@ -242,6 +409,13 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         #: workspace, or the runtime's own files would read as workspace drift.
         self.governance_dir = Path(governance_dir or store.db_path.parent)
         self.lease_ttl_ms = lease_ttl_ms
+        #: Projects whose genesis transaction is open, each mapped to the
+        #: token that authorizes *that* transaction's own appends. In memory
+        #: and nowhere else: it is a property of this uncommitted transaction,
+        #: not a durable fact about the project, and a controller that dies
+        #: mid-genesis leaves nothing behind to clear — the transaction rolled
+        #: back and the project never existed.
+        self._genesis_pending: dict[Id, object] = {}
 
     # -- repository handles -------------------------------------------------
 
@@ -280,7 +454,17 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         Held only across a mutation. A controller killed mid-mutation leaves
         the record behind, and the next controller waits out its expiry rather
         than asking whether a pid is still alive (`lease.py`).
+
+        Not issued against a project whose creation transaction is still open.
+        Everything taken under this lease is a mutation of the repository, not
+        of the store — a worktree directory, a branch, a lease record — and
+        none of it is inside the transaction that would roll back, nor
+        attested by any event. `governed_repo` creates a worktree under this
+        lease and a pending project can have none already, so refusing here
+        refuses that too, and one boundary covers the whole repository side
+        (`GR27-R4`).
         """
+        require(self._genesis_admits(project_id), f"project {project_id} is mid-genesis: its creation transaction is open, and a repository mutation taken under this lease would outlive a rollback with no event attesting it", IntegrityViolation)  # guard:repository_lease_pending_genesis
         if self.repo is None:
             raise IntegrityViolation("no repository adapter is configured")
         project = self.store.get_project(project_id)
@@ -306,18 +490,105 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         authority_ref: Optional[Id] = None,
         causal_parent: Optional[Id] = None,
         component: str = "controller",
+        actor: Optional[ActorRef] = None,
+        genesis_token: object = None,
     ):
+        """Append one event, by default as the kernel acting as itself.
+
+        `actor` names a different holder for the few acts the design does not
+        let the runtime hold: `decision.record` is `AX-15`'s, held by the
+        deciding human, and a runtime-performed act mediated under `AX-16`
+        carries that human in `on_behalf_of`. Everything else is the
+        runtime's own work and takes the default.
+
+        `genesis_token` is how `_genesis` appends its own four events against
+        a project it is simultaneously holding against everyone else. It is
+        not a parameter of any public method: nothing a presenter, a response
+        or a finalizer can call passes one, so every such caller arrives with
+        the default and is measured against the hold (`GR27-R5`).
+        """
+        require(self._genesis_admits(project_id, genesis_token), f"project {project_id} is mid-genesis: its creation transaction is open from the presentation boundary to the commit, and appending {event_type!r} would put a fifth event inside AX-17's four-event witness", IntegrityViolation)  # guard:genesis_pending_mutation
+        holder = actor or _runtime_actor(component)
+        require(delegation_depth(holder) <= MAX_DELEGATION_DEPTH, f"an event's actor may delegate once: {holder.actor_id} stands at delegation depth {delegation_depth(holder)}, over the maximum of {MAX_DELEGATION_DEPTH} (AX-16)", IntegrityViolation)  # guard:delegation_depth
         return self.store.append_event(
             project_id,
             event_type=event_type,
             epistemic_class=epistemic_class,
-            actor=_runtime_actor(component),
+            actor=holder,
             subject={key: str(value) for key, value in subject.items()},
             payload=canonical_json(payload),
             capability_used=capability_used,
             authority_ref=authority_ref,
             causal_parent=causal_parent,
         )
+
+    def pending_genesis(self) -> frozenset:
+        """The projects this controller is mid-genesis on. Diagnostic.
+
+        The ids only. The tokens that authorize each transaction's own appends
+        are not published here, and no other method publishes them either.
+        """
+        return frozenset(self._genesis_pending)
+
+    def _genesis_admits(self, project_id: Id, genesis_token: object = None) -> bool:
+        """Whether a mutation of `project_id` may proceed at all.
+
+        One question, asked in front of every durable write that can reach a
+        project whose creation transaction is still open — not only in front
+        of the append. `GR27-R4` is what happens when it is asked too late:
+        `start` bumps the controller epoch and `author_contract` stores the
+        contract row *before* either appends, so a presenter that swallowed
+        the append's refusal committed a durable mutation with no event to
+        account for it.
+
+        Admission is by token identity, never by a time window. A window
+        would be open during genesis's own writes, and a finalizer runs
+        exactly there: it would inherit whatever the runtime had granted
+        itself for the instant it was running in (`GR27-R5`). The token is a
+        fresh object held only by the transaction that created it and passed
+        only down `_genesis`'s own calls, so possession is the whole
+        predicate.
+
+        Python offers no privacy stronger than this, and none is claimed: code
+        that reaches into `_genesis_pending` could equally reach into
+        `store.connection`. What the boundary guarantees is that no *public*
+        controller API carries a token parameter, so no presenter, response
+        value or finalizer acquires one by calling the runtime normally.
+        """
+        return self._genesis_pending.get(project_id, genesis_token) is genesis_token  # guard:genesis_admission
+
+    @contextmanager
+    def _pending_genesis(self, project_id: Id):
+        """Hold `project_id` against everyone but this transaction, and yield
+        the token that excepts this transaction.
+
+        `AX-17` is one transaction of four ordered events, and events 0 and 2
+        sit either side of a callback into code the runtime does not own. A
+        presenter that calls back into the controller against the project
+        being created would append a fifth event between them, and what
+        committed would no longer be the witness (`GR27-R2`).
+
+        The hold spans the **whole** transaction — `BEGIN` to `COMMIT` or
+        `ROLLBACK` — and not merely the presentation. A response object stays
+        alive until `_genesis`'s frame is torn down, and its finalizer then
+        runs after the freshness recheck, after the approval and before the
+        commit; a hold that ended with the presentation left exactly that
+        interval open (`GR27-R5`). Nothing here depends on when the finalizer
+        runs, because there is no moment inside the transaction at which the
+        hold is off.
+
+        The hold is released on every exit, not the successful one: a
+        presenter that raises, a human who declines and a refused response all
+        leave the controller able to create the next project. It names one
+        project, so an unrelated project — nobody's open transaction — stays
+        operable from inside a presentation.
+        """
+        token = object()
+        self._genesis_pending[project_id] = token
+        try:
+            yield token
+        finally:
+            self._genesis_pending.pop(project_id, None)
 
     def _project_of_run(self, run_id: Id) -> Id:
         return self.store.get_run(run_id).project_id
@@ -519,14 +790,44 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         slug: str,
         workspace_root: str,
         approved_by: ActorRef,
+        present: CreationPresenter,
+        initial_mode: GovernanceMode,
         justification: str = "project creation approved",
     ) -> Id:
         """Create a project at `DRAFT`, under the four-event genesis witness.
 
-        `∅ → DRAFT` is a `HUMAN`-class row whose policy verdict is `AUTO`, so
-        the policy engine contributes nothing to its authority and a
-        `HumanDecision{kind: APPROVE}` over the project is what authorizes it
-        (`AX-14`, `R3.6`). `approved_by` is the human who made it.
+        `∅ → DRAFT` is a `HUMAN`-class row whose policy verdict is `AUTO`
+        **under `SUPERVISED` only**: its `AUTONOMOUS` cell is `DENY`
+        (transition-matrix.md:84, authority-matrix.md:157). Where the row is
+        admitted the policy engine contributes nothing further to its
+        authority, and a `HumanDecision{kind: APPROVE}` over the project is
+        what authorizes it (`AX-14`, `R3.6`). `approved_by` is the human who
+        made it; what they were shown and what they answered come from
+        `present`, below.
+
+        `initial_mode` is the mode the creating act establishes — a required,
+        human-supplied field of the created `Project` (domain-model.md:138) —
+        and it is the value the mode gate is evaluated against, since creation
+        is the one act with no prior project to read. It has no default: a
+        runtime that chose it would be establishing a governance mode nobody
+        asked for, and the caller must name it.
+
+        Two independent conditions admit it, and both are necessary:
+
+        1. the frozen policy cell for `∅ → DRAFT` must not be `DENY` in that
+           mode (transition-matrix.md:84, authority-matrix.md:157), read off
+           the matrix row itself rather than copied from it;
+        2. it must be `GENESIS_MODE`. Non-`DENY` is not sufficient. `AX-17`'s
+           creating act is specified at `SUPERVISED` (§2.23 row 1), and a
+           later change that made some other cell admissible would not thereby
+           make that mode one a creating act may establish — the only route to
+           another mode is a `SET_MODE` decision under `project.mode.set`,
+           which has no legal transition row in the frozen matrix and is not
+           implemented here (`DESIGN-04-032`, DESIGN-04 §2.23 row 1, §6.1).
+
+        The mode is also part of the presentation: what the human approves is
+        this project *under this governance mode*, and the value they are
+        shown is the value installed.
 
         One store transaction, four ordered events (`AX-17`):
 
@@ -550,24 +851,46 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         The approval is snapshot-bound (`R3.7`), so it binds to event 0's
         snapshot and an observation that did not succeed refuses the creation
         rather than approving an unknown workspace.
+
+        `present` is the presentation boundary and is mandatory. It is shown
+        event 0's observation — the snapshot it recorded and the artifacts
+        themselves — and returns the human's `CreationResponse` to *that*
+        observation. Creation is refused if no conforming response comes
+        back, if the response names a different observation, if the human
+        declines, or if reality was observed again while the presentation was
+        open. Its `signature` is the approver's signature evidence, required
+        where they authenticate by `SIGNATURE`. Nothing here labels a
+        runtime-selected artifact index as human-seen: what is recorded as
+        `evidence_shown` is what the presentation carried
+        (domain-model.md:703, :709, `HD-INV-2`, `DESIGN-04-036`).
         """
         require(_is_authenticated_human(approved_by), "project creation requires an authenticated human approval (AX-14)", IntegrityViolation)  # guard:genesis_approver
+        require(creation_is_permitted_in(initial_mode), f"project.create is DENY in {initial_mode.value} (authority-matrix.md:157, transition-matrix.md:84); the frozen policy cell for this mode admits no creating act", PolicyDenied)  # guard:genesis_initial_mode
+        require(initial_mode is GENESIS_MODE, f"a project is created {GENESIS_MODE.value} and reaches another mode only by a later SET_MODE decision: {initial_mode.value} is not a mode a creating act establishes, whatever its policy cell says (DESIGN-04 §2.23 row 1)", PolicyDenied)  # guard:genesis_mode_is_supervised
         project_id = new_id()
         db = self.store.connection
-        db.execute("BEGIN IMMEDIATE")
-        try:
-            self._genesis(
-                project_id,
-                name=name,
-                slug=slug,
-                workspace_root=workspace_root,
-                approved_by=approved_by,
-                justification=justification,
-            )
-            db.execute("COMMIT")
-        except BaseException:
-            db.execute("ROLLBACK")  # guard:genesis_rollback
-            raise
+        # The hold is taken around the transaction, not around the
+        # presentation: it must still be on when the last thing the
+        # transaction touched is finalized, and off once the transaction is
+        # closed either way (`GR27-R5`).
+        with self._pending_genesis(project_id) as genesis_token:
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                self._genesis(
+                    project_id,
+                    name=name,
+                    slug=slug,
+                    workspace_root=workspace_root,
+                    approved_by=approved_by,
+                    present=present,
+                    initial_mode=initial_mode,
+                    justification=justification,
+                    genesis_token=genesis_token,
+                )
+                db.execute("COMMIT")
+            except BaseException:
+                db.execute("ROLLBACK")  # guard:genesis_rollback
+                raise
         return project_id
 
     def _genesis(
@@ -578,9 +901,18 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         slug: str,
         workspace_root: str,
         approved_by: ActorRef,
+        present: CreationPresenter,
+        initial_mode: GovernanceMode,
         justification: str,
+        genesis_token: object,
     ) -> None:
-        """The four appends of `AX-17`, inside the caller's transaction."""
+        """The four appends of `AX-17`, inside the caller's transaction.
+
+        The caller holds the project and hands the hold's token down. Every
+        append below carries it and no other caller has it, which is what lets
+        one transaction write four events against a project that is otherwise
+        immutable for the whole time it is open.
+        """
         created_at = now_ts()
         snapshot, fingerprint, _ = self._observe_reality(
             project_id,
@@ -589,7 +921,9 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             previous=None,
             attributed=(),
         )
-        genesis = self._append_snapshot(project_id, snapshot, fingerprint)
+        genesis = self._append_snapshot(
+            project_id, snapshot, fingerprint, genesis_token=genesis_token
+        )
         # The `seq = 0` write installs the project and initializes its chain
         # state together; events 1-3 reserve their `seq` from this row.
         self.store.put_project(
@@ -600,29 +934,67 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 schema_version=SCHEMA_VERSION,
                 lifecycle=ProjectLifecycle.DRAFT,
                 suspension=SuspensionState.NONE,
-                governance_mode=GovernanceMode.AUTONOMOUS,
+                governance_mode=initial_mode,
                 workspace_root=workspace_root,
                 created_at=created_at,
                 updated_at=created_at,
-                created_by=_runtime_actor("controller"),
+                # `Project.created_by` is the approving human, never the
+                # runtime that performed the write: a runtime cannot
+                # originate a project and thereby its own ceiling
+                # (domain-model.md:150, transition-matrix.md:485).
+                created_by=approved_by,
                 event_head=genesis.event_hash,
                 event_seq=genesis.seq,
                 controller_epoch=0,
             )
         )
         self._publish_snapshot(project_id, snapshot)
-        approval = self.record_decision(
+        # The observation is *shown* and answered before anything is decided.
+        # What the human was shown is the observation event 0 recorded: the
+        # index of the workspace being taken under governance.
+        observation = CreationObservation(
+            project_id=project_id,
+            name=name,
+            slug=slug,
+            workspace_root=workspace_root,
+            initial_mode=initial_mode,
+            snapshot_id=snapshot.snapshot_id,
+            question=(
+                f"Create project {name} ({slug}) at {workspace_root} "
+                f"under {initial_mode.value} governance?"
+            ),
+            options_offered=CREATION_OPTIONS,
+            evidence_shown=(snapshot.file_index_ref,),
+        )
+        # Everything from here to the commit happens with the project held
+        # against mutation, and the presentation ends with the freshness
+        # recheck — so nothing the runtime does not own runs between that
+        # recheck and the decision it authorizes, and nothing it does not own
+        # writes at all until the transaction is closed.
+        response = present(observation)
+        require(isinstance(response, CreationResponse), "creation needs a human's answer to the observation it presented; no conforming response was given (HD-INV-2, domain-model.md:709)", IntegrityViolation)  # guard:creation_response
+        answer = _materialize(response)
+        require(_answers(answer, observation), f"the response answers a different observation: it names {answer.snapshot_id!r}, and {observation.snapshot_id!r} is what was presented (domain-model.md:703)", IntegrityViolation)  # guard:creation_response_binding
+        require(answer.chosen == CREATE_CHOICE, f"the human declined: they chose {answer.chosen!r} over {CREATE_CHOICE!r}", IntegrityViolation)  # guard:creation_response_approves
+        require(self._is_current_observation(project_id, observation.snapshot_id), f"reality was observed again while the presentation was open: {observation.snapshot_id} is no longer the current observation, so what was approved is not what would be created (HD-INV-4)", IntegrityViolation)  # guard:creation_observation_fresh
+        approval = self._record_decision(
             project_id,
             decision_kind=DecisionKind.APPROVE,
             subject_kind=DecisionSubjectKind.PROJECT,
             subject_id=project_id,
-            question=f"Create project {name} ({slug}) at {workspace_root}?",
-            chosen="CREATE",
-            justification=justification,
+            question=observation.question,
+            options_offered=observation.options_offered,
+            chosen=answer.chosen,
+            justification=answer.justification or justification,
             decided_by=approved_by,
-            # What the human was shown is the observation event 0 recorded:
-            # the index of the workspace being taken under governance.
-            evidence_shown=(snapshot.file_index_ref,),
+            signature=answer.signature,
+            # The observation that was approved, named rather than looked up:
+            # `subject_snapshot_id` is the reality the human actually approved
+            # (domain-model.md:703), which is not necessarily whatever the
+            # store would report as newest at this instant.
+            approved_snapshot_id=observation.snapshot_id,
+            evidence_shown=observation.evidence_shown,
+            genesis_token=genesis_token,
         )
         created = self._append(
             project_id,
@@ -638,12 +1010,52 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "snapshot_id": snapshot.snapshot_id,
             },
             capability_used="project.create",
+            # `AX-16`: the runtime writes, the human decided, and the event
+            # carries both — the delegation and the decision it rests on.
+            actor=_delegated_actor("controller", approved_by),
+            genesis_token=genesis_token,
             authority_ref=approval.decision_id,  # guard:genesis_authority_ref
         )
-        self._consume_decision(project_id, approval, discharged=created)  # guard:genesis_consumed
+        self._consume_decision(project_id, approval, discharged=created, genesis_token=genesis_token)  # guard:genesis_consumed
+
+    def _is_own_complete_observation(self, project_id: Id, snapshot_id: Id) -> bool:
+        """Whether `snapshot_id` is a `COMPLETE` observation of this project.
+
+        Identity, not currency. This is what makes an explicitly named
+        approved snapshot a real observation of the right workspace rather
+        than an id the caller invented or borrowed from elsewhere. Whether it
+        is still the *current* observation is a different question, asked by
+        `_is_current_observation` at the boundary that presented it — keeping
+        the two apart is what stops either check from standing in for the
+        other (`GR27-R3`).
+        """
+        try:
+            snapshot = self.store.get_snapshot(snapshot_id)
+        except KeyError:
+            return False
+        return (
+            snapshot.project_id == project_id
+            and snapshot.completeness is Completeness.COMPLETE
+        )
+
+    def _is_current_observation(self, project_id: Id, snapshot_id: Id) -> bool:
+        """Whether `snapshot_id` is still this project's newest `COMPLETE` one.
+
+        Rechecked after the human answers and before the transaction commits:
+        an approval over a superseded observation is `HD-INV-4`'s stale
+        approval, and creating from one would publish a project nobody
+        approved the reality of.
+        """
+        current = self.store.newest_complete_snapshot(project_id)
+        return current is not None and current.snapshot_id == snapshot_id
 
     def _consume_decision(
-        self, project_id: Id, decision: HumanDecision, *, discharged
+        self,
+        project_id: Id,
+        decision: HumanDecision,
+        *,
+        discharged,
+        genesis_token: object = None,
     ) -> None:
         """`VALID → CONSUMED` (transition-matrix §7.5-2).
 
@@ -665,6 +1077,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             capability_used="audit.append",
             causal_parent=discharged.event_id,
             component="decision",
+            genesis_token=genesis_token,
         )
         decision.decision_state = state
         self.store.put_decision(decision)
@@ -675,7 +1088,14 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         `P-INV-4`: the increment is committed before this controller does any
         other work, so an operation carrying a lower epoch is provably the
         work of a controller that is gone.
+
+        The bump is durable and precedes its own event, so the pending-genesis
+        boundary is asked in front of it rather than in front of the append: a
+        presenter that called this against the project being created and
+        swallowed the append's refusal would have committed an epoch no
+        `controller.started` event accounts for (`GR27-R4`).
         """
+        require(self._genesis_admits(project_id), f"project {project_id} is mid-genesis: its creation transaction is open, and bumping the controller epoch would durably mutate a project that no commit has yet established", IntegrityViolation)  # guard:start_pending_genesis
         epoch = self.store.bump_controller_epoch(project_id)
         self._append(
             project_id,
@@ -799,8 +1219,15 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
 
         Taking a snapshot is always permitted, under every suspension value
         (§0.1): observing reality is the only way a suspension raised by drift
-        is ever cleared.
+        is ever cleared. It is not permitted against a project whose creation
+        transaction is still open: the observation is stored as a
+        content-addressed artifact before any event is appended, and a blob
+        outlives the rollback of the transaction that wrote it. The boundary
+        is therefore in front of the observation, and a second observation of
+        the pending project never happens rather than happening and then
+        failing to be recorded (`GR27-R4`, `GR27-R5`).
         """
+        require(self._genesis_admits(project_id), f"project {project_id} is mid-genesis: its creation transaction is open, and observing it again would supersede the very observation its approval is bound to", IntegrityViolation)  # guard:snapshot_pending_genesis
         project = self.store.get_project(project_id)
         # The baseline is the newest `COMPLETE` snapshot, not merely the last
         # one: a failed observation is neither a baseline nor a comparand
@@ -876,7 +1303,14 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         )
         return snapshot, fingerprint, drifted
 
-    def _append_snapshot(self, project_id: Id, snapshot: RealitySnapshot, fingerprint):
+    def _append_snapshot(
+        self,
+        project_id: Id,
+        snapshot: RealitySnapshot,
+        fingerprint,
+        *,
+        genesis_token: object = None,
+    ):
         """Record the observation under `snapshot.take`."""
         drift = snapshot.drift_summary
         return self._append(
@@ -905,6 +1339,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             },
             capability_used="snapshot.take",
             component="snapshot",
+            genesis_token=genesis_token,
         )
 
     def _publish_snapshot(self, project_id: Id, snapshot: RealitySnapshot) -> None:
@@ -1009,10 +1444,63 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         decided_by: ActorRef,
         evidence_shown: Sequence[ArtifactRef],
         options_offered: Sequence[str] = (),
+        signature: Optional[str] = None,
+        approved_snapshot_id: Optional[Id] = None,
         scope: DecisionScope = DecisionScope.PROJECT,
         expires_at: Optional[datetime] = None,
         grants: frozenset[str] = frozenset(),
         revokes: frozenset[str] = frozenset(),
+    ) -> HumanDecision:
+        """Record a human's decision, from outside the runtime.
+
+        The public form, and it carries no genesis token: a caller reached
+        through this method is measured against the pending-genesis hold like
+        any other, including a presenter or a finalizer that calls it against
+        the project being created. Genesis records its own approval through
+        `_record_decision`, which is not on the public surface (`GR27-R5`).
+
+        Everything else about the two is the same; the predicates and what
+        they are for are documented on the implementation below.
+        """
+        return self._record_decision(
+            project_id,
+            decision_kind=decision_kind,
+            subject_kind=subject_kind,
+            subject_id=subject_id,
+            question=question,
+            chosen=chosen,
+            justification=justification,
+            decided_by=decided_by,
+            evidence_shown=evidence_shown,
+            options_offered=options_offered,
+            signature=signature,
+            approved_snapshot_id=approved_snapshot_id,
+            scope=scope,
+            expires_at=expires_at,
+            grants=grants,
+            revokes=revokes,
+        )
+
+    def _record_decision(
+        self,
+        project_id: Id,
+        *,
+        decision_kind: DecisionKind,
+        subject_kind: DecisionSubjectKind,
+        subject_id: Id,
+        question: str,
+        chosen: str,
+        justification: str,
+        decided_by: ActorRef,
+        evidence_shown: Sequence[ArtifactRef],
+        options_offered: Sequence[str] = (),
+        signature: Optional[str] = None,
+        approved_snapshot_id: Optional[Id] = None,
+        scope: DecisionScope = DecisionScope.PROJECT,
+        expires_at: Optional[datetime] = None,
+        grants: frozenset[str] = frozenset(),
+        revokes: frozenset[str] = frozenset(),
+        genesis_token: object = None,
     ) -> HumanDecision:
         """Record a human's decision. `∅ → VALID` (transition-matrix §7.5-1).
 
@@ -1021,6 +1509,36 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         `HD-INV-2` — an uninformed approval discharges nothing. A
         snapshot-bound decision is bound here to the newest `COMPLETE`
         snapshot, which is the reality the human was actually shown.
+
+        Refused unless `chosen` is one of `options_offered`
+        (domain-model.md:695-696): a choice that was never offered is not a
+        choice the human made, and a
+        malformed decision is authority for nothing (`DESIGN-04-034`). The
+        predicate is enforced here, once, rather than at each caller.
+
+        `signature` is required exactly when `decided_by.auth_method` is
+        `SIGNATURE` (domain-model.md:710) and is bound into `decision_hash`,
+        so it can be neither attached afterwards nor dropped. Nothing here
+        verifies it: no key infrastructure exists, and an unverified signature
+        is recorded as the evidence it is, not as proof of anything
+        (`DESIGN-04-035`).
+
+        `approved_snapshot_id` names the observation the decider was actually
+        shown, for the callers that presented one. Where it is given the
+        decision binds to **that** snapshot and to no other: the newest
+        `COMPLETE` snapshot is not re-selected, because rebinding an approval
+        to a reality its approver did not see is exactly what
+        `subject_snapshot_id` exists to prevent (domain-model.md:703). It is
+        validated, not trusted: the decision must be snapshot-bound and the
+        named observation must be a `COMPLETE` observation of **this**
+        project, or it is refused rather than recorded against an id the
+        caller invented. What it does not re-ask is whether that observation
+        is still current. That is the presenting caller's invariant, asked at
+        the boundary that showed it and immediately before this call
+        (`guard:creation_observation_fresh`); asking it again here would put
+        one predicate behind two guards, and neither could then be shown to
+        be doing any work (`GR27-R3`). Callers that name nothing keep the
+        central binding unchanged.
         """
         if decided_by.actor_kind is not ActorKind.HUMAN:
             raise IntegrityViolation(
@@ -1037,9 +1555,14 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "an uninformed approval cannot discharge required_evidence "
                 "(HD-INV-2)"
             )
+        require(chosen in tuple(options_offered), f"a decision must choose an offered option: chosen={chosen!r} is not in options_offered={list(options_offered)!r} (domain-model.md:695-696)", IntegrityViolation)  # guard:decision_option_membership
+        require(decided_by.auth_method is not AuthMethod.SIGNATURE or bool(signature), "auth_method=SIGNATURE requires the signature itself; a method label and a key id are not the evidence (domain-model.md:710)", IntegrityViolation)  # guard:decision_signature_present
         bound = is_snapshot_bound(subject_kind, decision_kind)
         subject_snapshot_id = None
-        if bound:
+        if approved_snapshot_id is not None:
+            require(bound and self._is_own_complete_observation(project_id, approved_snapshot_id), f"an explicitly approved observation must be a COMPLETE observation of this project, on a snapshot-bound decision: snapshot_bound={bound} and {approved_snapshot_id} is not one of {project_id}'s COMPLETE observations (domain-model.md:703)", IntegrityViolation)  # guard:decision_approved_snapshot
+            subject_snapshot_id = approved_snapshot_id
+        elif bound:
             snapshot = self.store.newest_complete_snapshot(project_id)
             if snapshot is None:
                 raise IntegrityViolation(
@@ -1084,6 +1607,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             revokes=frozenset(revokes),
             subject_snapshot_id=subject_snapshot_id,
             expires_at=expires_at,
+            signature=signature,
             prev_event_hash=self.store.get_project(project_id).event_head,
         )
         decision.decision_hash = decision_content_hash(decision)
@@ -1095,6 +1619,10 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             payload=preimage,
             capability_used="decision.record",
             component="decision",
+            # `AX-15`: this event is the human's own act, so they hold it and
+            # it cites no delegated authority.
+            actor=decided_by,
+            genesis_token=genesis_token,
         )
         self.store.put_decision(decision)
         return decision

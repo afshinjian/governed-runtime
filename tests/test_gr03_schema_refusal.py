@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 from gruntime.errors import SchemaTooOld
 from gruntime.store import (
     REQUIRED_COLUMNS,
@@ -53,7 +53,7 @@ def _drop_column(db_path: Path, table: str, column: str) -> None:
 def _legacy_database(h, *, table: str, column: str) -> None:
     """A populated database in the shape GR-01/GR-02 left behind."""
     with h.controller() as controller:
-        controller.create_project(
+        create_project(controller, then_mode=AUTONOMOUS,
             name="Legacy", slug="legacy", workspace_root=str(h.root),
             approved_by=OWNER,
         )
@@ -134,7 +134,7 @@ def test_a_fresh_database_is_never_refused(h):
 def test_a_populated_current_database_reads_back(h):
     """The columns the check insists on are the ones a read actually needs."""
     with h.controller() as controller:
-        project_id = controller.create_project(
+        project_id = create_project(controller, then_mode=AUTONOMOUS,
             name="Current", slug="current", workspace_root=str(h.root),
             approved_by=OWNER,
         )
@@ -164,7 +164,7 @@ def test_the_storage_version_is_not_the_domain_model_version(h):
     whenever a column was added.
     """
     with h.controller() as controller:
-        project_id = controller.create_project(
+        project_id = create_project(controller, then_mode=AUTONOMOUS,
             name="Anchor", slug="anchor", workspace_root=str(h.root),
             approved_by=OWNER,
         )

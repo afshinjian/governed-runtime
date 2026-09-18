@@ -16,7 +16,7 @@ from gruntime.canonical import canonical_json, digest_bytes
 from gruntime.errors import IntegrityViolation
 from gruntime.models import EpistemicClass
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 
 
 # --- content-addressed artifact store ------------------------------------
@@ -64,7 +64,7 @@ def test_canonical_json_orders_by_utf16_code_unit():
 
 def test_storage_is_wal_synchronous_full_and_strict(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
     conn = sqlite3.connect(h.db_path)
@@ -94,7 +94,7 @@ def test_storage_is_wal_synchronous_full_and_strict(h):
 
 def test_genesis_event_anchors_the_chain(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
     with h.store() as s:
@@ -108,7 +108,7 @@ def test_genesis_event_anchors_the_chain(h):
 
 def test_appends_are_gapless_and_advance_the_head(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
         for epoch in range(3):
@@ -125,7 +125,7 @@ def test_appends_are_gapless_and_advance_the_head(h):
 
 def test_every_event_binds_its_payload(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
         c.start(project_id)
@@ -140,7 +140,7 @@ def test_every_event_binds_its_payload(h):
 
 def test_verification_detects_a_rewritten_event(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
         c.start(project_id)
@@ -162,7 +162,7 @@ def test_verification_detects_a_rewritten_event(h):
 
 def test_verification_detects_a_broken_link(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
         c.start(project_id)
@@ -184,7 +184,7 @@ def test_verification_detects_a_broken_link(h):
 
 def test_the_event_log_is_append_only(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
     with h.store() as s:
@@ -203,7 +203,7 @@ def test_the_event_log_is_append_only(h):
 
 def test_epoch_increments_once_per_controller_start(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
         assert c.start(project_id) == 1
@@ -214,7 +214,7 @@ def test_epoch_increments_once_per_controller_start(h):
 
 def test_operations_carry_the_epoch_they_were_created_under(h):
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
         c.start(project_id)
@@ -235,7 +235,7 @@ def test_operations_carry_the_epoch_they_were_created_under(h):
 def test_the_epoch_bump_is_durable_before_any_work(h):
     """P-INV-4: the increment is committed before the controller does anything."""
     with h.controller() as c:
-        project_id = c.create_project(name="core", slug="core",
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="core", slug="core",
                                       workspace_root=str(h.root),
                                       approved_by=OWNER)
     proc = h.spawn(project_id, "start")

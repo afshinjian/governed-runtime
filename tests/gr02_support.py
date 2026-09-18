@@ -49,7 +49,7 @@ from gruntime.transitions import (
     Precondition,
 )
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 
 SUBJECT = "subj-gr02"
 
@@ -148,7 +148,7 @@ class Governor:
 @contextmanager
 def governed(h):
     with h.controller() as controller:
-        project_id = controller.create_project(
+        project_id = create_project(controller, then_mode=AUTONOMOUS,
             name="GR-02", slug="gr-02", workspace_root=str(h.root),
             approved_by=OWNER,
         )

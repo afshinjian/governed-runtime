@@ -20,13 +20,13 @@ from gruntime.models import (
 )
 from gruntime.provider import LookupAbsent, RECOVERY_CAPABILITIES, GovernedProvider
 
-from genesis_support import OWNER
+from genesis_support import AUTONOMOUS, OWNER, create_project
 
 
 def _seed_unreachable_invocation(h):
     """An invocation whose request is durable but which the provider never saw."""
     with h.controller() as c:
-        project_id = c.create_project(name="R1", slug="r1", workspace_root=str(h.root),
+        project_id = create_project(c, then_mode=AUTONOMOUS, name="R1", slug="r1", workspace_root=str(h.root),
                                       approved_by=OWNER)
         c.start(project_id)
         run_id = c.open_run(project_id)

@@ -418,21 +418,36 @@ def actor_to_json(actor: ActorRef) -> str:
 
 
 def actor_to_dict(actor: ActorRef) -> dict:
-    return {
+    """The serialized actor, and an `AX-16` delegation only where there is one.
+
+    `on_behalf_of` is written **only** when the actor delegates. An actor that
+    does not keeps exactly the four keys it has always had, so every event
+    recorded before delegation existed hashes to the same value it did then
+    (`AE-INV-1`) and no storage version changes.
+    """
+    body = {
         "actor_kind": actor.actor_kind.value,
         "actor_id": actor.actor_id,
         "auth_method": actor.auth_method.value,
         "principal_key_id": actor.principal_key_id,
     }
+    if actor.on_behalf_of is not None:
+        body["on_behalf_of"] = actor_to_dict(actor.on_behalf_of)
+    return body
 
 
 def actor_from_json(raw: str) -> ActorRef:
-    data = json.loads(raw)
+    return _actor_from_dict(json.loads(raw))
+
+
+def _actor_from_dict(data: dict) -> ActorRef:
+    delegated = data.get("on_behalf_of")
     return ActorRef(
         actor_kind=ActorKind(data["actor_kind"]),
         actor_id=data["actor_id"],
         auth_method=AuthMethod(data["auth_method"]),
         principal_key_id=data.get("principal_key_id"),
+        on_behalf_of=None if delegated is None else _actor_from_dict(delegated),
     )
 
 
