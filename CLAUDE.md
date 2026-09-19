@@ -1,6 +1,6 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-28 (transition authority enforcement, §7.4 only (closes F03-002, F03-003; F03-001 §7.4 instance only; F04-004 open)).
+Phase: GR-29 (HumanDecision principal-key integrity (F04-001) and current-state documentation).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
