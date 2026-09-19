@@ -1,0 +1,689 @@
+{
+  "stage": "GR-28",
+  "scope": "COMMIT_INTENT \u00a77.4 only; F03-002 and F03-003; the \u00a77.4 instance of F03-001",
+  "findings_closed": [
+    "F03-002",
+    "F03-003"
+  ],
+  "findings_not_closed": {
+    "F03-001": "closed for \u00a77.4 (14 of 145 rows); open for the other 131",
+    "F04-004": "open; it closes only when all three of F03-001..003 close"
+  },
+  "baseline_commit_at_implementation": "85fdffd18890128cee041ca02bb9a382ef8c7e0d",
+  "tests_passed": 1289,
+  "tests_added": 19,
+  "guards_killed": 20,
+  "gr28_guards": [
+    "transition_capability_held",
+    "transition_kernel_holder",
+    "transition_ord_grant",
+    "transition_row_declared"
+  ],
+  "adjacent_guards_rechecked": [
+    "commit_apply_base",
+    "commit_authorize_base",
+    "commit_authorize_status",
+    "commit_mark_barrier",
+    "commit_mark_completeness",
+    "commit_mark_status",
+    "commit_no_reapply",
+    "commit_proposal_message",
+    "commit_single_receipt",
+    "gr06_commit_apply",
+    "gr06_commit_authorize",
+    "gr06_commit_destination_scope",
+    "gr06_commit_intent_grant",
+    "gr06_commit_propose_grant",
+    "gr06_commit_propose_path",
+    "gr06_commit_source_scope"
+  ],
+  "hollowed_and_repaired": [
+    {
+      "guard": "commit_mark_status",
+      "cause": "GR-28 guard:transition_row_declared raises the same error type for the same illegal case",
+      "repair": "tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused now asserts each guard's own message with match=",
+      "survived_summaries": [
+        "Mutant: 1289 passed in 153.14s (0:02:33)",
+        "Restored: 1289 passed in 152.52s (0:02:32)",
+        "Mutation: SURVIVED; no tests went red"
+      ]
+    }
+  ],
+  "log_root": ".evidence/ (gitignored; summaries inlined above are the record)",
+  "guards": [
+    {
+      "guard": "gr06_commit_propose_grant",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1775,
+      "needle": "self.require_authority(run_id, \"commit.propose\")  # guard:gr06_commit_propose_grant",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 154.20s (0:02:34)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_unactivated_contract_has_no_authority_even_with_active_label",
+        "Restored: 1289 passed in 154.42s (0:02:34)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T120647.638694536Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_commit_propose_path",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1777,
+      "needle": "self.require_authority(run_id, \"fs.write\", path=path, repo=governed)  # guard:gr06_commit_propose_path",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 151.77s (0:02:31)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply",
+        "Restored: 1289 passed in 155.09s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T121158.712035002Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_proposal_message",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1815,
+      "needle": "commit_message(intent)  # guard:commit_proposal_message",
+      "passed": true,
+      "summaries": [
+        "Mutant: 5 failed, 1284 passed in 152.88s (0:02:32)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[]",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[\\nsubject]",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[x\\x00y]",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[x\\ry]",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+        "Restored: 1289 passed in 152.22s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T121708.023794333Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "transition_ord_grant",
+      "kind": "gr28",
+      "file": "src/gruntime/controller.py",
+      "line": 1872,
+      "needle": "return run_id is not None and self._grant_permits(run_id, capability)  # guard:transition_ord_grant",
+      "passed": true,
+      "summaries": [
+        "Mutant: 35 failed, 1157 passed, 97 errors in 137.72s (0:02:17)",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_transaction_receipt_records_and_verifies_every_field",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args0]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args1]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args3]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args4]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args5]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[../escape]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[.git]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[.gitmodules]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[./README.md]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[-A]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[:/*]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[README.md\\x00other]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_empty_exact_paths_are_refused",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_adapter_push_capability_never_reaches_a_subprocess[publish-args0]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_adapter_push_capability_never_reaches_a_subprocess[_git-args1]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_adapter_push_capability_never_reaches_a_subprocess[_git-args2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_controller_publication_is_denied_before_adapter",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_no_transaction_or_recovery_command_is_push",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[extra]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[protected]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[content]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[mode]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[delete]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_leaves_unrelated_untracked_and_dirty_files_out",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_literal_glob_filename_never_expands",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_expected_parent_and_branch_checked_after_staging[parent]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_expected_parent_and_branch_checked_after_staging[branch]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_expected_parent_and_branch_checked_after_staging[detached]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_verified_index_is_pinned_against_later_index_edits",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_commit_hooks_cannot_mutate_or_publish",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_git_environment_cannot_redirect_the_index_or_repository",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_noop_intent_does_not_create_a_commit",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[subject-other]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[body_hash-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[parent_revision_ids-value2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[actual_tree_digest-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[tree_id-bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[revision_id-bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[committed_paths-value6]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[operation_token-wrong]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[intent_id-wrong]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[files_changed-value9]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[subject-other]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[body_hash-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[parent_revision_ids-value2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[actual_tree_digest-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[committed_paths-value4]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[operation_tokens-value5]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[matching_revisions-value6]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[entries-value7]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_recovery_checks_full_receipt_and_applies_integrity_suspension[message-Changed subject]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_recovery_checks_full_receipt_and_applies_integrity_suspension[message-Add feature\\n\\nDifferent body]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_recovery_checks_full_receipt_and_applies_integrity_suspension[expected_tree_digest-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_and_settlement_roll_back_together",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_same_epoch_apply_is_never_retried",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused[authorize]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused[mark]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_authorization_requires_current_base",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_apply_base_is_checked_before_worktree_writes",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_reconciliation_barrier",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[FAILED]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[PARTIAL]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[TRUNCATED]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_missing_receipt_cannot_verify",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[\\nsubject]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[x\\x00y]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[x\\ry]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers0]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers1]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers3]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[scope]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[empty]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[duplicate]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[source]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[destination]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[preimage]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[missing_after]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[bad_rename]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[bad_mode]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_writing_through_symlink_is_refused",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_delete_cannot_traverse_symlink_to_outside",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[MODIFY]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[DELETE]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[RENAME]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[CHMOD]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_repeated_settlement_of_stale_intent_returns_existing_receipt",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_ambiguous_token_suspends_run_and_project",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_reverification_divergence_suspends_run_and_project",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_nonexistent_literal_path_cannot_expand_to_untracked_files",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_pending_merge_cannot_add_an_unexpected_parent",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_signing_configuration_cannot_execute_an_external_program",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_commit_message_bytes_are_not_rewritten_by_git_cleanup",
+        "Red: FAILED tests/test_gr03_drift_detection.py::test_a_change_inside_a_declared_path_is_attributed",
+        "Red: FAILED tests/test_gr03_drift_detection.py::test_drift_suspension_bars_new_effects_but_never_observation",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_mutation_lands_in_the_worktree_and_not_in_the_checkout",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_worktree_is_outside_the_workspace",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_governed_revision_is_on_the_governed_line",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_landed_revision_is_findable_from_the_users_checkout",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_governed_mutation_does_not_register_as_workspace_drift",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_governed_line_accumulates_and_is_never_reset",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_applying_against_a_moved_governed_line_is_refused",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_a_dirty_users_checkout_does_not_block_governed_mutation",
+        "Red: FAILED tests/test_gr03_observation_gate.py::test_a_failed_observation_bars_proposing_and_applying_commits",
+        "Red: FAILED tests/test_gr03_protected_paths.py::test_applying_a_protected_path_is_refused_even_if_the_record_carries_one",
+        "Red: FAILED tests/test_gr03_repository_lease.py::test_two_controller_processes_never_hold_the_repository_at_once",
+        "Red: FAILED tests/test_gr03_repository_lease.py::test_a_dead_controllers_lease_is_reclaimable_only_after_it_expires",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_checks_rename_destination",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_refuses_symlink_swapped_after_authorization",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_revoke_between_authorize_and_apply_stops_effect",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_source_guard_independently_checks_scope",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_sigkill_during_receipt_transaction_and_during_adoption_adopts_once",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_authorize_is_not_satisfied_by_commit_propose",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_deny_requires_commit_authorize",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_mark_applying_requires_commit_apply",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_apply_refuses_without_commit_apply_and_lands_no_revision",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_every_commit_transition_is_labelled_with_its_rows_capability",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_the_blocked_exit_of_authorize_is_labelled_by_row_7_4_2",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_the_kernel_set_does_not_satisfy_an_ord_row",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_block_requires_a_live_proposing_grant",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_the_granted_lifecycle_is_unchanged",
+        "Red: FAILED tests/test_r3_commit_crash_adoption.py::test_crash_between_commit_and_receipt_adopts_the_landed_commit_once",
+        "Red: FAILED tests/test_r3_commit_crash_adoption.py::test_nothing_landed_is_reconciled_as_orphaned_not_retried",
+        "Red: FAILED tests/test_r3_commit_crash_adoption.py::test_divergent_landed_tree_is_adopted_as_a_failure",
+        "Red: FAILED tests/test_r4_reconciliation_derivation.py::test_pre_applying_intents_reconcile_to_orphaned_without_changing_status",
+        "Red: FAILED tests/test_r5_attestation_required.py::test_preconditions_accept_an_attestation_reference",
+        "Red: FAILED tests/test_r5_attestation_required.py::test_authorization_refuses_a_review_backed_precondition",
+        "Restored: 1289 passed in 151.29s (0:02:31)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T122215.496291856Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "transition_kernel_holder",
+      "kind": "gr28",
+      "file": "src/gruntime/controller.py",
+      "line": 1884,
+      "needle": "return capability in kernel_capabilities and actor.actor_kind is ActorKind.RUNTIME  # guard:transition_kernel_holder",
+      "passed": true,
+      "summaries": [
+        "Mutant: 29 failed, 1163 passed, 97 errors in 141.40s (0:02:21)",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_transaction_receipt_records_and_verifies_every_field",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args0]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args1]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args3]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args4]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_blanket_staging_is_rejected_before_subprocess[args5]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[../escape]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[.git]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[.gitmodules]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[./README.md]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[-A]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[:/*]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_rejects_unsafe_paths[README.md\\x00other]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_empty_exact_paths_are_refused",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_adapter_push_capability_never_reaches_a_subprocess[publish-args0]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_adapter_push_capability_never_reaches_a_subprocess[_git-args1]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_adapter_push_capability_never_reaches_a_subprocess[_git-args2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_controller_publication_is_denied_before_adapter",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_no_transaction_or_recovery_command_is_push",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[extra]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[protected]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[content]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[mode]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staged_divergence_aborts_before_commit[delete]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_staging_leaves_unrelated_untracked_and_dirty_files_out",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_literal_glob_filename_never_expands",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_expected_parent_and_branch_checked_after_staging[parent]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_expected_parent_and_branch_checked_after_staging[branch]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_expected_parent_and_branch_checked_after_staging[detached]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_verified_index_is_pinned_against_later_index_edits",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_commit_hooks_cannot_mutate_or_publish",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_git_environment_cannot_redirect_the_index_or_repository",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_noop_intent_does_not_create_a_commit",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[subject-other]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[body_hash-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[parent_revision_ids-value2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[actual_tree_digest-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[tree_id-bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[revision_id-bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[committed_paths-value6]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[operation_token-wrong]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[intent_id-wrong]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_tampering_is_detected[files_changed-value9]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[subject-other]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[body_hash-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[parent_revision_ids-value2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[actual_tree_digest-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[committed_paths-value4]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[operation_tokens-value5]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[matching_revisions-value6]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_observed_revision_is_compared_against_intent[entries-value7]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_recovery_checks_full_receipt_and_applies_integrity_suspension[message-Changed subject]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_recovery_checks_full_receipt_and_applies_integrity_suspension[message-Add feature\\n\\nDifferent body]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_recovery_checks_full_receipt_and_applies_integrity_suspension[expected_tree_digest-sha256:bad]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_receipt_and_settlement_roll_back_together",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_same_epoch_apply_is_never_retried",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused[authorize]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused[mark]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_authorization_requires_current_base",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_apply_base_is_checked_before_worktree_writes",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_reconciliation_barrier",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[FAILED]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[PARTIAL]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[TRUNCATED]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_missing_receipt_cannot_verify",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[\\nsubject]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[x\\x00y]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[x\\ry]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_message_rejected_at_proposal[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers0]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers1]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers2]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_token_or_trailers_are_refused[trailers3]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[scope]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[empty]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[duplicate]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[source]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_exact_intent_paths_are_guarded[destination]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[preimage]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[missing_after]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[bad_rename]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_invalid_mutations_are_refused_before_any_write[bad_mode]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_writing_through_symlink_is_refused",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_delete_cannot_traverse_symlink_to_outside",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[MODIFY]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[DELETE]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[RENAME]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_all_mutation_operations_use_exact_paths[CHMOD]",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_repeated_settlement_of_stale_intent_returns_existing_receipt",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_ambiguous_token_suspends_run_and_project",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_reverification_divergence_suspends_run_and_project",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_nonexistent_literal_path_cannot_expand_to_untracked_files",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_pending_merge_cannot_add_an_unexpected_parent",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_signing_configuration_cannot_execute_an_external_program",
+        "Red: ERROR tests/test_gr10_git_transaction.py::test_commit_message_bytes_are_not_rewritten_by_git_cleanup",
+        "Red: FAILED tests/test_gr03_drift_detection.py::test_a_change_inside_a_declared_path_is_attributed",
+        "Red: FAILED tests/test_gr03_drift_detection.py::test_drift_suspension_bars_new_effects_but_never_observation",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_mutation_lands_in_the_worktree_and_not_in_the_checkout",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_worktree_is_outside_the_workspace",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_governed_revision_is_on_the_governed_line",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_landed_revision_is_findable_from_the_users_checkout",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_governed_mutation_does_not_register_as_workspace_drift",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_the_governed_line_accumulates_and_is_never_reset",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_applying_against_a_moved_governed_line_is_refused",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_a_dirty_users_checkout_does_not_block_governed_mutation",
+        "Red: FAILED tests/test_gr03_observation_gate.py::test_a_failed_observation_bars_proposing_and_applying_commits",
+        "Red: FAILED tests/test_gr03_protected_paths.py::test_applying_a_protected_path_is_refused_even_if_the_record_carries_one",
+        "Red: FAILED tests/test_gr03_repository_lease.py::test_two_controller_processes_never_hold_the_repository_at_once",
+        "Red: FAILED tests/test_gr03_repository_lease.py::test_a_dead_controllers_lease_is_reclaimable_only_after_it_expires",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_refuses_symlink_swapped_after_authorization",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_revoke_between_authorize_and_apply_stops_effect",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_sigkill_during_receipt_transaction_and_during_adoption_adopts_once",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_mark_applying_requires_commit_apply",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_apply_refuses_without_commit_apply_and_lands_no_revision",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_every_commit_transition_is_labelled_with_its_rows_capability",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_a_runtime_actor_takes_the_same_row",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_a_reconciling_holder_takes_the_recovery_row",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_the_granted_lifecycle_is_unchanged",
+        "Red: FAILED tests/test_r3_commit_crash_adoption.py::test_crash_between_commit_and_receipt_adopts_the_landed_commit_once",
+        "Red: FAILED tests/test_r3_commit_crash_adoption.py::test_nothing_landed_is_reconciled_as_orphaned_not_retried",
+        "Red: FAILED tests/test_r3_commit_crash_adoption.py::test_divergent_landed_tree_is_adopted_as_a_failure",
+        "Red: FAILED tests/test_r4_reconciliation_derivation.py::test_pre_applying_intents_reconcile_to_orphaned_without_changing_status",
+        "Red: FAILED tests/test_r5_attestation_required.py::test_preconditions_accept_an_attestation_reference",
+        "Restored: 1289 passed in 151.14s (0:02:31)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T122706.864359028Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "transition_row_declared",
+      "kind": "gr28",
+      "file": "src/gruntime/controller.py",
+      "line": 1950,
+      "needle": "require(bool(candidates), f\"no row of the transition matrix carries {axis.value} {normalize_state(from_state)} \u2192 {normalize_state(to_state)}; an operation that names no CapabilityId is denied (G-4, AX-2)\", IntegrityViolation)  # guard:transition_row_declared",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 151.42s (0:02:31)",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_an_edge_with_no_row_is_refused",
+        "Restored: 1289 passed in 152.47s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T123201.763784895Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "transition_capability_held",
+      "kind": "gr28",
+      "file": "src/gruntime/controller.py",
+      "line": 1959,
+      "needle": "require(not capability_missing(rule, context), f\"row {rule.row} requires {rule.required_capability!r}, which {holder.actor_id} does not hold at the moment of transition (authority-matrix.md:292)\", CapabilityDenied)  # guard:transition_capability_held",
+      "passed": true,
+      "summaries": [
+        "Mutant: 8 failed, 1281 passed in 151.41s (0:02:31)",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_authorize_is_not_satisfied_by_commit_propose",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_deny_requires_commit_authorize",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_mark_applying_requires_commit_apply",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_apply_refuses_without_commit_apply_and_lands_no_revision",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_the_kernel_set_does_not_satisfy_an_ord_row",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_block_requires_a_live_proposing_grant",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_a_kernel_row_is_refused_to_a_non_runtime_actor",
+        "Red: FAILED tests/test_gr28_transition_authority.py::test_a_reconciling_holder_cannot_take_the_direct_row",
+        "Restored: 1289 passed in 151.64s (0:02:31)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T123708.065262463Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_authorize_status",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2020,
+      "needle": "if intent.status is not CommitIntentStatus.PROPOSED:  # guard:commit_authorize_status\n            raise IntegrityViolation(\"only a proposed intent can be authorized\")",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 152.98s (0:02:32)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused[authorize]",
+        "Restored: 1289 passed in 152.85s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T124213.481720716Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_commit_authorize",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2023,
+      "needle": "self._require_commit_authority(intent, governed)  # guard:gr06_commit_authorize",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 149.96s (0:02:29)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply",
+        "Restored: 1289 passed in 152.99s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T124721.718779679Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_authorize_base",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2026,
+      "needle": "if not head.matches:  # guard:commit_authorize_base\n            raise IntegrityViolation(head.reason())",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 152.71s (0:02:32)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_authorization_requires_current_base",
+        "Restored: 1289 passed in 152.70s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T125227.049977431Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_mark_barrier",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2077,
+      "needle": "self._assert_barrier_clear(intent.run_id, \"marking a commit applying\")  # guard:commit_mark_barrier",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 152.75s (0:02:32)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_mark_applying_obeys_reconciliation_barrier",
+        "Restored: 1289 passed in 152.45s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T125734.872045383Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_mark_completeness",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2078,
+      "needle": "self._assert_may_initiate_effect(self.store.intent_project(intent_id), \"marking a commit applying\")  # guard:commit_mark_completeness",
+      "passed": true,
+      "summaries": [
+        "Mutant: 3 failed, 1286 passed in 153.51s (0:02:33)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[FAILED]",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[PARTIAL]",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_mark_applying_obeys_completeness_gate[TRUNCATED]",
+        "Restored: 1289 passed in 153.27s (0:02:33)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T130242.561367502Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_mark_status",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2079,
+      "needle": "if intent.status is not CommitIntentStatus.AUTHORIZED:  # guard:commit_mark_status\n            raise IntegrityViolation(\"only an authorized intent may start applying\")",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 153.86s (0:02:33)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_illegal_commit_statuses_are_refused[mark-only an authorized intent may start applying]",
+        "Restored: 1289 passed in 152.54s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T144312.522178568Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_single_receipt",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2115,
+      "needle": "if existing:  # guard:commit_single_receipt\n            return existing[0]",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 151.68s (0:02:31)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_repeated_settlement_of_stale_intent_returns_existing_receipt",
+        "Restored: 1289 passed in 149.13s (0:02:29)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T144821.341747431Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_no_reapply",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2205,
+      "needle": "if intent.status is not CommitIntentStatus.AUTHORIZED:  # guard:commit_no_reapply\n            raise IntegrityViolation(\"commit requires AUTHORIZED; reconcile any prior application\")",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 149.32s (0:02:29)",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_same_epoch_apply_is_never_retried",
+        "Restored: 1289 passed in 152.55s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T145324.662215861Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_commit_apply",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2215,
+      "needle": "self._require_commit_authority(intent, governed)  # guard:gr06_commit_apply",
+      "passed": true,
+      "summaries": [
+        "Mutant: 3 failed, 1286 passed in 151.34s (0:02:31)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_refuses_symlink_swapped_after_authorization",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_revoke_between_authorize_and_apply_stops_effect",
+        "Restored: 1289 passed in 151.62s (0:02:31)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T145828.894286535Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "commit_apply_base",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 2224,
+      "needle": "if not head.matches:  # guard:commit_apply_base\n                raise IntegrityViolation(f\"{intent.base_revision_id}: {head.reason()}\")",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1287 passed in 151.42s (0:02:31)",
+        "Red: FAILED tests/test_gr03_governed_worktree.py::test_applying_against_a_moved_governed_line_is_refused",
+        "Red: FAILED tests/test_gr10_git_transaction.py::test_apply_base_is_checked_before_worktree_writes",
+        "Restored: 1289 passed in 151.33s (0:02:31)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T150334.210789079Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_commit_intent_grant",
+      "kind": "adjacent",
+      "file": "src/gruntime/contract_controller.py",
+      "line": 211,
+      "needle": "self.require_authority(intent.run_id, \"commit.propose\", repo=repo)  # guard:gr06_commit_intent_grant",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 151.88s (0:02:31)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_persisted_intent_cannot_bypass_missing_propose_capability",
+        "Restored: 1289 passed in 153.59s (0:02:33)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T150839.360291436Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_commit_source_scope",
+      "kind": "adjacent",
+      "file": "src/gruntime/contract_controller.py",
+      "line": 213,
+      "needle": "self.require_authority(intent.run_id, \"fs.delete\" if mutation.op.value == \"DELETE\" else \"fs.write\", path=mutation.path, repo=repo)  # guard:gr06_commit_source_scope",
+      "passed": true,
+      "summaries": [
+        "Mutant: 3 failed, 1286 passed in 151.52s (0:02:31)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_uses_activated_scope_at_proposal_authorization_and_apply",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_refuses_symlink_swapped_after_authorization",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_source_guard_independently_checks_scope",
+        "Restored: 1289 passed in 152.92s (0:02:32)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T151347.223936208Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_commit_destination_scope",
+      "kind": "adjacent",
+      "file": "src/gruntime/contract_controller.py",
+      "line": 214,
+      "needle": "if mutation.rename_to is not None:\n                self.require_authority(intent.run_id, \"fs.write\", path=mutation.rename_to, repo=repo)  # guard:gr06_commit_destination_scope",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1288 passed in 153.54s (0:02:33)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_commit_checks_rename_destination",
+        "Restored: 1289 passed in 151.37s (0:02:31)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260919T151854.080713901Z-mutate.log"
+      ]
+    }
+  ]
+}

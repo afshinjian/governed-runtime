@@ -30,6 +30,14 @@ for kind, grantors, names in (
     for name in names.split():
         REGISTER[name] = (kind, grantors)
 
+#: The kernel's own capabilities: `AX-7` makes them non-delegable and
+#: authority-matrix §1 gives `RUNTIME_KERNEL` them "to itself only". Derived
+#: from the register rather than listed again, so the holder and the class
+#: cannot drift apart. Never resolved through `resolve_grants`, which denies
+#: them `NEVER_GRANTABLE`, and never present in an activation.
+KERNEL_CAPABILITIES = frozenset(
+    name for name, (kind, _) in REGISTER.items() if kind == "KERNEL")
+
 ROLES = ("PLANNER", "IMPLEMENTER", "REVIEWER", "INTEGRATOR", "ANALYST")
 ROLE_TABLE = dict(
     zip(("fs.read", "fs.read.outside_scope", "fs.write", "fs.delete",

@@ -190,6 +190,22 @@ class ContractController:
             raise
 
     def _require_commit_authority(self, intent, repo):
+        """Re-prove the proposing contract's mutation authority over this intent.
+
+        This is authority-matrix §6's *syscall or tool mediation* row, not its
+        *transition* row: it asks whether the activation that proposed these
+        mutations is still live and whether every path is still inside the
+        scope it was granted for. It is asked again at authorize and at apply
+        because a contract can be revoked or expire in between.
+
+        It is **not** the transition's authority and never stands in for it.
+        Rows 7.4-4 and 7.4-5 declare `commit.authorize` and 7.4-6 onward
+        declare `commit.apply`; both are `KERNEL` and are proved by
+        `_require_transition_authority` against the kernel's own capability
+        set. Checking `commit.propose` here and calling that the authority for
+        a kernel transition is what `F03-002` recorded — it put two kernel
+        transitions onto authority a contract can hold.
+        """
         # The caller's `in_scope` flag cannot confer permission. Both ends of
         # a rename are checked against the stored, activated contract.
         self.require_authority(intent.run_id, "commit.propose", repo=repo)  # guard:gr06_commit_intent_grant

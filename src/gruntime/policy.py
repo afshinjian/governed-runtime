@@ -198,6 +198,19 @@ def missing_evidence(
     return tuple(missing)
 
 
+def capability_missing(rule: TransitionRule, context: TransitionContext) -> bool:
+    """Whether the row's `required_capability` is absent from the holder's set.
+
+    Step 7, on its own, because production consumes it on its own: the
+    controller enforces the declared capability at the transition site without
+    re-deciding preconditions or evidence, and must do so through this
+    predicate rather than a second copy of it (`F03-001`).
+
+    authority-matrix.md:292 — held at the moment of transition, or not at all.
+    """
+    return rule.required_capability not in context.capabilities
+
+
 def select_rule(
     rules: tuple[TransitionRule, ...], context: TransitionContext
 ) -> TransitionRule:
@@ -338,7 +351,7 @@ def resolve(
     }
 
     # 7. The capability, held at the moment of transition or not at all.
-    if rule.required_capability not in context.capabilities:
+    if capability_missing(rule, context):
         return TransitionResolution(
             outcome=PolicyOutcome.DENY,
             reason=Reason.CAPABILITY_MISSING,

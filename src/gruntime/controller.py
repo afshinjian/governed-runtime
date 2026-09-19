@@ -49,9 +49,11 @@ from typing import Callable, Optional, Sequence
 from .artifacts import ArtifactStore
 from .canonical import canonical_json, digest_json
 from .commit import (
+    # `commit.authorize` and `commit.propose` are no longer named here: since
+    # GR-28 a §7.4 event is labelled with the capability its row declares and
+    # this channel proved, never with a literal chosen at the call site
+    # (`F03-003`). `APPLY_CAPABILITY` remains for the receipt's own attribution.
     APPLY_CAPABILITY,
-    AUTHORIZE_CAPABILITY,
-    PROPOSE_CAPABILITY,
     build_receipt,
     build_trailers,
     commit_message,
@@ -67,7 +69,13 @@ from .decision import (
     is_snapshot_bound,
     subject_scope,
 )
-from .errors import BarrierViolation, IntegrityViolation, PolicyDenied
+from .errors import (
+    BarrierViolation,
+    CapabilityDenied,
+    IntegrityViolation,
+    PolicyDenied,
+    ProtectedPathViolation,
+)
 from .gate import (
     AFTER_COMMIT_BEFORE_RECEIPT,
     AFTER_COMMIT_RECEIPT_INSERT,
@@ -134,12 +142,15 @@ from .repository import (
     verify_head,
 )
 from .worktree import WorktreePlacement, ensure_worktree, governed_branch, worktree_root
+from .authority import KERNEL_CAPABILITIES, REGISTER
 from .policy import (
     PolicyOutcome,
     TransitionContext,
     TransitionProposal,
     TransitionResolution,
+    capability_missing,
     resolve,
+    select_rule,
 )
 from .transitions import normalize_state
 from .provider import (
@@ -416,6 +427,12 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         #: mid-genesis leaves nothing behind to clear — the transaction rolled
         #: back and the project never existed.
         self._genesis_pending: dict[Id, object] = {}
+        #: The capabilities this controller holds as the runtime kernel
+        #: (`AX-7`; authority-matrix §1 `RUNTIME_KERNEL`). One holder for the
+        #: process, narrowed per call only where the design already narrows
+        #: it: a reconciling settlement acts with `RECOVERY_CAPABILITIES`,
+        #: which holds `recovery.reconcile` and nothing executable (`WP-16`).
+        self.kernel_capabilities: frozenset[str] = KERNEL_CAPABILITIES
 
     # -- repository handles -------------------------------------------------
 
@@ -1796,6 +1813,13 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             trailers=build_trailers(token),
         )
         commit_message(intent)  # guard:commit_proposal_message
+        rule = self._require_transition_authority(
+            Axis.COMMIT_INTENT,
+            ORIGIN,
+            CommitIntentStatus.PROPOSED,
+            project_id=run.project_id,
+            run_id=run_id,
+        )
         # `CM-INV-2`: the token is durable before anything touches the
         # repository, so a revision that lands is always matchable back here.
         self._append(
@@ -1809,11 +1833,131 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "expected_tree_digest": intent.expected_tree_digest,
                 "controller_epoch": intent.controller_epoch,
             },
-            capability_used=PROPOSE_CAPABILITY,
+            capability_used=rule.required_capability,
             component="commit",
         )
         self.store.put_commit_intent(intent, run.project_id)
         return intent
+
+    # -- transition authority (authority-matrix §6, `G-4`) ------------------
+
+    def _grant_permits(self, run_id: Id, capability: str) -> bool:
+        """Whether the run's activation grants `capability`, as a value.
+
+        `require_authority` answers by raising, and audits its own refusal as
+        `authority.denied`. Here the answer is wanted as a predicate: what
+        reports the shortfall is the transition's refusal, which names the row
+        and the capability the row declares.
+        """
+        try:
+            self.require_authority(run_id, capability, _grant_only=True)
+        except (
+            CapabilityDenied,
+            IntegrityViolation,
+            PolicyDenied,
+            ProtectedPathViolation,
+        ):
+            return False
+        return True
+
+    def _ord_holds(self, capability: str, run_id: Optional[Id]) -> bool:
+        """Whether an `ORD` row's capability is held — from the activation only.
+
+        `AX-11`: a capability is granted only where a principal the register
+        names as its grantor produced an admissible record, cited in
+        `capability_grant_basis`. `RUNTIME_KERNEL` "cannot self-grant
+        non-`KERNEL` capabilities", so the kernel set is not consulted here and
+        can never stand in for a grant.
+        """
+        return run_id is not None and self._grant_permits(run_id, capability)  # guard:transition_ord_grant
+
+    def _kernel_holds(
+        self, capability: str, kernel_capabilities: frozenset, actor: ActorRef
+    ) -> bool:
+        """Whether this holder may take a `KERNEL` row.
+
+        Both conjuncts are `AX-7`: the capability is in the set this holder is
+        acting with, and the holder is the runtime acting as itself. A
+        delegated or worker actor holds no `KERNEL` capability however wide the
+        set it is handed (authority-matrix §1, §6:288).
+        """
+        return capability in kernel_capabilities and actor.actor_kind is ActorKind.RUNTIME  # guard:transition_kernel_holder
+
+    def _transition_capabilities(
+        self,
+        candidates: Sequence,
+        run_id: Optional[Id],
+        kernel_capabilities: frozenset,
+        actor: ActorRef,
+    ) -> frozenset:
+        """Which capabilities these rows declare that this holder actually holds.
+
+        Two sources, chosen by the register's own class column and never
+        merged: `KERNEL` from the acting kernel set, `ORD` from the run's
+        activation. Neither can supply the other's class, so neither can stand
+        in for the other — which is the substitution `F03-002` records.
+        `HUMAN` and `NEVER` are held by nothing here: a `HUMAN` row needs an
+        exercise decision presented at the transition, and no §7.4 row declares
+        one, so the channel refuses rather than inventing a path to it.
+        """
+        held = set()
+        for capability in sorted(
+            {rule.required_capability for rule in candidates}
+        ):
+            kind = REGISTER.get(capability, ("NEVER", ()))[0]
+            if kind == "KERNEL":
+                holds = self._kernel_holds(capability, kernel_capabilities, actor)
+            elif kind == "ORD":
+                holds = self._ord_holds(capability, run_id)
+            else:
+                holds = False
+            if holds:
+                held.add(capability)
+        return frozenset(held)
+
+    def _require_transition_authority(
+        self,
+        axis: Axis,
+        from_state,
+        to_state,
+        *,
+        project_id: Id,
+        run_id: Optional[Id] = None,
+        kernel_capabilities: Optional[frozenset] = None,
+        actor: Optional[ActorRef] = None,
+    ):
+        """Prove the row's declared capability, and return the row.
+
+        authority-matrix.md:292 — `required_capability` from the transition
+        matrix, held at the moment of transition. The row comes from the frozen
+        table rather than from the caller, and the capability it names is what
+        the caller then labels its event with, so an operation cannot name one
+        capability and hold another (`G-4`).
+
+        Deciding the capability is all this does. Preconditions and
+        `required_evidence` are the other half of authority-matrix §6's
+        transition row and are **not** enforced here; `policy.resolve` is where
+        they live, and routing production through it is a larger change than
+        this one.
+        """
+        kernel = (
+            self.kernel_capabilities
+            if kernel_capabilities is None
+            else kernel_capabilities
+        )
+        holder = actor or _runtime_actor("controller")
+        candidates = rules_for(axis, from_state, to_state)
+        require(bool(candidates), f"no row of the transition matrix carries {axis.value} {normalize_state(from_state)} → {normalize_state(to_state)}; an operation that names no CapabilityId is denied (G-4, AX-2)", IntegrityViolation)  # guard:transition_row_declared
+        context = TransitionContext(
+            governance_mode=self.store.get_project(project_id).governance_mode,
+            from_state=normalize_state(from_state),
+            capabilities=self._transition_capabilities(
+                candidates, run_id, kernel, holder
+            ),
+        )
+        rule = select_rule(candidates, context)
+        require(not capability_missing(rule, context), f"row {rule.row} requires {rule.required_capability!r}, which {holder.actor_id} does not hold at the moment of transition (authority-matrix.md:292)", CapabilityDenied)  # guard:transition_capability_held
+        return rule
 
     def _transition_intent(
         self,
@@ -1823,8 +1967,24 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         status: CommitIntentStatus,
         event_type: str,
         payload: dict,
-        capability_used: str,
+        kernel_capabilities: Optional[frozenset] = None,
     ) -> None:
+        """Write one §7.4 status under the capability its row declares.
+
+        The capability is proved before the status is assigned and then labels
+        the event. No caller supplies it: `G-4` requires a state-changing
+        operation to name exactly one `CapabilityId`, and a label the caller
+        chose is a claim about authority rather than evidence of it
+        (`F03-003`).
+        """
+        rule = self._require_transition_authority(
+            Axis.COMMIT_INTENT,
+            intent.status,
+            status,
+            project_id=project_id,
+            run_id=intent.run_id,
+            kernel_capabilities=kernel_capabilities,
+        )
         intent.status = status
         self._append(
             project_id,
@@ -1832,7 +1992,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             epistemic_class=EpistemicClass.AUTHORITY,
             subject={"intent_id": intent.intent_id},
             payload=payload,
-            capability_used=capability_used,
+            capability_used=rule.required_capability,
             component="commit",
         )
         self.store.put_commit_intent(intent, project_id)
@@ -1846,7 +2006,6 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             status=CommitIntentStatus.BLOCKED,
             event_type="commit_intent.blocked",
             payload={"operation_token": intent.operation_token},
-            capability_used=PROPOSE_CAPABILITY,
         )
 
     def authorize_commit(self, intent_id: Id) -> None:
@@ -1880,7 +2039,6 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 status=CommitIntentStatus.BLOCKED,
                 event_type="commit_intent.blocked",
                 payload={"operation_token": intent.operation_token},
-                capability_used=AUTHORIZE_CAPABILITY,
             )
             return
         intent.authorized_by = _runtime_actor("commit")
@@ -1894,7 +2052,6 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "operation_token": intent.operation_token,
                 "preconditions_met": True,
             },
-            capability_used=AUTHORIZE_CAPABILITY,
         )
 
     def deny_commit(self, intent_id: Id, reason: str) -> None:
@@ -1907,7 +2064,6 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             status=CommitIntentStatus.DENIED,
             event_type="commit_intent.denied",
             payload={"reason": reason},
-            capability_used=AUTHORIZE_CAPABILITY,
         )
 
     def mark_applying(self, intent_id: Id) -> None:
@@ -1931,7 +2087,6 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "operation_token": intent.operation_token,
                 "controller_epoch": intent.controller_epoch,
             },
-            capability_used=APPLY_CAPABILITY,
         )
 
     def _settle_commit_receipt(self, intent, project_id, **kwargs):
@@ -1973,6 +2128,12 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             "recovery.reconcile"
             if attribution is Attribution.RECONCILED
             else APPLY_CAPABILITY
+        )
+        # `WP-16`: a reconciling settlement acts with `recovery.reconcile` and
+        # nothing executable, which is also what tells §7.4's two rows over
+        # `APPLYING → APPLIED` apart (`select_rule`).
+        reconciling = (
+            RECOVERY_CAPABILITIES if attribution is Attribution.RECONCILED else None
         )
         self._append(
             project_id,
@@ -2023,7 +2184,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "receipt_id": receipt.receipt_id,
                 "verification": receipt.verification.value,
             },
-            capability_used=capability,
+            kernel_capabilities=reconciling,
         )
         return receipt
 
@@ -2053,6 +2214,11 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             intent = self.store.get_commit_intent(intent_id)
             self._require_commit_authority(intent, governed)  # guard:gr06_commit_apply
             self.mark_applying(intent_id)
+            # `mark_applying` persisted `APPLYING`; re-read so the settlement
+            # transitions from where the intent actually is. The edge the
+            # receipt settles is `APPLYING → APPLIED` (row 7.4-7), and a stale
+            # `AUTHORIZED` in this frame would name an edge §7.4 does not carry.
+            intent = self.store.get_commit_intent(intent_id)
             head = verify_head(governed, expected_revision=intent.base_revision_id,
                                expected_ref=intent.target_ref)
             if not head.matches:  # guard:commit_apply_base
@@ -2450,7 +2616,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                     "base_revision_id": intent.base_revision_id,
                     "reconciliation_state": state.value,
                 },
-                capability_used="recovery.reconcile",
+                kernel_capabilities=RECOVERY_CAPABILITIES,
             )
             return Settlement(state=state)
 

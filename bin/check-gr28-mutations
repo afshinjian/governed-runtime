@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Run bin/mutate once per GR-28 guard, sequentially; retain its full evidence.
+
+The needle is built from the AST, never from the `# guard:` tag: a tag needle
+mutates only the comment and reports SURVIVED for a guard that is in fact
+killed. Each GR-28 guard is a single deletable statement whose removal leaves
+the module importable, so a mutant fails as a test failure rather than as a
+syntax error (pytest exit 4, which would prove nothing).
+
+`--adjacent` additionally re-checks the guards GR-28's code sits next to. A
+later stage can hollow an earlier guard's killing test without failing it —
+`guard:controller_snapshot` went SURVIVED for two stages with the suite green
+— so a passing suite does not re-verify an earlier kill.
+"""
+import ast
+import argparse
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+FILES = ('controller.py', 'policy.py', 'authority.py')
+
+#: GR-28's own guards.
+PREFIXES = ('transition_',)
+
+#: Guards GR-28's code sits beside: the commit lifecycle's status and base
+#: checks, and the contract-authority checks its ORD branch reaches. Re-run to
+#: prove this stage did not hollow any of them.
+ADJACENT = (
+    'gr06_commit_intent_grant', 'gr06_commit_source_scope',
+    'gr06_commit_destination_scope', 'gr06_commit_propose_grant',
+    'gr06_commit_propose_path', 'gr06_commit_authorize', 'gr06_commit_apply',
+    'commit_authorize_status', 'commit_authorize_base', 'commit_mark_status',
+    'commit_mark_barrier', 'commit_mark_completeness', 'commit_no_reapply',
+    'commit_apply_base', 'commit_single_receipt', 'commit_proposal_message',
+)
+ADJACENT_FILES = ('controller.py', 'contract_controller.py')
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--only', nargs='+', help='check only these guard names')
+parser.add_argument('--adjacent', action='store_true',
+                    help='also re-check the historical guards GR-28 sits beside')
+parser.add_argument('--out', default='gr28-mutations.json',
+                    help='evidence file, written under .evidence/')
+args = parser.parse_args()
+selected = None if args.only is None else set(args.only)
+
+files = list(FILES) + ([f for f in ADJACENT_FILES if f not in FILES] if args.adjacent else [])
+
+
+def wanted(name):
+    if selected is not None:
+        return name in selected
+    if name.startswith(PREFIXES):
+        return True
+    return args.adjacent and name in ADJACENT
+
+
+results = []
+for filename in files:
+    path = ROOT / 'src' / 'gruntime' / filename
+    source = path.read_text()
+    lines = source.splitlines(keepends=True)
+    tree = ast.parse(source)
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    for number, line in enumerate(lines, 1):
+        match = re.search(r'# guard:([a-z_0-9]+)', line)
+        if not match or not wanted(match.group(1)):
+            continue
+        name = match.group(1)
+        start, end = number, number
+        nodes = [node for node in ast.walk(tree) if isinstance(node, ast.stmt) and node.lineno == number]
+        if nodes:
+            node = min(nodes, key=lambda node: node.end_lineno - node.lineno)
+            parent = parents.get(node)
+            if isinstance(parent, ast.If) and parent.body == [node] and not parent.orelse:
+                node = parent
+            start, end = node.lineno, node.end_lineno
+        needle = ''.join(lines[start - 1:end]).rstrip('\n')
+        kind = 'gr28' if name.startswith(PREFIXES) else 'adjacent'
+        print(f'Checking {name} [{kind}] ({path.relative_to(ROOT)}:{start})', flush=True)
+        evidence = ROOT / '.evidence'
+        before = set(evidence.glob('*-mutate.log')) if evidence.exists() else set()
+        result = subprocess.run([str(ROOT / 'bin' / 'mutate'), str(path.relative_to(ROOT)), needle], cwd=ROOT)
+        logs = sorted(set(evidence.glob('*-mutate.log')) - before)
+        summaries = []
+        for log in logs:
+            summaries += [l[len('SUMMARY '):].strip() for l in log.read_text().splitlines()
+                          if l.startswith('SUMMARY ')]
+        results.append({
+            'guard': name, 'kind': kind, 'file': str(path.relative_to(ROOT)),
+            'line': start, 'needle': needle.strip(), 'passed': result.returncode == 0,
+            # Summaries are inlined so the record stands on its own: `.evidence/`
+            # is gitignored, and a citation into it resolves in no fresh clone
+            # (F04-003). `log_root` is what the relative names below are under.
+            'summaries': summaries,
+            'log_root': '.evidence/',
+            'logs': [p.name for p in logs],
+        })
+        (evidence / args.out).write_text(json.dumps(results, indent=2) + '\n')
+        if result.returncode != 0:
+            print(f'Stopped at {name}; inspect .evidence before continuing.', flush=True)
+            sys.exit(result.returncode)
+print(f'All {len(results)} guards killed; every restored suite passed.', flush=True)

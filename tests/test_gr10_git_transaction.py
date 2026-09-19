@@ -308,16 +308,28 @@ def test_same_epoch_apply_is_never_retried(tx):
     assert repo.head_revision() == intent.base_revision_id
 
 
-@pytest.mark.parametrize('operation', ['authorize', 'mark'])
-def test_illegal_commit_statuses_are_refused(tx, operation):
+@pytest.mark.parametrize('operation, refusal', [
+    ('authorize', 'only a proposed intent can be authorized'),
+    ('mark', 'only an authorized intent may start applying'),
+])
+def test_illegal_commit_statuses_are_refused(tx, operation, refusal):
+    """Each status guard, asserted by its own refusal.
+
+    These raises carried no `match=`, and GR-28 showed what that costs: the
+    transition channel also refuses `PROPOSED -> APPLYING` — §7.4 carries no
+    such row — with the same `IntegrityViolation`, so deleting
+    `guard:commit_mark_status` left this test green and the guard SURVIVED.
+    Naming the message is what makes this test the guard's killer rather than
+    a test of whichever refusal happens to fire first (`F04-002`).
+    """
     c, project, intent, _ = tx
     if operation == 'authorize':
-        with pytest.raises(IntegrityViolation):
+        with pytest.raises(IntegrityViolation, match=refusal):
             c.authorize_commit(intent.intent_id)
     else:
         intent.status = CommitIntentStatus.PROPOSED
         persist(c, project, intent)
-        with pytest.raises(IntegrityViolation):
+        with pytest.raises(IntegrityViolation, match=refusal):
             c.mark_applying(intent.intent_id)
 
 

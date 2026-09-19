@@ -248,3 +248,40 @@ def test_every_illegal_row_denies_in_both_modes():
 def test_the_axis_three_gate_covers_every_suspension_state():
     """§0.1 is exhaustive: a state with no gate row would be an open gate."""
     assert set(SUSPENSION_GATE) == set(SuspensionState)
+
+
+# --- the predicate GR-28 shares with production ----------------------------
+
+
+def test_the_capability_step_is_one_predicate_shared_with_production():
+    """GR-28 consumes step 7 through `capability_missing`, not a copy of it.
+
+    `F03-001` is that production consulted no declaration; the fix is a
+    production caller of *this* predicate. A second implementation would put
+    the two answers back out of step, so the resolver is asserted to give the
+    same answer as the predicate over every legal row, in both directions.
+    """
+    from gruntime.policy import capability_missing
+
+    for rule in LEGAL_TRANSITIONS:
+        held = context(SUPERVISED, capabilities=(rule.required_capability,))
+        absent = context(SUPERVISED, capabilities=())
+        assert not capability_missing(rule, held)
+        assert capability_missing(rule, absent)
+
+
+def test_resolution_still_denies_on_the_capability_before_the_preconditions():
+    """Step 7 precedes step 8, and the extraction does not reorder them."""
+    resolution = gov_free_resolution(capabilities=(), facts=())
+    assert resolution.outcome is PolicyOutcome.DENY
+    assert resolution.reason is Reason.CAPABILITY_MISSING
+
+
+def gov_free_resolution(*, capabilities, facts):
+    """Resolve one legal row without a controller: the resolver is pure."""
+    from gruntime.policy import resolve
+
+    return resolve(
+        propose(Axis.STAGE, S.CONTRACTED, S.READY),
+        context(SUPERVISED, S.READY, facts=facts, capabilities=capabilities),
+    )
