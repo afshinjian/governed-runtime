@@ -385,7 +385,7 @@ def _is_authenticated_human(actor: ActorRef) -> bool:
 
 from .contract_controller import ContractController
 from .contracts import new_id, require
-from .decision import decision_content_hash
+from .decision import decision_content_hash, require_principal_key
 
 
 from .worker_controller import WorkerController
@@ -1243,6 +1243,13 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         is therefore in front of the observation, and a second observation of
         the pending project never happens rather than happening and then
         failing to be recorded (`GR27-R4`, `GR27-R5`).
+
+        The observation is published — the event, then `snapshot_current` —
+        before either consequence above is drawn from it, and drawing them is
+        what measures the authority already on record against the new reality.
+        If that cannot complete, the project is left holding a reality nothing
+        was measured against, and `_suspend_uninterpreted_snapshot` refuses to
+        leave it usable (`GR29-R01`).
         """
         require(self._genesis_admits(project_id), f"project {project_id} is mid-genesis: its creation transaction is open, and observing it again would supersede the very observation its approval is bound to", IntegrityViolation)  # guard:snapshot_pending_genesis
         project = self.store.get_project(project_id)
@@ -1260,13 +1267,74 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         )
         self._append_snapshot(project_id, snapshot, fingerprint)
         self._publish_snapshot(project_id, snapshot)
-        # A derived `drift_summary` is exactly the comparable case: both ends
-        # were real observations of the same project.
-        if snapshot.drift_summary is not None:
-            self._stale_decisions_against(project_id, previous, snapshot)
-        if drifted:
-            self._on_reality_drift(project_id, snapshot, drifted)
+        try:
+            # A derived `drift_summary` is exactly the comparable case: both
+            # ends were real observations of the same project.
+            if snapshot.drift_summary is not None:
+                self._stale_decisions_against(project_id, previous, snapshot)
+            if drifted:
+                self._on_reality_drift(project_id, snapshot, drifted)
+        except BaseException as failure:
+            self._suspend_uninterpreted_snapshot(project_id, snapshot, failure)  # guard:snapshot_interpretation_suspends
+            raise
         return snapshot.snapshot_id
+
+    def _suspend_uninterpreted_snapshot(
+        self, project_id: Id, snapshot: RealitySnapshot, failure: BaseException
+    ) -> None:
+        """A published observation nobody could interpret suspends the project.
+
+        `take_snapshot` publishes the new observation first and interprets it
+        second, and interpreting it is what makes the new reality *mean*
+        anything to the authority already on record: `_stale_decisions_against`
+        stales every approval the observation supersedes (`HD-INV-4`), and
+        `_on_reality_drift` then raises `REALITY_DRIFT` for unattributed
+        change. Between the publication and the end of those two there is a
+        window in which the project holds a reality that has moved and
+        approvals that were never measured against it. `GR29-R01`: a malformed
+        `HumanDecision` refused at hydration lands exactly there — the
+        derivation enumerates every decision — and used to leave approvals
+        `VALID` against superseded reality, `suspension = NONE` and the drift
+        escalation unreached, the state normal control flow exists to prevent.
+
+        The observation stands: it is a true fact about a moment, and
+        discarding it would leave the runtime asserting a workspace it has
+        already seen is gone. What cannot stand is acting on it. So the
+        project is suspended by the runtime's existing integrity semantics —
+        an `INTEGRITY_VIOLATION` escalation applying `SUSPENDED_BY_INTEGRITY`
+        (§4 row 4-7, the same route `verify_commit` and the commit receipt
+        take) — which bars every new invocation, validation and commit exactly
+        as the `SUSPENDED_BY_DRIFT` this path could not reach would have
+        (`SUSPENSION_GATE`, §0.1). It is project-scoped because the drift
+        escalation it stands in for is, and because the gate in front of every
+        effect reads the project.
+
+        Nothing here repairs, skips or weakens the refusal that caused it: the
+        failure is re-raised by the caller, and a malformed row stays
+        unreadable on every later read. The suspension is not a recovery — it
+        is the admission that this project's reality can no longer be
+        interpreted, and clearing it is a human's act (§4 row 4-20).
+
+        Every failure of that interpretation leaves the same window, not only
+        an integrity refusal, so the handler is written against the window
+        rather than against one cause of it.
+
+        Written through `_raise_escalation`, so where `take_snapshot` is itself
+        inside a caller's transaction — `_settle_commit_receipt` is the one —
+        the suspension shares the fate of the publication it answers for: both
+        roll back together and the window never opened. It is durable exactly
+        where the publication is.
+        """
+        self._raise_escalation(
+            project_id,
+            trigger=EscalationTrigger.INTEGRITY_VIOLATION,
+            severity=EscalationSeverity.CRITICAL,
+            summary=(
+                f"snapshot {snapshot.snapshot_id} is published and could not "
+                f"be interpreted, so the authority on record was never "
+                f"measured against it: {type(failure).__name__}: {failure}"
+            ),
+        )
 
     def _observe_reality(
         self,
@@ -1522,10 +1590,16 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         """Record a human's decision. `∅ → VALID` (transition-matrix §7.5-1).
 
         Refused unless it is a human's: `HD-INV-1` — a runtime or a worker
-        cannot manufacture authority. Refused with empty `evidence_shown`:
-        `HD-INV-2` — an uninformed approval discharges nothing. A
-        snapshot-bound decision is bound here to the newest `COMPLETE`
-        snapshot, which is the reality the human was actually shown.
+        cannot manufacture authority. Refused unless that human is a *named*
+        principal: `principal_key_id` is required of a `HUMAN` actor
+        (domain-model.md:58), and the refusal comes before the decision is
+        built, before `decision.recorded` is appended and before anything is
+        persisted, because an append-only event announcing an unattributable
+        approval cannot be taken back (`F04-001`). Refused with empty
+        `evidence_shown`: `HD-INV-2` — an uninformed approval discharges
+        nothing. A snapshot-bound decision is bound here to the newest
+        `COMPLETE` snapshot, which is the reality the human was actually
+        shown.
 
         Refused unless `chosen` is one of `options_offered`
         (domain-model.md:695-696): a choice that was never offered is not a
@@ -1557,16 +1631,9 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         be doing any work (`GR27-R3`). Callers that name nothing keep the
         central binding unchanged.
         """
-        if decided_by.actor_kind is not ActorKind.HUMAN:
-            raise IntegrityViolation(
-                f"a HumanDecision must be decided by a HUMAN; got "
-                f"{decided_by.actor_kind.value} (HD-INV-1)"
-            )
-        if decided_by.auth_method in (AuthMethod.NONE, AuthMethod.DELEGATED):
-            raise IntegrityViolation(
-                "unauthenticated authority is indistinguishable from forged "
-                f"authority: auth_method={decided_by.auth_method.value}"
-            )
+        require(decided_by.actor_kind is ActorKind.HUMAN, f"a HumanDecision must be decided by a HUMAN; got {decided_by.actor_kind.value} (HD-INV-1)", IntegrityViolation)  # guard:decision_actor_human
+        require(decided_by.auth_method not in (AuthMethod.NONE, AuthMethod.DELEGATED), f"unauthenticated authority is indistinguishable from forged authority: auth_method={decided_by.auth_method.value}", IntegrityViolation)  # guard:decision_actor_authenticated
+        require_principal_key(decided_by, "record_decision")  # guard:decision_principal_key_record
         if not evidence_shown:
             raise IntegrityViolation(
                 "an uninformed approval cannot discharge required_evidence "

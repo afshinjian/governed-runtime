@@ -28,8 +28,12 @@ Rules:
   and :1158 declare it as the capability required by the validation
   transitions; no require_authority call consumes that declaration. Same path
   as FINDINGS-02 F02-001, not covered by it. Deferred from GR-17. FINDINGS-03
-  answers the cap= question: policy.resolve enforces required_capability but
-  has no production caller (F03-001); F03-002 and F03-003 are also open.
+  answered the cap= question: policy.resolve enforces required_capability but
+  had no production caller (F03-001). GR-28 closed F03-002 and F03-003, and
+  the §7.4 portion of F03-001 — COMMIT_INTENT transitions now enforce the
+  capability their row declares (14 of 145 rows). The other 131 rows, this
+  validation path among them, still consume no declaration, so F03-001 is
+  open. F04-004 is open and closes only when all of F03-001..003 close.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
   exercises the ERROR receipt. Verify before running on another host.
 - Storage v1→…→v5 (STORAGE_VERSION = 5 since GR-07) all refuse older schemas
@@ -53,13 +57,42 @@ Rules:
   production, and a non-COMPLETE snapshot is refused first by
   _assert_may_initiate_effect. Each guard acts only if a snapshot lands between
   the gate's read and its own; tests cover that by monkeypatch.
-- record_decision (controller.py) accepts a HUMAN actor with no
-  principal_key_id; domain-model.md:58 requires one. Key presence is checked
-  where some decisions are used, not when one is recorded: genesis
+- GR-29 closed F04-001. record_decision used to accept a HUMAN actor with no
+  principal_key_id, which domain-model.md:58 requires; key presence was
+  checked only where some decisions are used — genesis
   (_is_authenticated_human), contract activation (contract_controller.py
   approval; authority.py human_covers and basis check), exercise decisions
   (guard:gr06_exercise_decision) and secret-read approval
-  (guard:gr08_secret_approval).
+  (guard:gr08_secret_approval). One predicate now enforces
+  `actor_kind = HUMAN ⇒ principal_key_id` at three boundaries:
+  decision.require_principal_key (guard:decision_principal_key_iff), called
+  from _record_decision before anything is built, appended or persisted
+  (guard:decision_principal_key_record), from StateStore.put_decision
+  (guard:decision_principal_key_put) and from _decision_from_row, the single
+  hydration point behind get_decision and list_decisions
+  (guard:decision_principal_key_read). A malformed row already on disk fails
+  closed with IntegrityViolation on every read and is never repaired,
+  coerced, migrated or backfilled; a listing refuses whole rather than
+  omitting the row. No pre-release database is known to hold one, and nothing
+  scans for one — the first read of such a row is where it would surface.
+  Estate-wide F04-002 cleanup was not done: only the one match= that keeps
+  guard:genesis_approver killed was added.
+  GR29-R01: one of the places that first read happens is take_snapshot, which
+  publishes the new observation and only then derives staleness over every
+  decision (HD-INV-4), with the drift escalation after that. A refusal there
+  used to leave the project holding a superseded reality, approvals still
+  VALID against it, suspension NONE and REALITY_DRIFT unreached. The refusal
+  is unchanged; controller.py _suspend_uninterpreted_snapshot
+  (guard:snapshot_interpretation_suspends) now raises an INTEGRITY_VIOLATION
+  escalation applying SUSPENDED_BY_INTEGRITY (§4 row 4-7) before re-raising,
+  so the published-but-uninterpreted observation bars every new invocation,
+  validation and commit exactly as the drift suspension it could not reach
+  would have. It answers any failure of that derivation step, not only an
+  integrity refusal, and where take_snapshot is nested in a caller's
+  transaction (_settle_commit_receipt) the suspension rolls back with the
+  publication it answers for. Clearing it is a human's act (§4 row 4-20); the
+  malformed row is still never repaired, so on such a project the derivation
+  refuses again on every later snapshot.
 - No per-stage mutation evidence file exists for GR-17, GR-23 or GR-24; their
   kills are persisted only as bin/mutate summary lines in
   docs/evidence/recheck-20260916.txt. Of the committed JSON records, gr07 and
@@ -88,10 +121,14 @@ design-04-frozen, like design-02-frozen, adds documents only; no
 design-01-frozen file changed. DESIGN-04's amendments live in
 design/DESIGN-04-baseline-correction-04.md; its §8 registers KD-1..KD-13 as not
 closed at freeze (KD-9 is closed only on chosen premises).
-DESIGN-04-FINDINGS-04 (review of revision 04) finds that design-04-frozen does
+DESIGN-04-FINDINGS-04 (review of revision 04) found that design-04-frozen does
 not stand as an accepted corrective baseline; design-01-frozen remains
-operative. GR-23 implements the four-event genesis sequence but does not yet
-conform to AX-17's creation witness (DESIGN-04-032..036).
+operative. Revision 05 (design/DESIGN-04-baseline-correction-05.md) was
+independently re-reviewed and ACCEPTED at GR-26; the record is
+design/review/DESIGN-04-FINDINGS-05.md, which binds the revision by SHA-256.
+GR-23 implemented the four-event genesis sequence without AX-17's creation
+witness; GR-27 conformed project creation to AX-17 and closed
+DESIGN-04-032..036.
 
 DESIGN-03 is not frozen and, per DESIGN-04 §5, must be revised against
 DESIGN-04, reviewed by the reviewer that raised DESIGN-03-FINDINGS-01.

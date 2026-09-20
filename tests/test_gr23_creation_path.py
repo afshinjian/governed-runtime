@@ -254,9 +254,17 @@ def test_a_failed_genesis_publishes_nothing(h):
 def test_creation_requires_an_authenticated_human_approval(h, approver):
     """`HD-INV-1` and `AX-14`: the authority for `∅ → DRAFT` is one human's
     decision, and an approval naming no principal key can be attributed to
-    nobody afterwards."""
+    nobody afterwards.
+
+    Matched on `guard:genesis_approver`'s own message. The recording boundary
+    refuses all five of these actors on its own account — two by actor kind,
+    two by authentication, and, since GR-29, the keyless one by the principal
+    key — so a bare `pytest.raises(IntegrityViolation)` would pass with this
+    guard deleted and prove nothing about it (`CLAUDE.md`, F04-002).
+    """
     with h.controller() as controller:
-        with pytest.raises(IntegrityViolation):
+        with pytest.raises(IntegrityViolation,
+                           match="project creation requires an authenticated human approval"):
             create_project(controller,
                 name="GR-23", slug="gr-23",
                 workspace_root=str(h.root), approved_by=approver,

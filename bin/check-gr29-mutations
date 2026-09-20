@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Run bin/mutate once per GR-29 guard, sequentially; retain its full evidence.
+
+The needle is built from the AST, never from the `# guard:` tag: a tag needle
+mutates only the comment and reports SURVIVED for a guard that is in fact
+killed. Each GR-29 guard is a single deletable statement whose removal leaves
+the module importable, so a mutant fails as a test failure rather than as a
+syntax error (pytest exit 4, which would prove nothing).
+
+GR-29's own guards are the `HD-INV-1` principal-key rule (`F04-001`) at its
+three boundaries plus the predicate they share, the two decision-actor checks
+the stage made mutation-visible without changing their behavior, and
+`GR29-R01`'s `snapshot_interpretation_suspends`, which says what the read
+refusal must not leave behind when it fires mid-snapshot.
+
+`--adjacent` additionally re-checks the guards GR-29's code sits next to: the
+rest of the recording boundary, the genesis approval it is reached from, every
+reader that already checked a principal key, and the store's other
+persist/hydrate pair. A later stage can hollow an earlier guard's killing test
+without failing it — `guard:controller_snapshot` went SURVIVED for two stages
+with the suite green — so a passing suite does not re-verify an earlier kill.
+
+`--keep-going` records a SURVIVED or ERROR result and carries on rather than
+stopping at it, so one run produces the whole record. Pre-existing mutation
+debt in an adjacent guard is reported, not repaired here.
+"""
+import ast
+import argparse
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+FILES = ('decision.py', 'controller.py', 'store.py')
+
+#: GR-29's own guards: the shared predicate and its three call sites, plus the
+#: two `HD-INV-1` checks this stage made deletable so they can be mutated at
+#: all. Their behavior is unchanged.
+PREFIXES = ('decision_principal_key_', 'decision_actor_')
+
+#: `GR29-R01`'s own guard, named rather than prefixed: it belongs to the same
+#: invariant but sits on the snapshot path, where the read refusal lands after
+#: a new reality is already published. Checked with GR-29's guards because it
+#: is the half of the rule that says what the refusal must not leave behind.
+REMEDIATION = ('snapshot_interpretation_suspends',)
+
+#: Guards GR-29's code sits beside. The rest of `_record_decision`; the genesis
+#: approval that reaches it, whose kill this stage repaired with a `match=`;
+#: the five decision readers that already asked for a principal key, which are
+#: what bounded `F04-001`'s exposure (`gr06_human_admissible`,
+#: `gr06_basis_grantor`, `gr06_exercise_decision`,
+#: `gr06_activation_confirmation`, `gr08_secret_approval`) plus
+#: `gr06_policy_document`, which asks the same of a document's author; and the
+#: store's suspension pair, the persist/hydrate guards the new ones are
+#: modelled on.
+ADJACENT = (
+    'decision_option_membership', 'decision_signature_present',
+    'decision_approved_snapshot',
+    'genesis_approver', 'genesis_authority_ref', 'genesis_consumed',
+    'gr06_human_admissible', 'gr06_basis_grantor', 'gr06_exercise_decision',
+    'gr06_activation_confirmation', 'gr06_policy_document',
+    'gr08_secret_approval',
+    'suspension_ref_put', 'suspension_ref_read',
+)
+ADJACENT_FILES = ('authority.py', 'contract_controller.py', 'relay_controller.py')
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--only', nargs='+', help='check only these guard names')
+parser.add_argument('--adjacent', action='store_true',
+                    help='also re-check the historical guards GR-29 sits beside')
+parser.add_argument('--keep-going', action='store_true',
+                    help='record a failure and continue instead of stopping at it')
+parser.add_argument('--out', default='gr29-mutations.json',
+                    help='evidence file, written under .evidence/')
+args = parser.parse_args()
+selected = None if args.only is None else set(args.only)
+
+files = list(FILES) + ([f for f in ADJACENT_FILES if f not in FILES] if args.adjacent else [])
+
+
+def wanted(name):
+    if selected is not None:
+        return name in selected
+    if name.startswith(PREFIXES) or name in REMEDIATION:
+        return True
+    return args.adjacent and name in ADJACENT
+
+
+def narrowest(source, lines, statements, parents, number):
+    """The narrowest deletion at `number` that leaves the module importable.
+
+    A narrow mutant is what makes a kill mean *this* guard rather than the
+    statement around it, and `bin/mutate` deletes whole lines, so the three
+    shapes a `# guard:` tag takes each need a different span:
+
+    * the tagged line begins a statement — delete that statement;
+    * the tag sits on one line of a larger statement and that line is
+      separately deletable (`guard:genesis_authority_ref` tags one keyword
+      argument of a twenty-line call) — delete the line, not the call, since
+      deleting the call would prove only that the call is tested;
+    * the tag is on a continuation line that is not deletable alone
+      (`guard:gr08_secret_approval` is on the last line of its `require`) —
+      delete the smallest statement containing it, because that line by itself
+      leaves half a call behind and fails as a syntax error: pytest exit 4,
+      reported as ERROR, proving nothing either way.
+
+    An `if` whose entire body is the guard goes with its condition, or the
+    deletion orphans one of the two.
+    """
+    def deletable(start, end):
+        mutant = source.replace(''.join(lines[start - 1:end]), '# mutation: removed\n', 1)
+        try:
+            ast.parse(mutant)
+        except SyntaxError:
+            return False
+        return True
+
+    starting = [node for node in statements if node.lineno == number]
+    if starting:
+        node = min(starting, key=lambda node: node.end_lineno - node.lineno)
+        parent = parents.get(node)
+        if isinstance(parent, ast.If) and parent.body == [node] and not parent.orelse:
+            node = parent
+        return node.lineno, node.end_lineno
+    if deletable(number, number):
+        return number, number
+    containing = [node for node in statements if node.lineno <= number <= node.end_lineno]
+    node = min(containing, key=lambda node: node.end_lineno - node.lineno)
+    return node.lineno, node.end_lineno
+
+
+results = []
+failed = []
+for filename in files:
+    path = ROOT / 'src' / 'gruntime' / filename
+    source = path.read_text()
+    lines = source.splitlines(keepends=True)
+    tree = ast.parse(source)
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    statements = [node for node in ast.walk(tree) if isinstance(node, ast.stmt)]
+    for number, line in enumerate(lines, 1):
+        match = re.search(r'# guard:([a-z_0-9]+)', line)
+        if not match or not wanted(match.group(1)):
+            continue
+        name = match.group(1)
+        start, end = narrowest(source, lines, statements, parents, number)
+        needle = ''.join(lines[start - 1:end]).rstrip('\n')
+        kind = 'gr29' if name.startswith(PREFIXES) or name in REMEDIATION else 'adjacent'
+        print(f'Checking {name} [{kind}] ({path.relative_to(ROOT)}:{start})', flush=True)
+        evidence = ROOT / '.evidence'
+        before = set(evidence.glob('*-mutate.log')) if evidence.exists() else set()
+        result = subprocess.run([str(ROOT / 'bin' / 'mutate'), str(path.relative_to(ROOT)), needle], cwd=ROOT)
+        logs = sorted(set(evidence.glob('*-mutate.log')) - before)
+        summaries = []
+        for log in logs:
+            summaries += [l[len('SUMMARY '):].strip() for l in log.read_text().splitlines()
+                          if l.startswith('SUMMARY ')]
+        results.append({
+            'guard': name, 'kind': kind, 'file': str(path.relative_to(ROOT)),
+            'line': start, 'needle': needle.strip(), 'passed': result.returncode == 0,
+            # Summaries are inlined so the record stands on its own: `.evidence/`
+            # is gitignored, and a citation into it resolves in no fresh clone
+            # (F04-003). `log_root` is what the relative names below are under.
+            'summaries': summaries,
+            'log_root': '.evidence/',
+            'logs': [p.name for p in logs],
+        })
+        (evidence / args.out).write_text(json.dumps(results, indent=2) + '\n')
+        if result.returncode != 0:
+            failed.append(name)
+            print(f'{name} did not pass; inspect .evidence.', flush=True)
+            if not args.keep_going:
+                print(f'Stopped at {name}; inspect .evidence before continuing.', flush=True)
+                sys.exit(result.returncode)
+if failed:
+    print(f'{len(results) - len(failed)} of {len(results)} guards killed; '
+          f'not killed: {", ".join(failed)}.', flush=True)
+    sys.exit(1)
+print(f'All {len(results)} guards killed; every restored suite passed.', flush=True)

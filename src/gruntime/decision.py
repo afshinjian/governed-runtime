@@ -26,9 +26,12 @@ from datetime import datetime
 from dataclasses import asdict
 from typing import Mapping, Optional, Sequence
 
+from .contracts import require
 from .errors import IntegrityViolation
 from .canonical import digest_json
 from .models import (
+    ActorKind,
+    ActorRef,
     DecisionKind,
     DecisionState,
     DecisionSubjectKind,
@@ -74,6 +77,31 @@ TERMINAL_STATES: frozenset[DecisionState] = frozenset(
         DecisionState.VOID,
     }
 )
+
+
+def require_principal_key(decided_by: ActorRef, where: str) -> None:
+    """`decided_by.actor_kind = HUMAN` ⇒ `principal_key_id` — domain-model:58.
+
+    The third half of `HD-INV-1`, and the one the runtime did not enforce
+    (`F04-001`). The actor kind and the `auth_method` say that *a* human
+    authenticated; only the key says **which** one, and a decision that names
+    no principal can be attributed to nobody the moment it is read back.
+
+    Stated as the implication rather than as an unconditional test, because
+    that is what [domain-model.md:58](../../design/domain-model.md#L58) says:
+    a non-`HUMAN` actor is out of its scope and is refused, where it must be,
+    by the actor-kind rule instead.
+
+    One predicate behind three call sites — the recording boundary and both
+    persistence boundaries — so a record that reaches the store another way,
+    and a record already on disk from before the rule existed, are refused by
+    the same rule rather than by three restatements of it that can drift
+    apart. Refusal is all of it: nothing here repairs, coerces or backfills a
+    missing key, because the runtime holds nothing it could put there and a
+    plausible substitute would fabricate the very attribution the record is
+    missing.
+    """
+    require(decided_by.actor_kind is not ActorKind.HUMAN or bool(decided_by.principal_key_id), f"a HumanDecision decided by a HUMAN must name the principal key it was made with: {where} has actor_id={decided_by.actor_id!r} with principal_key_id={decided_by.principal_key_id!r} (domain-model.md:58, HD-INV-1)", IntegrityViolation)  # guard:decision_principal_key_iff
 
 
 def is_snapshot_bound(

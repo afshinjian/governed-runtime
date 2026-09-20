@@ -1,0 +1,633 @@
+{
+  "stage": "GR-29",
+  "scope": "F04-001 only: HumanDecision principal-key integrity at the recording and both persistence boundaries, plus the single adjacent match= that keeps guard:genesis_approver killed. GR29-R01 added the snapshot boundary: a hydration refusal must not leave a published observation uninterpreted.",
+  "findings_closed": [
+    "F04-001"
+  ],
+  "findings_not_closed": {
+    "F03-001": "open for the 131 non-§7.4 rows; GR-28 closed the §7.4 14",
+    "F04-002": "open. Only the one match= on tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval was added, to keep an existing kill this stage would otherwise have hollowed. No estate-wide cleanup.",
+    "F04-003": "open. This record inlines every bin/mutate summary so it stands without the gitignored .evidence/; log_root names where the full logs were written on this host.",
+    "F04-004": "open; it closes only when all three of F03-001..003 close"
+  },
+  "invariant": "HumanDecision.decided_by.actor_kind == HUMAN => bool(principal_key_id)",
+  "design_basis": "design/domain-model.md:58 (principal_key_id required when actor_kind = HUMAN); HD-INV-1",
+  "existing_malformed_records": "refused with IntegrityViolation on every read, at StateStore._decision_from_row, behind both get_decision and list_decisions. Never repaired, coerced, migrated or backfilled; a listing refuses whole rather than omitting the row.",
+  "baseline_commit_at_implementation": "df7f0c7ded90b66093768e6f90b28b6c8c7a3483",
+  "tests_passed": 1303,
+  "tests_added": 14,
+  "guards_killed": 21,
+  "guards_not_killed": [],
+  "gr29_guards": [
+    "decision_actor_authenticated",
+    "decision_actor_human",
+    "decision_principal_key_iff",
+    "decision_principal_key_put",
+    "decision_principal_key_read",
+    "decision_principal_key_record",
+    "snapshot_interpretation_suspends"
+  ],
+  "adjacent_guards_rechecked": [
+    "decision_approved_snapshot",
+    "decision_option_membership",
+    "decision_signature_present",
+    "genesis_approver",
+    "genesis_authority_ref",
+    "genesis_consumed",
+    "gr06_activation_confirmation",
+    "gr06_basis_grantor",
+    "gr06_exercise_decision",
+    "gr06_human_admissible",
+    "gr06_policy_document",
+    "gr08_secret_approval",
+    "suspension_ref_put",
+    "suspension_ref_read"
+  ],
+  "hollowed_and_repaired": [
+    {
+      "guard": "genesis_approver",
+      "cause": "the recording boundary refuses all five actors this test parametrizes on its own account — two by guard:decision_actor_human, two by guard:decision_actor_authenticated and, since GR-29, the keyless one by guard:decision_principal_key_record — so a bare pytest.raises(IntegrityViolation) would have passed with guard:genesis_approver deleted",
+      "repair": "tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval now asserts the guard's own message with match=\"project creation requires an authenticated human approval\"",
+      "verified": "KILLED after the repair; all five parametrizations go red. The hollowing was anticipated and repaired in the same stage, so no SURVIVED run was recorded."
+    }
+  ],
+  "command": "./.venv/bin/python bin/check-gr29-mutations --adjacent --keep-going",
+  "log_root": ".evidence/ (gitignored; the summaries inlined below are the record)",
+  "guards": [
+    {
+      "guard": "decision_principal_key_iff",
+      "kind": "gr29",
+      "file": "src/gruntime/decision.py",
+      "line": 104,
+      "needle": "require(decided_by.actor_kind is not ActorKind.HUMAN or bool(decided_by.principal_key_id), f\"a HumanDecision decided by a HUMAN must name the principal key it was made with: {where} has actor_id={decided_by.actor_id!r} with principal_key_id={decided_by.principal_key_id!r} (domain-model.md:58, HD-INV-1)\", IntegrityViolation)  # guard:decision_principal_key_iff",
+      "passed": true,
+      "summaries": [
+        "Mutant: 11 failed, 1292 passed in 156.98s (0:02:36)",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_record_decision_refuses_a_missing_principal_key",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_record_decision_refuses_an_empty_principal_key",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_session_is_refused_for_the_key_and_nothing_else",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_signature_is_refused_for_the_key_and_nothing_else",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_refusal_precedes_every_decision_and_audit_side_effect",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_put_decision_refuses_a_keyless_human_decision",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_put_decision_refuses_an_empty_principal_key",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_get_decision_refuses_a_malformed_stored_row",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_list_decisions_refuses_a_malformed_stored_row",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_malformed_row_is_never_repaired",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_failed_staleness_derivation_suspends_the_project",
+        "Restored: 1303 passed in 153.49s (0:02:33)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T055728.475032542Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "genesis_approver",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 884,
+      "needle": "require(_is_authenticated_human(approved_by), \"project creation requires an authenticated human approval (AX-14)\", IntegrityViolation)  # guard:genesis_approver",
+      "passed": true,
+      "summaries": [
+        "Mutant: 5 failed, 1298 passed in 154.62s (0:02:34)",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval[runtime]",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval[worker]",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval[unauthenticated]",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval[delegated]",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval[keyless]",
+        "Restored: 1303 passed in 156.81s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T060241.560625226Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "genesis_authority_ref",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1034,
+      "needle": "authority_ref=approval.decision_id,  # guard:genesis_authority_ref",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 155.48s (0:02:35)",
+        "Red: FAILED tests/test_gr23_conformance.py::test_the_creation_event_is_the_runtime_acting_for_the_deciding_human",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_cites_its_authority_and_its_snapshot",
+        "Restored: 1303 passed in 155.64s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T060755.562433190Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "genesis_consumed",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1036,
+      "needle": "self._consume_decision(project_id, approval, discharged=created, genesis_token=genesis_token)  # guard:genesis_consumed",
+      "passed": true,
+      "summaries": [
+        "Mutant: 14 failed, 1289 passed in 156.09s (0:02:36)",
+        "Red: FAILED tests/test_gr23_conformance.py::test_the_observation_and_consumption_events_remain_the_runtime_s",
+        "Red: FAILED tests/test_gr23_conformance.py::test_an_undelegated_actor_keeps_its_existing_event_preimage",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_conforming_creation_witnesses_exactly_four_ordered_events",
+        "Red: FAILED tests/test_gr23_conformance.py::test_the_boundary_holds_only_the_project_being_created",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_presenter_that_raises_leaves_no_pending_genesis_behind",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_caught_start_refusal_leaves_no_controller_epoch_behind",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_caught_author_contract_refusal_leaves_no_contract_behind",
+        "Red: FAILED tests/test_gr23_conformance.py::test_the_presentation_cannot_record_the_approval_it_is_being_asked_for",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_response_finalizer_cannot_supersede_the_approved_observation",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_presenter_cannot_give_the_pending_project_a_worktree",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_genesis_writes_four_ordered_events",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_the_chain_is_anchored_and_the_head_is_the_fourth_event",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_creation_cites_its_authority_and_its_snapshot",
+        "Red: FAILED tests/test_gr23_creation_path.py::test_the_creation_approval_is_consumed_by_the_creation",
+        "Restored: 1303 passed in 156.12s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T061309.159490680Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "snapshot_interpretation_suspends",
+      "kind": "gr29",
+      "file": "src/gruntime/controller.py",
+      "line": 1278,
+      "needle": "self._suspend_uninterpreted_snapshot(project_id, snapshot, failure)  # guard:snapshot_interpretation_suspends",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1302 passed in 155.61s (0:02:35)",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_failed_staleness_derivation_suspends_the_project",
+        "Restored: 1303 passed in 156.81s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T061823.847382856Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_actor_human",
+      "kind": "gr29",
+      "file": "src/gruntime/controller.py",
+      "line": 1634,
+      "needle": "require(decided_by.actor_kind is ActorKind.HUMAN, f\"a HumanDecision must be decided by a HUMAN; got {decided_by.actor_kind.value} (HD-INV-1)\", IntegrityViolation)  # guard:decision_actor_human",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1302 passed in 156.24s (0:02:36)",
+        "Red: FAILED tests/test_gr03_approval_staleness.py::test_a_runtime_cannot_manufacture_authority",
+        "Restored: 1303 passed in 153.14s (0:02:33)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T062338.750966851Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_actor_authenticated",
+      "kind": "gr29",
+      "file": "src/gruntime/controller.py",
+      "line": 1635,
+      "needle": "require(decided_by.auth_method not in (AuthMethod.NONE, AuthMethod.DELEGATED), f\"unauthenticated authority is indistinguishable from forged authority: auth_method={decided_by.auth_method.value}\", IntegrityViolation)  # guard:decision_actor_authenticated",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 155.43s (0:02:35)",
+        "Red: FAILED tests/test_gr03_approval_staleness.py::test_unauthenticated_authority_is_refused[NONE]",
+        "Red: FAILED tests/test_gr03_approval_staleness.py::test_unauthenticated_authority_is_refused[DELEGATED]",
+        "Restored: 1303 passed in 155.87s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T062850.696570621Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_principal_key_record",
+      "kind": "gr29",
+      "file": "src/gruntime/controller.py",
+      "line": 1636,
+      "needle": "require_principal_key(decided_by, \"record_decision\")  # guard:decision_principal_key_record",
+      "passed": true,
+      "summaries": [
+        "Mutant: 5 failed, 1298 passed in 154.04s (0:02:34)",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_record_decision_refuses_a_missing_principal_key",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_record_decision_refuses_an_empty_principal_key",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_session_is_refused_for_the_key_and_nothing_else",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_signature_is_refused_for_the_key_and_nothing_else",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_refusal_precedes_every_decision_and_audit_side_effect",
+        "Restored: 1303 passed in 155.06s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T063404.475773373Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_option_membership",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1642,
+      "needle": "require(chosen in tuple(options_offered), f\"a decision must choose an offered option: chosen={chosen!r} is not in options_offered={list(options_offered)!r} (domain-model.md:695-696)\", IntegrityViolation)  # guard:decision_option_membership",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 156.54s (0:02:36)",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_decision_cannot_choose_an_option_that_was_never_offered",
+        "Red: FAILED tests/test_gr23_conformance.py::test_an_empty_option_set_offers_nothing_to_choose",
+        "Restored: 1303 passed in 154.93s (0:02:34)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T063915.982271275Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_signature_present",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1643,
+      "needle": "require(decided_by.auth_method is not AuthMethod.SIGNATURE or bool(signature), \"auth_method=SIGNATURE requires the signature itself; a method label and a key id are not the evidence (domain-model.md:710)\", IntegrityViolation)  # guard:decision_signature_present",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1302 passed in 158.80s (0:02:38)",
+        "Red: FAILED tests/test_gr23_conformance.py::test_a_signature_method_without_a_signature_publishes_nothing",
+        "Restored: 1303 passed in 156.41s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T064429.925329407Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_approved_snapshot",
+      "kind": "adjacent",
+      "file": "src/gruntime/controller.py",
+      "line": 1647,
+      "needle": "require(bound and self._is_own_complete_observation(project_id, approved_snapshot_id), f\"an explicitly approved observation must be a COMPLETE observation of this project, on a snapshot-bound decision: snapshot_bound={bound} and {approved_snapshot_id} is not one of {project_id}'s COMPLETE observations (domain-model.md:703)\", IntegrityViolation)  # guard:decision_approved_snapshot",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 154.04s (0:02:34)",
+        "Red: FAILED tests/test_gr23_conformance.py::test_an_approved_snapshot_must_be_this_project_s_own_observation",
+        "Red: FAILED tests/test_gr23_conformance.py::test_an_approved_snapshot_is_refused_on_a_decision_that_binds_none",
+        "Restored: 1303 passed in 156.11s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T064947.749376593Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "suspension_ref_read",
+      "kind": "adjacent",
+      "file": "src/gruntime/store.py",
+      "line": 924,
+      "needle": "self.validate_suspension_ref(SuspensionState(row[\"suspension\"]), row[\"suspension_ref\"])  # guard:suspension_ref_read",
+      "passed": true,
+      "summaries": [
+        "Mutant: 16 failed, 1287 passed in 159.59s (0:02:39)",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-NONE-esc-stale]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-NONE-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_HUMAN-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_HUMAN-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_POLICY-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_POLICY-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_ESCALATION-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_ESCALATION-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_BUDGET-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_BUDGET-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_INTEGRITY-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_INTEGRITY-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_DRIFT-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-SUSPENDED_BY_DRIFT-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-QUIESCING-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[read-QUIESCING-]",
+        "Restored: 1303 passed in 155.88s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T065500.452935418Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "suspension_ref_put",
+      "kind": "adjacent",
+      "file": "src/gruntime/store.py",
+      "line": 949,
+      "needle": "self.validate_suspension_ref(project.suspension, project.suspension_ref)  # guard:suspension_ref_put",
+      "passed": true,
+      "summaries": [
+        "Mutant: 32 failed, 1271 passed in 157.81s (0:02:37)",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-NONE-esc-stale]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-NONE-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_HUMAN-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_HUMAN-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_POLICY-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_POLICY-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_ESCALATION-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_ESCALATION-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_BUDGET-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_BUDGET-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_INTEGRITY-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_INTEGRITY-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_DRIFT-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-SUSPENDED_BY_DRIFT-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-QUIESCING-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[put-QUIESCING-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-NONE-esc-stale]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-NONE-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_HUMAN-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_HUMAN-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_POLICY-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_POLICY-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_ESCALATION-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_ESCALATION-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_BUDGET-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_BUDGET-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_INTEGRITY-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_INTEGRITY-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_DRIFT-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-SUSPENDED_BY_DRIFT-]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-QUIESCING-None]",
+        "Red: FAILED tests/test_suspension_evidence.py::test_suspension_reference_is_required_iff_non_none[insert-QUIESCING-]",
+        "Restored: 1303 passed in 154.64s (0:02:34)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T070018.377578636Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_principal_key_put",
+      "kind": "gr29",
+      "file": "src/gruntime/store.py",
+      "line": 1760,
+      "needle": "require_principal_key(decision.decided_by, \"put_decision\")  # guard:decision_principal_key_put",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 155.83s (0:02:35)",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_put_decision_refuses_a_keyless_human_decision",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_put_decision_refuses_an_empty_principal_key",
+        "Restored: 1303 passed in 153.76s (0:02:33)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T070533.213874480Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "decision_principal_key_read",
+      "kind": "gr29",
+      "file": "src/gruntime/store.py",
+      "line": 1814,
+      "needle": "require_principal_key(decided_by, f\"stored decision {row['decision_id']}\")  # guard:decision_principal_key_read",
+      "passed": true,
+      "summaries": [
+        "Mutant: 4 failed, 1299 passed in 154.87s (0:02:34)",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_get_decision_refuses_a_malformed_stored_row",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_list_decisions_refuses_a_malformed_stored_row",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_malformed_row_is_never_repaired",
+        "Red: FAILED tests/test_gr29_decision_principal_key.py::test_a_failed_staleness_derivation_suspends_the_project",
+        "Restored: 1303 passed in 155.77s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T071045.272180187Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_human_admissible",
+      "kind": "adjacent",
+      "file": "src/gruntime/authority.py",
+      "line": 97,
+      "needle": "return (authenticated and decision.project_id == contract.project_id  # guard:gr06_human_admissible\n        and decision.decision_kind is DecisionKind.GRANT_CAPABILITY\n        and capability in decision.grants and capability not in decision.revokes\n        and bool(decision.evidence_shown) and 16 <= len(decision.nonce) <= 64\n        and decision.decided_at <= now and subject_matches and scope_matches\n        # Snapshot observation persists STALE through the single decision-state\n        # derivation. An unchanged re-observation does not supersede a decision.\n        and (not decision.snapshot_bound or bool(decision.subject_snapshot_id))\n        and derive_decision_state(decision, now=now) is DecisionState.VALID)",
+      "passed": true,
+      "summaries": [
+        "Mutant: 95 failed, 1208 passed in 142.99s (0:02:22)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[PROJECT]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[STAGE]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[RUN]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_live_human_grant_is_bound_once_and_replayed[SINGLE_ACTION]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_nonce_cannot_activate_a_second_run",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_human_class_grant_does_not_replace_exercise_decision",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_unchanged_snapshot_preserves_scoped_human_grant",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_https_relay_injects_only_at_upstream",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_network_needs_admissible_invocation_grant[SUPERVISED-none-True-False]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_network_needs_admissible_invocation_grant[SUPERVISED-policy-True-False]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_network_needs_admissible_invocation_grant[SUPERVISED-human-False-False]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_network_needs_admissible_invocation_grant[SUPERVISED-human-True-True]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_network_needs_admissible_invocation_grant[AUTONOMOUS-policy-True-True]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[void]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[expired]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[stale]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[consumed]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[actor]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[scope]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[grant]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[mode]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[revoked]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[ceiling]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[budget]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[closed]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[epoch]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_every_request_rechecks_live_authority[suspension]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[other-port]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[other-host]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[http]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[userinfo]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[suffix]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[scheme-relative]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[absolute-path]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[backslash]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[fragment]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_other_destinations_make_zero_requests[control]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[same-301]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[same-302]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[same-303]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[same-307]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[same-308]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[other-301]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[other-302]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[other-303]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[other-307]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[other-308]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[http-301]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[http-302]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[http-303]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[http-307]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[http-308]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[relative-301]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[relative-302]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[relative-303]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[relative-307]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_redirects_are_refused_without_following[relative-308]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[stdout]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[stderr]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[claim]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[mutation]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[exception]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[progress]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[response]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_never_reaches_any_artifact_or_journal[response-header]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_relay_response_guards[tls] - ...",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_relay_response_guards[oversize]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_relay_response_guards[response-secret]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[single-origin]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_approval_consumed_and_resolver_exception_is_safe",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[missing]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[other-run]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[grant]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[revoked]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_bridge_network_guards[target]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_tool_secret_diagnostics_are_discarded[metadata]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_tool_secret_diagnostics_are_discarded[diagnostic]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_controller_worker_output_is_checked_before_processing",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_controller_diagnostic_is_checked_before_receipt",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_receipt_boundary_discards_tainted_output_and_fields",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_provider_input_is_checked_before_launch",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_fingerprints_survive_restart_and_include_no_values",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[artifact]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[media]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[event-payload]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[event-subject]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[event-type]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[event-actor]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[state]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[sql-many]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[sql-script]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_checks_run_before_sink_write[progress]",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_real_worker_uses_bridge_and_validation_remains_isolated",
+        "Red: FAILED tests/test_gr08_relay_boundaries.py::test_watchdog_interrupts_trickling_response",
+        "Red: FAILED tests/test_gr08_relay_boundaries.py::test_worker_lease_limits_requests_to_wall_budget",
+        "Restored: 1303 passed in 153.73s (0:02:33)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T071558.427104471Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_basis_grantor",
+      "kind": "adjacent",
+      "file": "src/gruntime/authority.py",
+      "line": 191,
+      "needle": "require(admissible, \"A-INV-3: inadmissible grantor\")  # guard:gr06_basis_grantor",
+      "passed": true,
+      "summaries": [
+        "Mutant: 4 failed, 1299 passed in 155.33s (0:02:35)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_basis_cannot_claim_inadmissible_grantor[CEILING-actor0-None]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_basis_cannot_claim_inadmissible_grantor[POLICY-actor1-evaluation]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_basis_cannot_claim_inadmissible_grantor[ROLE_DEFAULT-actor2-None]",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_basis_cannot_claim_inadmissible_grantor[HUMAN_DECISION-actor3-decision]",
+        "Restored: 1303 passed in 156.45s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T072057.519952481Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_exercise_decision",
+      "kind": "adjacent",
+      "file": "src/gruntime/authority.py",
+      "line": 228,
+      "needle": "require(valid, \"capability requires a live human decision at exercise time\", CapabilityDenied)  # guard:gr06_exercise_decision",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1302 passed in 156.49s (0:02:36)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_human_class_grant_does_not_replace_exercise_decision",
+        "Restored: 1303 passed in 156.30s (0:02:36)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T072611.688425002Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_policy_document",
+      "kind": "adjacent",
+      "file": "src/gruntime/contract_controller.py",
+      "line": 59,
+      "needle": "require(valid, \"policy must be human-authored and digest-pinned\")  # guard:gr06_policy_document",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 155.57s (0:02:35)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_policy_document_requires_human_author",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_directly_persisted_policy_evaluation_cannot_supply_nonhuman_policy",
+        "Restored: 1303 passed in 154.38s (0:02:34)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T073126.894685169Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr06_activation_confirmation",
+      "kind": "adjacent",
+      "file": "src/gruntime/contract_controller.py",
+      "line": 125,
+      "needle": "require(valid, \"SUPERVISED activation requires live contract approval\", CapabilityDenied)  # guard:gr06_activation_confirmation",
+      "passed": true,
+      "summaries": [
+        "Mutant: 2 failed, 1301 passed in 154.68s (0:02:34)",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_supervised_activation_requires_live_approval",
+        "Red: FAILED tests/test_gr06_contract_authority.py::test_supervised_activation_refuses_a_stale_contract_approval",
+        "Restored: 1303 passed in 155.25s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T073639.227851940Z-mutate.log"
+      ]
+    },
+    {
+      "guard": "gr08_secret_approval",
+      "kind": "adjacent",
+      "file": "src/gruntime/relay_controller.py",
+      "line": 26,
+      "needle": "require(approval.project_id == run.project_id and approval.decision_kind is DecisionKind.APPROVE\n                and approval.subject_kind.value == 'CAPABILITY' and approval.subject_id == 'secret.read'\n                and approval.scope.value == 'SINGLE_ACTION' and approval.chosen == secret_name\n                and actor.actor_kind is ActorKind.HUMAN and bool(actor.principal_key_id)\n                and actor.auth_method in (AuthMethod.SESSION, AuthMethod.SIGNATURE, AuthMethod.MTLS)\n                and approval.auth_method == actor.auth_method\n                and (actor.auth_method is not AuthMethod.SIGNATURE or bool(approval.signature))\n                and approval.evidence_shown and 16 <= len(approval.nonce) <= 64\n                and approval.decided_at <= now\n                and derive_decision_state(approval, now=now) is DecisionState.VALID,\n                'SECRET_APPROVAL_DENIED', CapabilityDenied)  # guard:gr08_secret_approval",
+      "passed": true,
+      "summaries": [
+        "Mutant: 1 failed, 1302 passed in 155.23s (0:02:35)",
+        "Red: FAILED tests/test_gr08_inference_relay.py::test_secret_resolution_authority_guards[approval]",
+        "Restored: 1303 passed in 155.27s (0:02:35)",
+        "Mutation: KILLED; restored suite is green"
+      ],
+      "log_root": ".evidence/",
+      "logs": [
+        "20260920T074151.613039155Z-mutate.log"
+      ]
+    }
+  ],
+  "remediation": {
+    "verdict_remediated": "GR29_REMEDIATION_REQUIRED",
+    "GR29-R01": {
+      "finding": "take_snapshot publishes the new observation and only then derives staleness over every decision; a malformed HumanDecision refused at _decision_from_row aborted that derivation after publication, leaving snapshot_current on the new reality, prior approvals VALID against the reality they superseded, suspension NONE and the REALITY_DRIFT escalation unreached.",
+      "correction": "controller.py _suspend_uninterpreted_snapshot (guard:snapshot_interpretation_suspends) raises an INTEGRITY_VIOLATION escalation applying SUSPENDED_BY_INTEGRITY (transition-matrix §4 row 4-7) and re-raises. The refusal, the read guard and the no-repair rule are unchanged; no malformed row is skipped, coerced or migrated.",
+      "why_this_suspension": "SUSPENSION_GATE gives SUSPENDED_BY_INTEGRITY and SUSPENDED_BY_DRIFT the same row (no new invocations, validations or commits; ABANDONED the only lifecycle target), so the project is barred exactly as the drift suspension this path could not reach would have barred it, by the route verify_commit and the commit receipt already take for an integrity violation.",
+      "nesting": "Written through _raise_escalation, so where take_snapshot is nested in a caller's transaction (_settle_commit_receipt) the suspension rolls back with the publication it answers for.",
+      "regression": "tests/test_gr29_decision_principal_key.py::test_a_failed_staleness_derivation_suspends_the_project reproduces the reviewer's sequence and asserts the durable state twice, the second time through a store and controller opened after the first closed. test_a_readable_project_is_not_suspended_by_the_new_gate holds the healthy path to REALITY_DRIFT/SUSPENDED_BY_DRIFT.",
+      "red_evidence": "Before the correction the regression failed at 'assert <SuspensionState.NONE: \\'NONE\\'> is <SuspensionState.SUSPENDED_BY_INTEGRITY: \\'SUSPENDED_BY_INTEGRITY\\'>'; an exploratory run of the same sequence showed propose_commit succeeding against the superseded reality. .evidence/gr29-r01/red.log (gitignored).",
+      "not_done": "No storage migration, no repair or backfill of malformed rows, no scan for them, and no change to how an integrity suspension is cleared (§4 row 4-20 remains a human's act)."
+    },
+    "GR29-R02": "The hollowing explanation said the recording boundary refuses three of the five actors that test parametrizes. It refuses five of five: two actor-kind refusals, two authentication refusals and one principal-key refusal. Corrected in hollowed_and_repaired[0].cause and in the docstring of tests/test_gr23_creation_path.py::test_creation_requires_an_authenticated_human_approval. No mutation count was changed by this correction."
+  }
+}

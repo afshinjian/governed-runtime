@@ -32,6 +32,7 @@ from typing import Any, Optional, Sequence
 from .artifacts import ArtifactStore
 from .canonical import canonical_json, digest_bytes
 from .contract_store import ContractStore, CONTRACT_SCHEMA
+from .decision import require_principal_key
 from .errors import IntegrityViolation, SchemaTooOld
 from .models import (
     ActorRef,
@@ -1748,6 +1749,15 @@ class StateStore(ContractStore):
     # -- human decisions (domain-model §9.A) --------------------------------
 
     def put_decision(self, decision: HumanDecision) -> None:
+        """Persist a decision. `HD-INV-1`'s key rule holds at the write too.
+
+        `record_decision` refuses a keyless `HUMAN` decider before anything is
+        built, and this is the same rule at the boundary that actually writes
+        the row: `put_decision` is public, is called again on every state
+        derivation, and is what a future recording path would reach. A
+        malformed decision is refused rather than stored (`F04-001`).
+        """
+        require_principal_key(decision.decided_by, "put_decision")  # guard:decision_principal_key_put
         self.connection.execute(
             "INSERT INTO decisions (decision_id, project_id, subject_kind,"
             " subject_id, decision_kind, question, options_offered, chosen,"
@@ -1789,6 +1799,19 @@ class StateStore(ContractStore):
         )
 
     def _decision_from_row(self, row: sqlite3.Row) -> HumanDecision:
+        """Hydrate one stored decision — the single read boundary.
+
+        Both `get_decision` and `list_decisions` come through here, so the key
+        rule is asked once and neither can return a malformed record. A row
+        written before the rule existed fails closed on every read, for good:
+        it is not repaired, coerced or backfilled, because nothing here knows
+        who made it and inventing a key would manufacture the attribution the
+        record is missing (`F04-001`). A listing refuses whole rather than
+        omitting the row, so no caller concludes from a short answer that the
+        decision was never made.
+        """
+        decided_by = actor_from_json(row["decided_by"])
+        require_principal_key(decided_by, f"stored decision {row['decision_id']}")  # guard:decision_principal_key_read
         return HumanDecision(
             decision_id=row["decision_id"],
             project_id=row["project_id"],
@@ -1799,7 +1822,7 @@ class StateStore(ContractStore):
             chosen=row["chosen"],
             justification=row["justification"],
             scope=DecisionScope(row["scope"]),
-            decided_by=actor_from_json(row["decided_by"]),
+            decided_by=decided_by,
             auth_method=AuthMethod(row["auth_method"]),
             decided_at=_parse_ts(row["decided_at"]),
             nonce=row["nonce"],
