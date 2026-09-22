@@ -1,6 +1,6 @@
 # Governed Runtime
 Project-agnostic governed AI software-development runtime.
-Phase: GR-30 (repository-local governed agent skills and shared procedure contracts).
+Phase: GR-31 (First Supervised Automation Pilot readiness and minimal path).
 Rules:
 - No HIR / automate-implementation identifiers in core.
 - No Claude/Codex/Hermes specifics outside adapters.
