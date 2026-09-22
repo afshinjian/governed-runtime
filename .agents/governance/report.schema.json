@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-runtime.local/agents/report.schema.json",
+  "title": "Skill report",
+  "description": "A skill's result is a report: a claim about what was done, tied to the authorization that warranted it (SK-12). Unknown fields are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "authorization_id",
+    "skill",
+    "mode",
+    "stage",
+    "outcome",
+    "scope_observed"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Unique id of this report."
+    },
+    "authorization_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The authorization this invocation ran under; a report without one is REFUSED."
+    },
+    "skill": {
+      "enum": [
+        "governed-repo-reality-check",
+        "governed-stage-planner",
+        "governed-stage-implementer",
+        "governed-independent-reviewer",
+        "governed-owner-closeout",
+        "governed-pilot-readiness"
+      ],
+      "description": "The skill that produced the report; must equal the skill on the cited authorization."
+    },
+    "mode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The mode the invocation ran in; must equal the mode on the cited authorization."
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The stage worked; must equal the stage on the cited authorization (SK-11)."
+    },
+    "outcome": {
+      "enum": ["COMPLETE", "BLOCKED", "REFUSED"],
+      "description": "COMPLETE: the skill's procedure finished. BLOCKED: it stopped at a gate with findings. REFUSED: no valid authorization, or an out-of-warrant act was requested."
+    },
+    "scope_observed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Paths this invocation read (read-only skills) or mutated (mutating skills). Every entry must match a pattern in the cited authorization's scope (SK-04)."
+    },
+    "findings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "claim"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "description": "Stable finding id, e.g. STAGE-F-NNN; remediation cites these (SK-05)."
+          },
+          "severity": { "enum": ["BLOCKER", "MAJOR", "MINOR", "NOTE"] },
+          "claim": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What is wrong, naming the file and the evidence on disk."
+          }
+        }
+      },
+      "description": "Findings raised; the reviewer's primary output, never a patch."
+    },
+    "verdict": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The stage's own verdict token, when the stage defines one."
+    },
+    "summary": {
+      "type": "string",
+      "description": "What was done, what was run, what remains; claims here are reviewable."
+    }
+  }
+}

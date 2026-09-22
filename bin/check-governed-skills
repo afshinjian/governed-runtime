@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+"""Structural contract check for the governed skill layer (rules.md).
+
+Runs the six enforcement groups rules.md names in its "enforced by"
+column — wrappers, wrapper-dedup, authority, authorization-schema,
+authorization-gate, report-schema — read-only over the checked root.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+import jsonschema
+
+ROOT = Path(__file__).resolve().parents[1]
+AUTH_SCHEMA = ".agents/governance/authorization.schema.json"
+REPORT_SCHEMA = ".agents/governance/report.schema.json"
+TEMPLATE = ".agents/governance/authorization-template.md"
+FRONTMATTER_KEYS = {"name", "description"}
+SKILL_ENTRY_KEYS = {"id", "path", "role", "kind", "modes", "authorization_required"}
+KIND_RULES = {
+    "read-only": ("SK-04",),
+    "proposal": ("SK-11",),
+    "mutating": ("SK-04", "SK-09", "SK-11"),
+    "review": ("SK-06", "SK-07", "SK-10", "SK-11"),
+    "owner-act": ("SK-09", "SK-10"),
+}
+SKILL_REGISTRY = {
+    "governed-repo-reality-check": ("ANALYST", "read-only"),
+    "governed-stage-planner": ("PLANNER", "proposal"),
+    "governed-stage-implementer": ("IMPLEMENTER", "mutating"),
+    "governed-independent-reviewer": ("REVIEWER", "review"),
+    "governed-owner-closeout": ("OWNER", "owner-act"),
+    "governed-pilot-readiness": ("ANALYST", "read-only"),
+}
+REGISTRY_ROLES = {role for role, _ in SKILL_REGISTRY.values()}
+WARRANT_REQUIREMENTS = (
+    ("governed-stage-implementer", "remediation", "original_findings"),
+    ("governed-independent-reviewer", "closure-review", "candidate"),
+)
+WARRANT_BINDINGS = (
+    ("governed-stage-implementer", "remediation", "original_findings", ["GR30-F-001"]),
+    ("governed-independent-reviewer", "closure-review", "candidate", {"candidate_ref": "d2a8e31"}),
+)
+WARRANT_MISBINDINGS = (
+    ("governed-stage-implementer", "implementation", "original_findings", ["GR30-F-001"]),
+    ("governed-stage-implementer", "implementation", "candidate", {"candidate_ref": "d2a8e31"}),
+    ("governed-stage-implementer", "remediation", "candidate", {"candidate_ref": "d2a8e31"}),
+    ("governed-independent-reviewer", "implementation-review", "original_findings", ["GR30-F-001"]),
+    ("governed-independent-reviewer", "implementation-review", "candidate", {"candidate_ref": "d2a8e31"}),
+    ("governed-independent-reviewer", "closure-review", "original_findings", ["GR30-F-001"]),
+)
+
+
+def split_frontmatter(text):
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None, text
+    fields = {}
+    for index, line in enumerate(lines[1:], 1):
+        if line.strip() == "---":
+            return fields, "\n".join(lines[index + 1:])
+        key, sep, value = line.partition(":")
+        if not sep or not key.strip():
+            return None, text
+        fields[key.strip()] = value.strip()
+    return None, text
+
+
+def section(body, title):
+    match = re.search(rf"(?ms)^## {re.escape(title)}[ \t]*\n(.*?)(?=^## |\Z)", body)
+    return match.group(1) if match else None
+
+
+def skill_modes(body):
+    for title in ("Modes", "Mode"):
+        text = section(body, title)
+        if text is not None:
+            return re.findall(r"(?m)^\s*[|*-]\s*`([a-z0-9-]+)`", text)
+    return []
+
+
+def load(root):
+    catalog = json.loads((root / ".agents/governance/catalog.json").read_text())
+    skills = []
+    for entry in catalog.get("skills", []):
+        fields, body = split_frontmatter((root / entry["path"]).read_text())
+        skills.append({"entry": entry, "fields": fields or {}, "body": body})
+    return catalog, skills
+
+
+def check_wrappers(root, catalog, skills):
+    findings = []
+    if catalog.get("catalog_version") != 1:
+        findings.append(f"catalog_version is {catalog.get('catalog_version')!r}, expected 1")
+    if catalog.get("canonical_root") != ".agents":
+        findings.append(f"catalog canonical_root is {catalog.get('canonical_root')!r}, expected '.agents' (SK-01)")
+    if catalog.get("discovery") != {"claude": ".claude/skills/", "codex": "AGENTS.md"}:
+        findings.append("catalog discovery must be exactly claude='.claude/skills/' and codex='AGENTS.md' (SK-01)")
+    governance = catalog.get("governance")
+    expected = {
+        "rules": ".agents/governance/rules.md",
+        "authorization_schema": AUTH_SCHEMA,
+        "report_schema": REPORT_SCHEMA,
+        "authorization_template": TEMPLATE,
+        "contract_check": "bin/check-governed-skills",
+        "contract_tests": "tests/test_governed_skills.py",
+    }
+    if governance != expected:
+        findings.append("catalog governance block diverges from the governed contract")
+    else:
+        for relpath in expected.values():
+            if not (root / relpath).is_file():
+                findings.append(f"governance file missing: {relpath}")
+    wrapper_root = root / ".claude/skills"
+    ids = {skill["entry"]["id"] for skill in skills}
+    for skill in skills:
+        entry = skill["entry"]
+        if set(skill["fields"]) != FRONTMATTER_KEYS:
+            findings.append(f"canonical frontmatter must carry exactly name and description: {entry['path']}")
+        if skill["fields"].get("name") != entry["id"]:
+            findings.append(f"canonical frontmatter name does not match the catalog id: {entry['path']}")
+        wrapper = wrapper_root / entry["id"] / "SKILL.md"
+        if not wrapper.is_file():
+            findings.append(f"wrapper missing: .claude/skills/{entry['id']}/SKILL.md (SK-01)")
+            continue
+        fields, body = split_frontmatter(wrapper.read_text())
+        if fields is None or set(fields) != FRONTMATTER_KEYS:
+            findings.append(f"wrapper frontmatter must carry exactly name and description: .claude/skills/{entry['id']}/SKILL.md")
+            continue
+        if fields["name"] != entry["id"]:
+            findings.append(f"wrapper name does not match the catalog id: {entry['id']}")
+        if fields["description"] != skill["fields"].get("description"):
+            findings.append(f"wrapper description diverges from the canonical skill: {entry['id']}")
+        if entry["path"] not in body:
+            findings.append(f"wrapper does not point at the canonical skill text: {entry['id']} (SK-01)")
+        if re.search(r"(?m)^\s*#", body):
+            findings.append(f"wrapper restates structure instead of pointing: {entry['id']} (SK-01)")
+        if len([line for line in body.splitlines() if line.strip()]) > 8:
+            findings.append(f"wrapper body exceeds pointer shape: {entry['id']} (SK-01)")
+    if wrapper_root.is_dir():
+        for extra in sorted(p.name for p in wrapper_root.iterdir() if p.name not in ids):
+            findings.append(f"wrapper without a catalog entry: .claude/skills/{extra} (SK-01)")
+        for sid in sorted(ids):
+            wrapper_dir = wrapper_root / sid
+            if not wrapper_dir.is_dir():
+                continue
+            for extra in sorted(p.name for p in wrapper_dir.iterdir() if p.name != "SKILL.md"):
+                findings.append(
+                    f"wrapper directory carries a file beside its pointer: .claude/skills/{sid}/{extra} (SK-01)"
+                )
+    skills_root = root / ".agents/skills"
+    if skills_root.is_dir():
+        for path in sorted(skills_root.iterdir()):
+            if not path.is_dir():
+                findings.append(
+                    f"stray file under the canonical skill root: .agents/skills/{path.name} (SK-01)"
+                )
+            elif path.name not in ids:
+                findings.append(
+                    f"canonical skill without a catalog entry: .agents/skills/{path.name} (SK-01)"
+                )
+            else:
+                for extra in sorted(p.name for p in path.iterdir() if p.name != "SKILL.md"):
+                    findings.append(
+                        f"canonical skill directory carries a file beside its procedure: "
+                        f".agents/skills/{path.name}/{extra} (SK-01)"
+                    )
+    governance_root = root / ".agents/governance"
+    if governance_root.is_dir():
+        pinned = {".agents/governance/catalog.json"} | {
+            rel for rel in expected.values() if rel.startswith(".agents/governance/")
+        }
+        for path in sorted(governance_root.iterdir()):
+            rel = f".agents/governance/{path.name}"
+            if not path.is_file():
+                findings.append(f"stray directory under .agents/governance: {rel} (SK-01)")
+            elif rel not in pinned:
+                findings.append(f"governance file outside the governed contract: {rel} (SK-01)")
+    agents = root / "AGENTS.md"
+    if not agents.is_file():
+        findings.append("codex discovery surface missing: AGENTS.md (SK-01)")
+    elif not re.search(r"\.agents/(skills|governance)/", agents.read_text()):
+        findings.append("AGENTS.md does not point at the canonical layer (SK-01)")
+    return findings
+
+
+def check_wrapper_dedup(root, catalog, skills):
+    findings = []
+    surfaces = {}
+    for relpath in ("AGENTS.md", "CLAUDE.md"):
+        path = root / relpath
+        if path.is_file():
+            surfaces[relpath] = {line.strip() for line in path.read_text().splitlines()}
+    wrapper_root = root / ".claude/skills"
+    if wrapper_root.is_dir():
+        for path in sorted(wrapper_root.glob("*/SKILL.md")):
+            surfaces[path.relative_to(root).as_posix()] = {
+                line.strip() for line in path.read_text().splitlines()
+            }
+    for skill in skills:
+        entry = skill["entry"]
+        canonical = {line.strip() for line in skill["body"].splitlines()}
+        headings = {line for line in canonical if line.startswith("#")}
+        substantive = {line for line in canonical if len(line) >= 20}
+        for surface, lines in surfaces.items():
+            for line in sorted(substantive & lines):
+                findings.append(f"{surface} restates a canonical line of {entry['id']}: {line!r} (SK-01)")
+            for line in sorted(headings & lines):
+                findings.append(f"{surface} copies a canonical heading of {entry['id']}: {line!r} (SK-01)")
+    return findings
+
+
+def check_authority(root, catalog, skills):
+    findings = []
+    if set(catalog) != {"catalog_version", "canonical_root", "discovery", "governance", "skills"}:
+        findings.append("catalog carries fields outside the governed contract (SK-02)")
+    for skill in skills:
+        entry = skill["entry"]
+        if set(entry) != SKILL_ENTRY_KEYS:
+            findings.append(f"catalog entry carries fields outside the governed contract: {entry.get('id')}")
+        if entry.get("authorization_required") is not True:
+            findings.append(f"catalog entry does not require a stage authorization: {entry.get('id')} (SK-02, SK-03)")
+        if entry.get("path") != f".agents/skills/{entry.get('id')}/SKILL.md":
+            findings.append(f"catalog entry path is not the canonical location: {entry.get('id')} (SK-01)")
+        if entry.get("id") not in SKILL_REGISTRY:
+            findings.append(f"catalog entry is outside the governed skill registry: {entry.get('id')} (SK-02)")
+        else:
+            role, kind = SKILL_REGISTRY[entry["id"]]
+            if entry.get("role") != role or entry.get("kind") != kind:
+                findings.append(
+                    f"catalog entry diverges from the governed skill registry: {entry['id']} (SK-02)"
+                )
+        if entry.get("kind") not in KIND_RULES:
+            findings.append(f"catalog entry carries a kind outside the governed vocabulary: {entry.get('id')} (SK-02)")
+        if entry.get("role") not in REGISTRY_ROLES:
+            findings.append(f"catalog entry carries a role outside the governed vocabulary: {entry.get('id')} (SK-02)")
+    for sid in sorted(set(SKILL_REGISTRY) - {skill["entry"].get("id") for skill in skills}):
+        findings.append(f"governed skill registry names a skill the catalog does not: {sid} (SK-02)")
+    try:
+        schema = json.loads((root / AUTH_SCHEMA).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return findings + [f"authorization schema unreadable: {exc}"]
+    properties = schema.get("properties", {})
+    required = schema.get("required", [])
+    for field, const, rule in (
+        ("governance_mode", "SUPERVISED", "SK-08"),
+        ("may_commit_tag_push", False, "SK-09"),
+    ):
+        if properties.get(field, {}).get("const") != const:
+            findings.append(f"authorization schema does not pin {field} to {const!r} ({rule})")
+        if field not in required:
+            findings.append(f"authorization schema does not require {field} ({rule})")
+    authorized_by = properties.get("authorized_by", {})
+    if authorized_by.get("properties", {}).get("actor_kind", {}).get("const") != "HUMAN":
+        findings.append("authorization schema does not pin authorized_by.actor_kind to 'HUMAN' (SK-08)")
+    if "authorized_by" not in required or "principal" not in authorized_by.get("required", []):
+        findings.append("authorization schema does not require a human principal (SK-08)")
+    try:
+        reports = json.loads((root / REPORT_SCHEMA).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return findings + [f"report schema unreadable: {exc}"]
+    if "authorization_id" not in reports.get("required", []):
+        findings.append("report schema accepts a report without its authorization (SK-12)")
+    return findings
+
+
+def check_authorization_schema(root, catalog, skills):
+    findings = []
+    try:
+        schema = json.loads((root / AUTH_SCHEMA).read_text())
+        jsonschema.Draft202012Validator.check_schema(schema)
+    except (OSError, json.JSONDecodeError, jsonschema.SchemaError) as exc:
+        return [f"authorization schema is not a valid 2020-12 schema: {exc}"]
+    ids = sorted(skill["entry"]["id"] for skill in skills)
+    if sorted(schema.get("properties", {}).get("skill", {}).get("enum", [])) != ids:
+        findings.append("authorization schema skill enum does not match the catalog (SK-03)")
+    enums = {}
+    for block in schema.get("allOf", []):
+        cond = block.get("if", {}).get("properties", {}).get("skill", {}).get("const")
+        if cond:
+            enums[cond] = block.get("then", {}).get("properties", {}).get("mode", {}).get("enum", [])
+    for skill in skills:
+        entry = skill["entry"]
+        if sorted(enums.get(entry["id"], [])) != sorted(entry["modes"]):
+            findings.append(f"authorization mode enum does not match the catalog for {entry['id']} (SK-03)")
+        if sorted(skill_modes(skill["body"])) != sorted(entry["modes"]):
+            findings.append(f"canonical mode list does not match the catalog for {entry['id']} (SK-03)")
+    try:
+        text = (root / TEMPLATE).read_text()
+        match = re.search(r"```json\n(.*?)```", text, re.S)
+        example = json.loads(match.group(1))
+        jsonschema.validate(example, schema)
+    except (OSError, AttributeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        findings.append(f"template example does not validate against the authorization schema: {exc}")
+        return findings
+    for skill_id, mode, field in WARRANT_REQUIREMENTS:
+        doc = dict(example)
+        doc["skill"] = skill_id
+        doc["mode"] = mode
+        try:
+            jsonschema.validate(doc, schema)
+        except jsonschema.ValidationError:
+            continue
+        findings.append(
+            f"authorization schema opens {mode} mode without its required {field} (SK-05, SK-06)"
+        )
+    for skill_id, mode, field, value in WARRANT_BINDINGS:
+        doc = dict(example)
+        doc["skill"] = skill_id
+        doc["mode"] = mode
+        doc[field] = value
+        try:
+            jsonschema.validate(doc, schema)
+        except jsonschema.ValidationError as exc:
+            findings.append(
+                f"authorization schema refuses the {mode} warrant it requires: {exc}"
+            )
+    for skill_id, mode, field, value in WARRANT_MISBINDINGS:
+        doc = dict(example)
+        doc["skill"] = skill_id
+        doc["mode"] = mode
+        if mode == "remediation":
+            doc["original_findings"] = ["GR30-F-001"]
+        if mode == "closure-review":
+            doc["candidate"] = {"candidate_ref": "d2a8e31"}
+        doc[field] = value
+        try:
+            jsonschema.validate(doc, schema)
+        except jsonschema.ValidationError:
+            continue
+        findings.append(
+            f"authorization schema accepts {field} on {mode} mode (SK-05, SK-06)"
+        )
+    return findings
+
+
+def check_authorization_gate(root, catalog, skills):
+    findings = []
+    for skill in skills:
+        entry = skill["entry"]
+        sid = entry["id"]
+        auth = section(skill["body"], "Authorization")
+        if auth is None:
+            findings.append(f"{sid} has no Authorization section (SK-03)")
+        else:
+            for token in ("`skill`", "`mode`", "`stage`"):
+                if token not in auth:
+                    findings.append(f"{sid} binds no {token.strip('`')} to its authorization (SK-03, SK-11)")
+        procedure = section(skill["body"], "Procedure")
+        if procedure is None:
+            findings.append(f"{sid} has no Procedure section (SK-03)")
+        else:
+            first = re.search(r"(?m)^\s*1\.", procedure)
+            step = procedure[first.start():first.start() + 400] if first else None
+            if step is None or "REFUSED" not in step:
+                findings.append(f"{sid} does not refuse before any effect (SK-03)")
+        refusals = section(skill["body"], "Refusals")
+        if refusals is None:
+            findings.append(f"{sid} has no Refusals section (SK-03)")
+        else:
+            bullet = re.search(r"(?ms)^\s*-\s*No valid.*?(?=^\s*-|\Z)", refusals)
+            if bullet is None or "SK-03" not in bullet.group(0):
+                findings.append(f"{sid} does not refuse invocation without a valid authorization (SK-03)")
+        for rule in KIND_RULES.get(entry.get("kind"), ()):
+            if rule not in skill["body"]:
+                findings.append(f"{sid} cites no {rule} boundary for kind {entry.get('kind')!r}")
+    return findings
+
+
+def check_report_schema(root, catalog, skills):
+    findings = []
+    try:
+        schema = json.loads((root / REPORT_SCHEMA).read_text())
+        jsonschema.Draft202012Validator.check_schema(schema)
+    except (OSError, json.JSONDecodeError, jsonschema.SchemaError) as exc:
+        return [f"report schema is not a valid 2020-12 schema: {exc}"]
+    ids = sorted(skill["entry"]["id"] for skill in skills)
+    if sorted(schema.get("properties", {}).get("skill", {}).get("enum", [])) != ids:
+        findings.append("report schema skill enum does not match the catalog (SK-12)")
+    for field in ("report_id", "authorization_id", "scope_observed", "outcome", "skill", "mode", "stage"):
+        if field not in schema.get("required", []):
+            findings.append(f"report schema does not require {field} (SK-12)")
+    outcome = schema.get("properties", {}).get("outcome", {})
+    if sorted(outcome.get("enum") or []) != ["BLOCKED", "COMPLETE", "REFUSED"]:
+        findings.append("report schema does not pin outcome to COMPLETE/BLOCKED/REFUSED (SK-12)")
+    for skill in skills:
+        entry = skill["entry"]
+        output = section(skill["body"], "Output")
+        if output is None or ".agents/governance/report.schema.json" not in output:
+            findings.append(f"{entry['id']} does not cite the report schema in its output (SK-12)")
+    return findings
+
+
+CHECKS = (
+    ("wrappers", check_wrappers),
+    ("wrapper-dedup", check_wrapper_dedup),
+    ("authority", check_authority),
+    ("authorization-schema", check_authorization_schema),
+    ("authorization-gate", check_authorization_gate),
+    ("report-schema", check_report_schema),
+)
+
+
+def run_checks(root):
+    root = Path(root)
+    try:
+        catalog, skills = load(root)
+    except Exception as exc:
+        return [(name, [f"canonical layer unreadable: {exc}"]) for name, _ in CHECKS]
+    results = []
+    for name, check in CHECKS:
+        try:
+            results.append((name, check(root, catalog, skills)))
+        except Exception as exc:
+            results.append((name, [f"check could not run: {exc}"]))
+    return results
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Check the governed skill layer contract (SK-01..SK-12)."
+    )
+    parser.add_argument(
+        "root", nargs="?", default=ROOT,
+        help="workspace root to check (default: this repository)",
+    )
+    args = parser.parse_args(argv)
+    total = 0
+    for name, items in run_checks(Path(args.root).resolve()):
+        for item in items:
+            print(f"{name}: {item}")
+            total += 1
+    names = ", ".join(name for name, _ in CHECKS)
+    if total:
+        print(f"governed skill contract: {total} finding(s) across {names}")
+        return 1
+    print(f"governed skill contract: OK ({names})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

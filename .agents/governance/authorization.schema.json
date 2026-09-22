@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-runtime.local/agents/authorization.schema.json",
+  "title": "Stage authorization",
+  "description": "The only warrant a skill invocation has (SK-02, SK-03). A human act (SK-08): written and signed by a human principal, never by the agent that will use it. Unknown fields are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authorization_id",
+    "skill",
+    "mode",
+    "stage",
+    "scope",
+    "authorized_by",
+    "created_at",
+    "governance_mode",
+    "may_commit_tag_push"
+  ],
+  "properties": {
+    "authorization_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Unique id of this authorization."
+    },
+    "skill": {
+      "enum": [
+        "governed-repo-reality-check",
+        "governed-stage-planner",
+        "governed-stage-implementer",
+        "governed-independent-reviewer",
+        "governed-owner-closeout",
+        "governed-pilot-readiness"
+      ],
+      "description": "The one catalog skill this authorization opens."
+    },
+    "mode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One of the authorized skill's modes; membership is enforced per skill below."
+    },
+    "stage": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "The one stage this authorization opens (SK-11); a skill never works a stage it does not name."
+    },
+    "scope": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Explicit path patterns covered (SK-04). Anything not matching a pattern is out of scope."
+    },
+    "authorized_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_kind", "principal"],
+      "properties": {
+        "actor_kind": {
+          "const": "HUMAN",
+          "description": "SK-08: an authorization is a live human act; an agent never signs one."
+        },
+        "principal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The human principal authorizing, by name or key id."
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the human authorized."
+    },
+    "governance_mode": {
+      "const": "SUPERVISED",
+      "description": "This repository operates in SUPERVISED mode (SK-08); the only value an authorization may carry."
+    },
+    "may_commit_tag_push": {
+      "const": false,
+      "description": "SK-09: no authorization can grant Git authority to a skill. This field exists only to be false."
+    },
+    "original_findings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Required for remediation mode (SK-05): the finding IDs from the review record being answered; refused on every other mode."
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_ref"],
+      "properties": {
+        "candidate_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity of the reviewed candidate (SK-06): the commit, digest or record it is."
+        },
+        "review_record": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The review record the candidate was accepted in, when there is one."
+        }
+      },
+      "description": "Required for closure-review mode (SK-06); refused on every other mode."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Anything else the human wants on record with the authorization."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "skill": { "const": "governed-repo-reality-check" } }, "required": ["skill"] },
+      "then": { "properties": { "mode": { "enum": ["reality-check"] } } }
+    },
+    {
+      "if": { "properties": { "skill": { "const": "governed-stage-planner" } }, "required": ["skill"] },
+      "then": { "properties": { "mode": { "enum": ["planning"] } } }
+    },
+    {
+      "if": { "properties": { "skill": { "const": "governed-stage-implementer" } }, "required": ["skill"] },
+      "then": { "properties": { "mode": { "enum": ["implementation", "remediation"] } } }
+    },
+    {
+      "if": { "properties": { "skill": { "const": "governed-independent-reviewer" } }, "required": ["skill"] },
+      "then": { "properties": { "mode": { "enum": ["implementation-review", "closure-review"] } } }
+    },
+    {
+      "if": { "properties": { "skill": { "const": "governed-owner-closeout" } }, "required": ["skill"] },
+      "then": { "properties": { "mode": { "enum": ["closeout"] } } }
+    },
+    {
+      "if": { "properties": { "skill": { "const": "governed-pilot-readiness" } }, "required": ["skill"] },
+      "then": { "properties": { "mode": { "enum": ["pilot-readiness"] } } }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "remediation" } }, "required": ["mode"] },
+      "then": { "required": ["original_findings"] }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "closure-review" } }, "required": ["mode"] },
+      "then": { "required": ["candidate"] }
+    },
+    {
+      "if": { "properties": { "mode": { "not": { "const": "remediation" } } }, "required": ["mode"] },
+      "then": { "not": { "required": ["original_findings"] } }
+    },
+    {
+      "if": { "properties": { "mode": { "not": { "const": "closure-review" } } }, "required": ["mode"] },
+      "then": { "not": { "required": ["candidate"] } }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "catalog_version": 1,
+  "canonical_root": ".agents",
+  "discovery": {
+    "claude": ".claude/skills/",
+    "codex": "AGENTS.md"
+  },
+  "governance": {
+    "rules": ".agents/governance/rules.md",
+    "authorization_schema": ".agents/governance/authorization.schema.json",
+    "report_schema": ".agents/governance/report.schema.json",
+    "authorization_template": ".agents/governance/authorization-template.md",
+    "contract_check": "bin/check-governed-skills",
+    "contract_tests": "tests/test_governed_skills.py"
+  },
+  "skills": [
+    {
+      "id": "governed-repo-reality-check",
+      "path": ".agents/skills/governed-repo-reality-check/SKILL.md",
+      "role": "ANALYST",
+      "kind": "read-only",
+      "modes": ["reality-check"],
+      "authorization_required": true
+    },
+    {
+      "id": "governed-stage-planner",
+      "path": ".agents/skills/governed-stage-planner/SKILL.md",
+      "role": "PLANNER",
+      "kind": "proposal",
+      "modes": ["planning"],
+      "authorization_required": true
+    },
+    {
+      "id": "governed-stage-implementer",
+      "path": ".agents/skills/governed-stage-implementer/SKILL.md",
+      "role": "IMPLEMENTER",
+      "kind": "mutating",
+      "modes": ["implementation", "remediation"],
+      "authorization_required": true
+    },
+    {
+      "id": "governed-independent-reviewer",
+      "path": ".agents/skills/governed-independent-reviewer/SKILL.md",
+      "role": "REVIEWER",
+      "kind": "review",
+      "modes": ["implementation-review", "closure-review"],
+      "authorization_required": true
+    },
+    {
+      "id": "governed-owner-closeout",
+      "path": ".agents/skills/governed-owner-closeout/SKILL.md",
+      "role": "OWNER",
+      "kind": "owner-act",
+      "modes": ["closeout"],
+      "authorization_required": true
+    },
+    {
+      "id": "governed-pilot-readiness",
+      "path": ".agents/skills/governed-pilot-readiness/SKILL.md",
+      "role": "ANALYST",
+      "kind": "read-only",
+      "modes": ["pilot-readiness"],
+      "authorization_required": true
+    }
+  ]
+}

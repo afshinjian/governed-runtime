@@ -169,3 +169,13 @@ DESIGN-04-FINDINGS-04.
   GR-23's genesis snapshot left guard:controller_snapshot surviving until
   GR-24. A passing suite does not re-verify earlier kills. Assert refusals with
   match=.
+
+## Skill layer
+`.agents/` is the canonical governed-skill layer (SK-01): the rules are
+`.agents/governance/rules.md`, the catalog is
+`.agents/governance/catalog.json`, and each skill's procedure lives in
+`.agents/skills/<skill>/SKILL.md`. `.claude/skills/`, `AGENTS.md` and this
+file are discovery surfaces that point there and restate no procedure.
+Every skill invocation requires a stage authorization (SK-03); the contract
+is enforced structurally by `bin/check-governed-skills` and
+`tests/test_governed_skills.py`.
