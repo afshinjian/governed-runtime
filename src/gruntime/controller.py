@@ -67,6 +67,7 @@ from .decision import (
     derive_decision_state,
     drift_touches_scope,
     is_snapshot_bound,
+    require_confirmation,
     subject_scope,
 )
 from .errors import (
@@ -1155,12 +1156,43 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 payload={"controller_epoch": epoch, "records": changed},
             )
 
-    def open_run(self, project_id: Id) -> Id:
-        """Allocate a `StageRun` under the current epoch."""
+    def open_run(self, project_id: Id, *, confirmation_id: Optional[Id] = None) -> Id:
+        """Allocate a `StageRun` under the current epoch. Row 5-1.
+
+        `∅ → ALLOCATED` is `CONFIRM` under `SUPERVISED` and `AUTO` under
+        `AUTONOMOUS` (transition-matrix.md:189), so `confirmation_id` is
+        required by the row rather than by Python: a supervised project
+        refuses without it, and an autonomous one asks for nothing, because
+        enforcing the `SUPERVISED` cell on the `AUTONOMOUS` column would be
+        this runtime inventing a confirmation the frozen matrix does not
+        declare. Read the keyword as mandatory wherever the mode is the one
+        the pilot runs in.
+
+        The subject of the confirmation is the `PROJECT`, not the run: the run
+        does not exist until this method mints it, so there is nothing else a
+        human could have been shown and answered about.
+
+        `_require_transition_authority` proves `run.start` elsewhere;
+        this proves the human act the same row declares beside it. The two are
+        the two halves of authority-matrix §6's transition row, and neither
+        stands in for the other.
+
+        One `BEGIN IMMEDIATE` transaction covers the allocation and the
+        confirmation's consumption, the same discipline
+        `set_capability_ceiling` and `create_invocation` apply (`GR31-R01`).
+        Separately, a failure between them would leave the run allocated and
+        the confirmation still `VALID` — and because this row's subject is the
+        `PROJECT`, that surviving answer would authorize a *second, different*
+        run: one human act, two allocations, which is what `HD-INV-3` exists
+        to forbid.
+        """
         project = self.store.get_project(project_id)
-        run_id = new_id()
+        confirmation = None
+        if project.governance_mode is GovernanceMode.SUPERVISED:
+            confirmation = self.store.get_decision(confirmation_id) if confirmation_id else None
+            require_confirmation(confirmation, project_id=project_id, subject_kind=DecisionSubjectKind.PROJECT, subject_id=project_id, row="5-1", now=now_ts())  # guard:gr31_run_start_confirm
         run = StageRun(
-            run_id=run_id,
+            run_id=new_id(),
             project_id=project_id,
             stage_id=new_id(),
             lifecycle=RunLifecycle.ALLOCATED,
@@ -1168,16 +1200,29 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             controller_epoch=project.controller_epoch,
             started_at=now_ts(),
         )
-        self._append(
-            project_id,
+        db = self.store.connection
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            self._allocate_run(run, confirmation)
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
+        return run.run_id
+
+    def _allocate_run(self, run: StageRun, confirmation) -> None:
+        """The durable half of row 5-1, inside the caller's transaction."""
+        allocated = self._append(
+            run.project_id,
             event_type="run.allocated",
             epistemic_class=EpistemicClass.AUTHORITY,
-            subject={"run_id": run_id, "stage_id": run.stage_id},
+            subject={"run_id": run.run_id, "stage_id": run.stage_id},
             payload={"controller_epoch": run.controller_epoch},
             capability_used="run.start",
         )
         self.store.put_run(run)
-        return run_id
+        if confirmation is not None:
+            self._consume_decision(run.project_id, confirmation, discharged=allocated)
 
     # -- reality (domain-model §9.D) ---------------------------------------
 
@@ -2035,7 +2080,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         event_type: str,
         payload: dict,
         kernel_capabilities: Optional[frozenset] = None,
-    ) -> None:
+    ):
         """Write one §7.4 status under the capability its row declares.
 
         The capability is proved before the status is assigned and then labels
@@ -2053,7 +2098,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             kernel_capabilities=kernel_capabilities,
         )
         intent.status = status
-        self._append(
+        event = self._append(
             project_id,
             event_type=event_type,
             epistemic_class=EpistemicClass.AUTHORITY,
@@ -2063,6 +2108,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             component="commit",
         )
         self.store.put_commit_intent(intent, project_id)
+        return event
 
     def block_commit(self, intent_id: Id) -> None:
         """`PROPOSED → BLOCKED` when a precondition is unmet."""
@@ -2075,17 +2121,50 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             payload={"operation_token": intent.operation_token},
         )
 
-    def authorize_commit(self, intent_id: Id) -> None:
-        """`PROPOSED → AUTHORIZED`.
+    def authorize_commit(self, intent_id: Id, *, confirmation_id: Optional[Id] = None) -> None:
+        """`PROPOSED → AUTHORIZED`. Row 7.4-4.
 
         Re-evaluates the preconditions rather than trusting the stored value:
         a review-backed precondition is refused here even if something wrote
         one directly into the record (`G-1`).
+
+        The row is `CONFIRM` under `SUPERVISED` and `AUTO` under `AUTONOMOUS`
+        (transition-matrix.md:349), so `confirmation_id` is required by the
+        row and not by Python, exactly as on `open_run`. The subject is the
+        `COMMIT_INTENT`: what the human confirms is committing *this* proposal
+        against *this* reality.
+
+        `COMMIT_INTENT` is in `SNAPSHOT_BOUND_SUBJECTS` and `APPROVE` is in
+        `SNAPSHOT_BOUND_KINDS`, so the confirmation is snapshot-bound and a
+        snapshot landing between recording it and authorizing makes it
+        `STALE`. That is `HD-INV-4` working, not an inconvenience: the human
+        approved committing against a workspace that has since moved. It
+        imposes an ordering on any driver — record the confirmation, then
+        authorize, with no observation in between.
+
+        `intent.authorized_by` still names the runtime: the runtime performed
+        the write. The human's act is the consumed decision the event cites,
+        which is where `AX-16` puts it.
+
+        The status write and that consumption are one `BEGIN IMMEDIATE`
+        transaction (`GR31-R01`). An `AUTHORIZED` intent is the runtime's
+        standing permission to mutate the repository — `mark_applying` accepts
+        no other status — so one left durable beside a confirmation still
+        `VALID` would be a commit authorized by an act the audit shows nothing
+        ever discharged. The repository reads above stay outside it: they
+        write nothing, and holding the database's write lock across them would
+        widen the transaction for no gain.
         """
         intent = self.store.get_commit_intent(intent_id)
         project_id = self.store.intent_project(intent_id)
         if intent.status is not CommitIntentStatus.PROPOSED:  # guard:commit_authorize_status
             raise IntegrityViolation("only a proposed intent can be authorized")
+        preconditions = intent.preconditions or CommitPreconditions()
+        require(not preconditions.reviews and not preconditions.validations, f"intent {intent_id} binds {len(preconditions.reviews)} review and {len(preconditions.validations)} validation preconditions, and neither kind can be discharged soundly yet: evaluate_preconditions calls resolve_attestation and discards the result (commit.py:101-104), so a FAIL ReviewAttestation discharges a review; and a validation precondition is discharged by artifact existence rather than by a passing receipt (controller.py, resolve_validation). Until those are closed, binding one is refused rather than met hollowly", PolicyDenied)  # guard:gr31_preconditions_deferred
+        confirmation = None
+        if self.store.get_project(project_id).governance_mode is GovernanceMode.SUPERVISED:
+            confirmation = self.store.get_decision(confirmation_id) if confirmation_id else None
+            require_confirmation(confirmation, project_id=project_id, subject_kind=DecisionSubjectKind.COMMIT_INTENT, subject_id=intent_id, row="7.4-4", now=now_ts())  # guard:gr31_commit_authorize_confirm
         governed = self.governed_repo(project_id)
         self._require_commit_authority(intent, governed)  # guard:gr06_commit_authorize
         head = verify_head(governed, expected_revision=intent.base_revision_id,
@@ -2098,6 +2177,23 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             resolve_validation=lambda digest: self.store.artifacts.has(digest),
             resolve_decision=lambda ref: False,
         )
+        db = self.store.connection
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            self._settle_commit_authorization(intent, project_id, met=met,
+                                              confirmation=confirmation)
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
+
+    def _settle_commit_authorization(self, intent, project_id, *, met, confirmation) -> None:
+        """The durable half of row 7.4-4, inside the caller's transaction.
+
+        The `BLOCKED` branch consumes nothing: an intent that never reached
+        `AUTHORIZED` discharged no confirmation, so the human's answer stays
+        `VALID` — unspent, because the act it authorizes has not happened.
+        """
         intent.preconditions_met = met
         if not met:
             self._transition_intent(
@@ -2110,7 +2206,7 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
             return
         intent.authorized_by = _runtime_actor("commit")
         intent.authorized_at = now_ts()
-        self._transition_intent(
+        authorized = self._transition_intent(
             intent,
             project_id,
             status=CommitIntentStatus.AUTHORIZED,
@@ -2120,6 +2216,8 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
                 "preconditions_met": True,
             },
         )
+        if confirmation is not None:
+            self._consume_decision(project_id, confirmation, discharged=authorized)
 
     def deny_commit(self, intent_id: Id, reason: str) -> None:
         """`PROPOSED → DENIED`."""

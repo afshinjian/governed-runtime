@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Run bin/mutate once per GR-31 guard, sequentially; retain its full evidence.
+
+Needles are built from the AST, never from the `# guard:` tag. A tag needle
+mutates only the comment and reports SURVIVED for a guard that is in fact
+killed (`CLAUDE.md` Tooling); `bin/check-gr09-mutations` is the model this
+follows, including its rule for block guards: where the tagged statement is
+the sole body of an `if`, the `if` is taken whole so the mutant stays
+importable. A guard that is not a single deletable statement orphans its body
+and reports ERROR (pytest exit 4), which proves nothing either way.
+
+No mutants run concurrently against this shared checkout. Allow at least ten
+minutes: `bin/mutate` runs the whole suite twice per guard — once mutated,
+once restored — and an interrupted run skips its restore trap and leaves the
+mutant in `src/`. After any interruption, run `git diff --quiet -- src` before
+anything else.
+"""
+import argparse
+import ast
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+#: Every file GR-31 added a guard to. The stage's guards are the `gr31_`
+#: prefixed ones; `PREDICATE_GUARDS` names the shared predicate behind the
+#: three CONFIRM cells, which carries no stage prefix because it is not one
+#: row's guard.
+FILES = ('decision.py', 'contract_controller.py', 'controller.py',
+         'worker_controller.py', 'validation_controller.py')
+
+PREFIX = 'gr31_'
+PREDICATE_GUARDS = frozenset({'gr31_confirmation_admits'})
+
+
+def selected_guard(name, only):
+    if not (name.startswith(PREFIX) or name in PREDICATE_GUARDS):
+        return False
+    return only is None or name in only
+
+
+def needle_for(lines, tree, parents, number):
+    """The whole statement carrying the guard, as bytes bin/mutate can find."""
+    start, end = number, number
+    nodes = [node for node in ast.walk(tree)
+             if isinstance(node, ast.stmt) and node.lineno == number]
+    if nodes:
+        node = min(nodes, key=lambda node: node.end_lineno - node.lineno)
+        parent = parents.get(node)
+        if isinstance(parent, ast.If) and parent.body == [node] and not parent.orelse:
+            node = parent
+        start, end = node.lineno, node.end_lineno
+    return ''.join(lines[start - 1:end]).rstrip('\n'), start
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--only', nargs='+',
+                        help='check only these guard names (default: every GR-31 guard)')
+    parser.add_argument('--list', action='store_true',
+                        help='print the guards that would be checked and exit')
+    args = parser.parse_args()
+    only = None if args.only is None else set(args.only)
+
+    found = []
+    for filename in FILES:
+        path = ROOT / 'src' / 'gruntime' / filename
+        source = path.read_text()
+        lines = source.splitlines(keepends=True)
+        tree = ast.parse(source)
+        parents = {child: parent
+                   for parent in ast.walk(tree)
+                   for child in ast.iter_child_nodes(parent)}
+        for number, line in enumerate(lines, 1):
+            match = re.search(r'# guard:([a-z0-9_]+)', line)
+            if not match or not selected_guard(match.group(1), only):
+                continue
+            needle, start = needle_for(lines, tree, parents, number)
+            found.append((match.group(1), path, start, needle))
+
+    if args.list:
+        for name, path, start, _ in found:
+            print(f'{name}\t{path.relative_to(ROOT)}:{start}')
+        return 0
+    if only is not None and len(found) != len(only):
+        missing = only - {name for name, _, _, _ in found}
+        print(f'No such guard: {sorted(missing)}', flush=True)
+        return 2
+
+    evidence = ROOT / '.evidence'
+    evidence.mkdir(exist_ok=True)
+    results = []
+    for name, path, start, needle in found:
+        relative = path.relative_to(ROOT)
+        print(f'Checking {name} ({relative}:{start})', flush=True)
+        result = subprocess.run(
+            [str(ROOT / 'bin' / 'mutate'), str(relative), needle], cwd=ROOT)
+        results.append({'guard': name, 'file': str(relative), 'line': start,
+                        'passed': result.returncode == 0})
+        (evidence / 'gr31-mutations.json').write_text(
+            json.dumps(results, indent=2) + '\n')
+        if result.returncode != 0:
+            print(f'Stopped at {name}; inspect .evidence before continuing.',
+                  flush=True)
+            return result.returncode
+    print(f'All {len(results)} guards killed; every restored suite passed.',
+          flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

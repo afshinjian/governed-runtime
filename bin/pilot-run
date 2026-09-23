@@ -1,18 +1,33 @@
 #!/usr/bin/env python3
 """Preflight the first supervised pilot, using only the throwaway repository.
 
-This pilot is BLOCKED before registration. The shipped ClaudeCodeProvider
-requires an injected transport; the only shipped transport, ProcessTransport,
-cannot reach inference or credentials. No live transport configuration exists
-in this checkout. Do not replace this refusal with an unsandboxed subprocess,
-a fixture, or a manufactured receipt.
+This pilot is BLOCKED before registration, and what blocks it is **not** a
+missing transport. An earlier version of this script said the only shipped
+transport was ProcessTransport; that was already untrue when it was written.
+`WorkerRelayTransport` (`adapters/relay_process.py`), `InferenceRelay` and
+`RelayController.configure_inference_relay` ship and are tested, and were
+added in the same commit as this file (`git show --stat 361e06e`). Anyone
+acting on the old claim would rebuild a transport that already exists, which
+is the single most likely wrong turn out of here.
+
+What is actually missing is the composition root: `controller.py`'s `main()`
+hardcodes `FakeProvider` and has no command for project creation, ceiling or
+budget provisioning, decision recording, contract authoring or activation, run
+allocation, relay configuration, invoke, propose/authorize/apply, snapshot or
+validate — and no way to pass `protocol_headers=ClaudeCodeProvider.relay_headers`
+into `configure_inference_relay`. That driver is GR-32; the live run is GR-33.
+
+GR-31 supplied the authority surface underneath both: governed per-field
+provisioning (`set_capability_ceiling`, `grant_project_budget`) and enforced
+`SUPERVISED` `CONFIRM` on rows 5-1, 7.2-1 and 7.4-4. A driver must therefore
+record a real `HumanDecision` for each confirmed step and never fabricate one.
 
 Run: bin/pilot-run
 Exit 2 means a missing prerequisite; exit 1 means an invalid pilot target.
 The JSON report distinguishes requested transitions from observed execution.
-No runtime transition is performed, so no human approval is fabricated. The
-remaining end-to-end driver is blocked on the missing live transport, rather
-than represented here by unreachable or simulated implementations.
+No runtime transition is performed, so no human approval is fabricated. Do not
+replace this refusal with an unsandboxed subprocess, a fixture, or a
+manufactured receipt.
 """
 
 from __future__ import annotations
@@ -119,25 +134,36 @@ def main() -> int:
         return 1
 
     missing = [
-        'A live transport implementation injected into ClaudeCodeProvider(transport=...). '
-        'The only shipped transport is ProcessTransport: --unshare-all disables network, '
-        '--clearenv removes ambient credentials, and the worker receives a fresh empty HOME.',
-        'That live transport must provide a fixed inference endpoint and broker-side '
-        'authentication, preserve isolation, and expose worker tool calls only through '
-        'the invocation bridge. There is no shipped broker or configuration switch '
-        'that enables this in ProcessTransport.',
+        'A composition root. controller.py main() hardcodes FakeProvider and offers no '
+        'command for project creation, ceiling or budget provisioning, decision recording, '
+        'contract authoring or activation, run allocation, relay configuration, invoke, '
+        'propose/authorize/apply, snapshot or validate. That driver is GR-32.',
+        'Wiring for the transport that already ships: '
+        'ClaudeCodeProvider(state_dir, transport=WorkerRelayTransport(...), read_artifact=...), '
+        'with protocol_headers=ClaudeCodeProvider.relay_headers passed into '
+        'configure_inference_relay — used today only in test_gr08_inference_relay.py. '
+        'WorkerRelayTransport is NOT missing; do not rebuild it.',
+        'A human at the keyboard for each confirmed step. Rows 5-1, 7.2-1 and 7.4-4 are '
+        'CONFIRM under SUPERVISED and refuse without a live HumanDecision (GR-31). '
+        'A driver records one per step and fabricates none.',
     ]
     if not report['claude']['executable']:
         missing.insert(0, 'The Claude Code executable is absent from PATH.')
     report.update(
         state='BLOCKED', blocked_before='register_project',
-        reason='Live transport unavailable; stopped before creating the store or granting authority.',
+        reason='No composition root for a live pilot; stopped before creating the store or granting authority.',
         missing=missing,
+        shipped_already=[
+            'src/gruntime/adapters/relay_process.py: WorkerRelayTransport',
+            'src/gruntime/inference_relay.py: InferenceRelay',
+            'src/gruntime/relay_controller.py: configure_inference_relay',
+            'src/gruntime/contract_controller.py: set_capability_ceiling, grant_project_budget',
+        ],
         implementation_evidence=[
             'src/gruntime/adapters/claude_code.py: ClaudeCodeProvider',
             'src/gruntime/adapters/journaled_worker.py: constructor requires transport',
-            'src/gruntime/adapters/worker_process.py: offline isolation and broker requirements',
-            'CLAUDE.md: Known gaps / GR-07',
+            'src/gruntime/controller.py: main() hardcodes FakeProvider',
+            'CLAUDE.md: Known gaps / GR-08; Supervision gates',
         ],
         receipt_absence_reason='No invocation, validation, or commit was attempted; no runtime receipt exists.',
         supervision='Stopped before the first transition. Subsequent transitions require individual human confirmation.',

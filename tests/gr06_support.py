@@ -54,7 +54,12 @@ def provision(c, run_id, *, policy_grantable=('fs.delete',), **overrides):
 
 
 def provision_legacy_run(controller, project_id):
+    # `proc.exec.validation` is what rows 7.1-2/7.1-3 declare and what
+    # `execute_validation` now proves (GR-31 C8). The legacy harness grants it
+    # because the validations these tests already run legitimately require it;
+    # tests that assert a *refusal* build their own contract without it.
     from gruntime.controller import Controller
     run_id = Controller.open_run(controller, project_id)
-    provision(controller, run_id, capability_request=['fs.read', 'fs.write', 'fs.delete', 'commit.propose'])
+    provision(controller, run_id, capability_request=['fs.read', 'fs.write', 'fs.delete',
+                                                      'proc.exec.validation', 'commit.propose'])
     return run_id

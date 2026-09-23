@@ -23,7 +23,7 @@ for kind, grantors, names in (
     ("ORD", ("ROLE_DEFAULT",), "stage.declare fs.write proc.exec.validation validation.request review.submit finding.raise finding.resolve commit.propose escalation.raise"),
     ("ORD", ("HUMAN_DECISION", "POLICY"), "roadmap.import contract.author fs.delete net.egress.allowlist audit.read"),
     ("ORD", ("HUMAN_DECISION",), "roadmap.writeback contract.supersede fs.read.outside_scope"),
-    ("HUMAN", ("HUMAN_DECISION",), "project.create project.mode.set project.abandon project.archive policy.set policy.override budget.grant budget.extend stage.reject stage.abandon proc.exec.arbitrary net.egress.any secret.read finding.waive commit.publish decision.record audit.redact"),
+    ("HUMAN", ("HUMAN_DECISION",), "project.create project.mode.set project.ceiling.set project.abandon project.archive policy.set policy.override budget.grant budget.extend stage.reject stage.abandon proc.exec.arbitrary net.egress.any secret.read finding.waive commit.publish decision.record audit.redact"),
     ("KERNEL", (), "project.lifecycle.advance suspension.set suspension.clear stage.lifecycle.advance stage.satisfy contract.activate contract.revoke run.start run.abort worker.invoke recovery.reconcile snapshot.take validation.execute validation.attest review.attest review.attest.independent commit.authorize commit.apply escalation.resolve audit.append"),
     ("NEVER", (), "worker.delegate fs.read.outside_workspace fs.write.outside_scope commit.rewrite_history audit.rewrite"),
 ):

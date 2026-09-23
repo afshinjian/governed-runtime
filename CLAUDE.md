@@ -24,16 +24,19 @@ Rules:
   is unreachable rather than merely denied. Closing that needs an
   exercise-decision parameter plumbed from the CLI plus atomic consumption in
   the transition, mirroring relay_controller. Ungated egress is closed.
-- Validation execution does not check proc.exec.validation. transitions.py:1153
-  and :1158 declare it as the capability required by the validation
-  transitions; no require_authority call consumes that declaration. Same path
-  as FINDINGS-02 F02-001, not covered by it. Deferred from GR-17. FINDINGS-03
-  answered the cap= question: policy.resolve enforces required_capability but
-  had no production caller (F03-001). GR-28 closed F03-002 and F03-003, and
-  the §7.4 portion of F03-001 — COMMIT_INTENT transitions now enforce the
-  capability their row declares (14 of 145 rows). The other 131 rows, this
-  validation path among them, still consume no declaration, so F03-001 is
-  open. F04-004 is open and closes only when all of F03-001..003 close.
+- Validation execution now checks proc.exec.validation, for rows 7.1-2 and
+  7.1-3 only. transitions.py:1153 and :1158 declare it; execute_validation
+  proves it at guard:gr31_validation_exec_authority (GR-31 C8), immediately
+  ahead of guard:execute_network_egress so a denial leaves no
+  validation.executing event for recovery to reconcile. Same path as
+  FINDINGS-02 F02-001, not covered by it; was deferred from GR-17.
+  FINDINGS-03 answered the cap= question: policy.resolve enforces
+  required_capability but had no production caller (F03-001). GR-28 closed
+  F03-002 and F03-003, and the §7.4 portion of F03-001 — COMMIT_INTENT
+  transitions now enforce the capability their row declares (14 of 145 rows).
+  GR-31 adds these two. The other 129 rows still consume no declaration, so
+  F03-001 remains OPEN, and F04-004 is unaffected — it closes only when all of
+  F03-001..003 close.
 - GR-09: the missing-bwrap path is untested — this host has bwrap, so no test
   exercises the ERROR receipt. Verify before running on another host.
 - Storage v1→…→v5 (STORAGE_VERSION = 5 since GR-07) all refuse older schemas
@@ -95,11 +98,66 @@ Rules:
   refuses again on every later snapshot.
 - No per-stage mutation evidence file exists for GR-17, GR-23 or GR-24; their
   kills are persisted only as bin/mutate summary lines in
-  docs/evidence/recheck-20260916.txt. Of the committed JSON records, gr07 and
+  docs/evidence/recheck-20260916.txt. GR-31 does not join them:
+  docs/gr31-validation.md inlines every summary and states its one log root.
+  Of the committed JSON records, gr07 and
   gr08 inline their summaries and cite no logs; gr06 inlines summaries and also
   cites logs; gr06, gr09, gr10 and suspension cite full logs that exist only
   under the gitignored .evidence/ (gr09's paths are relative to
   .evidence/gr09/, with no root field).
+
+## Supervision gates
+GR-31 gives the runtime a governed, per-field, human-authorized path to
+provision a project, and makes the three SUPERVISED CONFIRM cells the first
+supervised pilot traverses refuse without the human act their row declares.
+Evidence: [GR-31 validation](docs/gr31-validation.md).
+
+- Provisioning is two operations, not one: `set_capability_ceiling` and
+  `grant_project_budget` (contract_controller.py). Each is one BEGIN IMMEDIATE
+  transaction that appends its event, consumes its decision and writes its
+  field together. Before GR-31 no production code wrote either field, so a
+  project created through `create_project` could activate nothing; every test
+  provisioned by writing the project row directly.
+- The ceiling decision is CONSUMED by provisioning, deliberately. `human_covers`
+  accepts a GRANT_CAPABILITY over PROJECT scoped PROJECT as an *activation
+  grant basis*, so a ceiling decision left VALID would both bound the ceiling
+  and confer everything in it. Activation needs its own, separate grant
+  decision (test_ceiling_decision_cannot_also_grant).
+- `project.ceiling.set` is the one register entry GR-31 adds (authority.py:26).
+  No DecisionKind member was added; DESIGN-03's proposed GRANT_BUDGET was NOT
+  added, and the initial budget grant is recorded as EXTEND_BUDGET, the only
+  budget-shaped member of the frozen enum. LEGAL_TRANSITIONS is unchanged.
+- CONFIRM is enforced on rows 5-1 (open_run, subject PROJECT — the run does not
+  exist yet), 7.2-1 (first invocation of a run, subject RUN) and 7.4-4
+  (authorize_commit, subject COMMIT_INTENT), through one predicate,
+  decision.require_confirmation. Row 6-2 was already enforced by
+  guard:gr06_activation_confirmation. No other row is gated.
+- Enforcement is the SUPERVISED column only. All three rows read AUTO under
+  AUTONOMOUS, so `confirmation_id` is required by the row, not by Python:
+  the keyword defaults to None and an autonomous project is asked for nothing.
+  Demanding it there would invent a cell the frozen matrix does not declare
+  (test_autonomous_rows_require_no_confirmation).
+- 7.2-1 is WHEN(FIRST_INVOCATION_OF_RUN, CONFIRM, AUTO). The confirmation is
+  asked once per run; over-applying it would deny a second invocation the row
+  declares AUTO.
+- A commit confirmation is snapshot-bound (COMMIT_INTENT ∈ SNAPSHOT_BOUND_SUBJECTS,
+  APPROVE ∈ SNAPSHOT_BOUND_KINDS), so a snapshot landing between recording it
+  and authorizing makes it STALE. Any driver must record the confirmation
+  immediately before the act it discharges, with no observation in between.
+  Provisioning decisions are *not* snapshot-bound and do not go STALE.
+- guard:gr31_preconditions_deferred is TEMPORARY. authorize_commit refuses any
+  non-empty review or validation precondition because B6 (commit.py:101-104
+  discards resolve_attestation's result, so a FAIL attestation discharges) and
+  B7 (a validation precondition is discharged by artifact existence, not by a
+  passing receipt) are both OPEN. It defers them; it closes neither, and
+  commit.py, review.py, rvw() and generic precondition resolution are
+  untouched. resolve_decision stays `lambda ref: False`, so a decisions
+  precondition still routes to BLOCKED. GR-33 must not bypass or weaken it.
+- B4 remains open: governed independent worker review is still unreachable
+  (one relay origin per controller; CodexProvider overrides no
+  relay_environment). Do not claim the production review leg is complete.
+- DESIGN-03 is neither revised nor frozen by GR-31 and no DESIGN-03 finding is
+  claimed closed. policy_digest provisioning is omitted; policy.set untouched.
 
 ## Design baseline
 design-01-frozen is the frozen design and is unchanged. `git diff

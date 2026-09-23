@@ -97,8 +97,14 @@ class ValidationController:
         self._assert_barrier_clear(run_id, 'executing validation')  # guard:execute_barrier
         self._assert_may_initiate_effect(run.project_id, 'executing validation')  # guard:effect_gate
         spec, operation = self._validation_spec(run_id, spec_id)
-        # Checked ahead of validation.executing, so a denial leaves no attempt
-        # for recovery to reconcile and no executor is ever built.
+        # Both checked ahead of validation.executing, so a denial leaves no
+        # attempt for recovery to reconcile and no executor is ever built.
+        # Rows 7.1-2 and 7.1-3 declare `proc.exec.validation` as the capability
+        # required to authorize or deny a validation (transitions.py:1153,
+        # :1158). The declaration existed and nothing consumed it: the same
+        # shape as `F03-001`, on the one path the supervised pilot executes.
+        # This closes it for those two rows and for no others.
+        self.require_authority(run_id, 'proc.exec.validation')  # guard:gr31_validation_exec_authority
         self._require_egress_authority(run_id, operation.network)  # guard:execute_network_egress
         snapshot = self.store.latest_snapshot(run.project_id)
         require(snapshot is not None and snapshot.completeness is Completeness.COMPLETE, 'validation needs a COMPLETE snapshot')  # guard:controller_snapshot

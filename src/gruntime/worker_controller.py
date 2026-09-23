@@ -8,11 +8,12 @@ import uuid
 from .authority import REGISTER, parse_ts
 from .canonical import canonical_json, digest_bytes, digest_json
 from .contracts import require
+from .decision import require_confirmation
 from .errors import BarrierViolation, CapabilityDenied, IntegrityViolation, PolicyDenied, GovernedRuntimeError
 from .gate import AFTER_INVOKE_BEFORE_RECEIPT, gate
-from .models import (Attribution, Budget, Claim, Completeness, EpistemicClass, Independence,
-    InvocationStatus, MutationOp, MutationProposal, OutcomeStatus, ReconciliationState,
-    SuspensionState, TerminationReason, Usage, WorkerInvocation, WorkerRole)
+from .models import (Attribution, Budget, Claim, Completeness, DecisionSubjectKind, EpistemicClass,
+    GovernanceMode, Independence, InvocationStatus, MutationOp, MutationProposal, OutcomeStatus,
+    ReconciliationState, SuspensionState, TerminationReason, Usage, WorkerInvocation, WorkerRole)
 from .provider import (DISPATCH_CAPABILITIES, GovernedProvider, InvocationRequest,
     ProviderError, ScopeView, ToolCall, ToolDescriptor, WorkerProvider, status_for_outcome)
 from .repository import effective_index
@@ -71,7 +72,20 @@ class WorkerController:
         return run, snapshot
 
     def create_invocation(self, run_id, *, prompt, provider_id=None, binding_id='default',
-                          context_refs=(), author_invocation_id=None):
+                          context_refs=(), author_invocation_id=None, confirmation_id=None):
+        """Mint a `WorkerInvocation` at `PENDING`. Row 7.2-1.
+
+        The row's `SUPERVISED` cell is `WHEN(FIRST_INVOCATION_OF_RUN, CONFIRM,
+        AUTO)` (transition-matrix.md:305): a human confirms that this run
+        starts putting a worker to work, and every later invocation of the
+        same run proceeds on that one act. So the confirmation is asked for
+        exactly once per run, and asking it again would deny a second
+        invocation the frozen row declares `AUTO`. Under `AUTONOMOUS` the cell
+        is `AUTO` throughout and nothing is asked.
+
+        The subject is the `RUN`: the run exists by now, and it is what the
+        human is being asked about.
+        """
         run, snapshot = self._worker_gate(run_id)
         contract, activation = self._worker_contract(run_id)
         provider_id = provider_id or self.provider.describe().provider_id
@@ -83,6 +97,10 @@ class WorkerController:
         require(binding_id in {b.binding_id for b in descriptor.bindings}, 'UNKNOWN_BINDING', PolicyDenied)  # guard:gr07_binding
         prior = self.store.list_invocations(run_id)
         require(len(prior) < contract.budget_ceiling['worker_invocations'], 'worker budget exhausted', PolicyDenied)  # guard:gr07_invocation_budget
+        confirmation = None
+        if not prior and self.store.get_project(run.project_id).governance_mode is GovernanceMode.SUPERVISED:
+            confirmation = self.store.get_decision(confirmation_id) if confirmation_id else None
+            require_confirmation(confirmation, project_id=run.project_id, subject_kind=DecisionSubjectKind.RUN, subject_id=run_id, row='7.2-1', now=now_ts())  # guard:gr31_first_invocation_confirm
         refused = any(i.provider_id == provider_id and i.execution_binding == binding_id
             and any(r.termination_reason is TerminationReason.REFUSAL for r in self.store.list_worker_receipts(i.invocation_id)) for i in prior)
         require(not refused, 'refused binding cannot be retried in this run', PolicyDenied)  # guard:gr07_refusal_retry
@@ -143,12 +161,14 @@ class WorkerController:
         db = self.store.connection
         db.execute('BEGIN IMMEDIATE')
         try:
-            self._append(run.project_id, event_type='invocation.created', epistemic_class=EpistemicClass.AUTHORITY,
+            created = self._append(run.project_id, event_type='invocation.created', epistemic_class=EpistemicClass.AUTHORITY,
                 subject={'invocation_id': invocation_id, 'run_id': run_id},
                 payload=dict(idempotency_key=request.idempotency_key, request_digest=ref.digest,
                     controller_epoch=project.controller_epoch, activation_id=activation.activation_id,
                     author_invocation_id=author_invocation_id), capability_used='worker.invoke')
             self.store.put_invocation(invocation, run.project_id)
+            if confirmation is not None:
+                self._consume_decision(run.project_id, confirmation, discharged=created)
             db.execute('COMMIT')
         except BaseException:
             db.execute('ROLLBACK')

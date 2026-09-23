@@ -28,7 +28,12 @@ def egress_operation(network, **changes):
 def granted_run(c, project, capability):
     """A second run whose activation actually grants `capability`."""
     run = Controller.open_run(c, project)  # unpatched: no legacy provisioning
-    provision(c, run, capability_request=['fs.read', 'fs.write', 'commit.propose', capability],
+    # `proc.exec.validation` is what rows 7.1-2/7.1-3 declare and what
+    # `execute_validation` proves (GR-31 C8). This run is the one that reaches
+    # the executor, so it legitimately needs it; the refusal tests above use
+    # the legacy run and still deny on the egress capability alone.
+    provision(c, run, capability_request=['fs.read', 'fs.write', 'commit.propose',
+                                          'proc.exec.validation', capability],
               policy_grantable=(capability,))
     return run
 

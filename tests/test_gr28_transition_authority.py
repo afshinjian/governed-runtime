@@ -26,6 +26,7 @@ from gruntime.models import (
     AuthMethod,
     CommitIntentStatus,
     CommitPreconditions,
+    Ref,
 )
 from gruntime.provider import RECOVERY_CAPABILITIES
 from gruntime.transitions import ORIGIN, Axis, rules_for
@@ -182,12 +183,18 @@ def test_the_blocked_exit_of_authorize_is_labelled_by_row_7_4_2(commits):
     this row. The edge decides the label, not the method that took it.
     """
     c, project, run = commits
+    # The vehicle is a *decision* precondition, not a validation one: GR-31
+    # `Q2a` refuses review- and validation-backed preconditions outright
+    # (`guard:gr31_preconditions_deferred`), so those no longer reach any
+    # transition. `resolve_decision` remains `lambda ref: False` (`Q4`), so a
+    # decision precondition is permanently unmet and takes exactly the
+    # unmet-precondition exit this test is about.
     intent = c.propose_commit(
         run,
         path="gated.txt",
         content="gated\n",
         message="Add gated",
-        preconditions=CommitPreconditions(validations=("sha256:" + "0" * 64,)),
+        preconditions=CommitPreconditions(decisions=(Ref("HumanDecision", "dec-unmet"),)),
     )
     c.authorize_commit(intent.intent_id)
 

@@ -27,11 +27,12 @@ from dataclasses import asdict
 from typing import Mapping, Optional, Sequence
 
 from .contracts import require
-from .errors import IntegrityViolation
+from .errors import CapabilityDenied, IntegrityViolation
 from .canonical import digest_json
 from .models import (
     ActorKind,
     ActorRef,
+    AuthMethod,
     DecisionKind,
     DecisionState,
     DecisionSubjectKind,
@@ -102,6 +103,111 @@ def require_principal_key(decided_by: ActorRef, where: str) -> None:
     missing.
     """
     require(decided_by.actor_kind is not ActorKind.HUMAN or bool(decided_by.principal_key_id), f"a HumanDecision decided by a HUMAN must name the principal key it was made with: {where} has actor_id={decided_by.actor_id!r} with principal_key_id={decided_by.principal_key_id!r} (domain-model.md:58, HD-INV-1)", IntegrityViolation)  # guard:decision_principal_key_iff
+
+
+#: Where each `CONFIRM` cell this module enforces is written down. The row is
+#: cited by the refusal so a denial names the frozen line it comes from rather
+#: than the code that raised it.
+CONFIRM_ROWS: dict[str, str] = {
+    "5-1": "transition-matrix.md:189",
+    "7.2-1": "transition-matrix.md:305",
+    "7.4-4": "transition-matrix.md:349",
+}
+
+
+def confirmation_admits(
+    decision: Optional[HumanDecision],
+    *,
+    project_id: str,
+    subject_kind: DecisionSubjectKind,
+    subject_id: str,
+    now: datetime,
+) -> bool:
+    """Whether `decision` is the human act a `CONFIRM` cell declares.
+
+    `CONFIRM` in the transition matrix's policy vocabulary (§1.1) is "a human
+    confirms this transition before it happens", and the record of that is an
+    `APPROVE` over the subject the transition is about. Every conjunct below
+    is one of the things that makes such a record authority rather than a row
+    in a table:
+
+    * it is an `APPROVE`, over **this** project and **this** subject — an
+      approval of something else discharges nothing here;
+    * the decider is an authenticated, named human (`HD-INV-1`,
+      domain-model.md:58), with the signature itself where they authenticate
+      by `SIGNATURE` (domain-model.md:710);
+    * they were shown something (`HD-INV-2`) and the nonce is a real one
+      (`HD-INV-3`);
+    * `decision_hash` still recomputes, so the authority-bearing fields were
+      not edited between recording and presenting;
+    * and the single derivation says `VALID` — the only state that is
+      authority (`HD-INV-4`).
+
+    Written as the same shape as `authority.human_covers`, which asks the
+    sibling question for a `GRANT_CAPABILITY` basis, so the two read alike and
+    neither can quietly admit what the other refuses. A predicate rather than
+    a raiser, so `require_confirmation` has exactly one deletable line.
+
+    Staleness is not passed in. `take_snapshot` persists `STALE` onto every
+    superseded decision as it publishes the observation
+    (`_stale_decisions_against`), and `derive_decision_state` treats it as
+    terminal, so a confirmation overtaken by a newer reality is already
+    `STALE` on the row by the time it is read back.
+    """
+    if decision is None:
+        return False
+    actor = decision.decided_by
+    authenticated = (
+        actor.actor_kind is ActorKind.HUMAN
+        and bool(actor.principal_key_id)
+        and actor.auth_method in (AuthMethod.SESSION, AuthMethod.SIGNATURE, AuthMethod.MTLS)
+        and decision.auth_method == actor.auth_method
+        and (actor.auth_method is not AuthMethod.SIGNATURE or bool(decision.signature))
+    )
+    return (
+        authenticated
+        and decision.project_id == project_id
+        and decision.decision_kind is DecisionKind.APPROVE
+        and decision.subject_kind is subject_kind
+        and decision.subject_id == subject_id
+        and bool(decision.evidence_shown)
+        and 16 <= len(decision.nonce) <= 64
+        and decision.decided_at <= now
+        and decision.decision_hash == decision_content_hash(decision)
+        and derive_decision_state(decision, now=now) is DecisionState.VALID
+    )
+
+
+def require_confirmation(
+    decision: Optional[HumanDecision],
+    *,
+    project_id: str,
+    subject_kind: DecisionSubjectKind,
+    subject_id: str,
+    row: str,
+    now: datetime,
+) -> HumanDecision:
+    """Refuse unless `decision` is the `CONFIRM` that row declares.
+
+    One predicate behind every `CONFIRM` cell the runtime enforces, for the
+    reason `require_principal_key` is one predicate behind three call sites:
+    three restatements of the same rule drift apart, and the row that drifts
+    is the one nobody tested. The call sites differ only in the subject the
+    approval must be over and the row they cite.
+
+    The caller decides *whether* the cell applies — `CONFIRM` is the
+    `SUPERVISED` column, and every row here reads `AUTO` under `AUTONOMOUS`,
+    so asking this of an autonomous project would enforce a cell the frozen
+    matrix does not declare. What this decides is whether the act presented is
+    the human act, and it never looks one up: the caller hands over what it
+    was given, and a caller that was given nothing hands over `None`.
+
+    Raises `CapabilityDenied`: a transition whose policy verdict is `CONFIRM`
+    and which has no confirmation is an operation its caller has no authority
+    for, not an unmet precondition.
+    """
+    require(confirmation_admits(decision, project_id=project_id, subject_kind=subject_kind, subject_id=subject_id, now=now), f"row {row} is CONFIRM under SUPERVISED ({CONFIRM_ROWS.get(row, 'transition-matrix.md')}): it needs a live APPROVE by an authenticated, named human over {subject_kind.value} {subject_id}, and {'none was cited' if decision is None else repr(decision.decision_id) + ' is not one'}", CapabilityDenied)  # guard:gr31_confirmation_admits
+    return decision
 
 
 def is_snapshot_bound(

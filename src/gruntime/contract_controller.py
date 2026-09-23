@@ -9,8 +9,9 @@ from .canonical import canonical_json, digest_json
 from .contracts import StageContract, new_id, require
 from .decision import decision_content_hash, derive_decision_state
 from .errors import CapabilityDenied, IntegrityViolation, PolicyDenied, ProtectedPathViolation
-from .models import (ActorKind, AuthMethod, Completeness, DecisionKind,
-    DecisionState, EpistemicClass, EscalationSeverity, EscalationTrigger)
+from .models import (ActorKind, AuthMethod, Budget, Completeness, DecisionKind,
+    DecisionScope, DecisionState, DecisionSubjectKind, EpistemicClass,
+    EscalationSeverity, EscalationTrigger)
 from .store import now_ts
 from .scope import authorize_path
 
@@ -33,6 +34,160 @@ class ContractController:
             epistemic_class=EpistemicClass.CLAIM, subject={"contract_id": contract.contract_id},
             payload=contract.document(), capability_used="contract.author")
         return contract
+
+    def _provisioning_decision_admits(self, decision, project_id, *, decision_kind, now):
+        """The conjuncts every per-field provisioning decision must satisfy.
+
+        Shared by the ceiling and the budget so the two cannot drift apart:
+        they differ only in the `DecisionKind` the field's act is recorded as,
+        and in the field-specific conjunct each adds on top of this.
+
+        Subject `PROJECT`/`project_id` and scope `PROJECT`: provisioning is an
+        act over the whole project, and a decision scoped to one action or to
+        a stage is not authority for the bound every later contract is
+        resolved against. The authentication, evidence, nonce and hash
+        conjuncts are `human_covers`' — the same test the activation grant
+        basis is held to (`HD-INV-1`..`HD-INV-3`) — and the last is the single
+        derivation: only `VALID` is authority (`HD-INV-4`).
+        """
+        if decision is None:
+            return False
+        actor = decision.decided_by
+        authenticated = (actor.actor_kind is ActorKind.HUMAN and bool(actor.principal_key_id)
+            and actor.auth_method in (AuthMethod.SESSION, AuthMethod.SIGNATURE, AuthMethod.MTLS)
+            and decision.auth_method == actor.auth_method
+            and (actor.auth_method is not AuthMethod.SIGNATURE or bool(decision.signature)))
+        return (authenticated and decision.project_id == project_id
+            and decision.decision_kind is decision_kind
+            and decision.subject_kind is DecisionSubjectKind.PROJECT
+            and decision.subject_id == project_id
+            and decision.scope is DecisionScope.PROJECT
+            and bool(decision.evidence_shown) and 16 <= len(decision.nonce) <= 64
+            and decision.decided_at <= now
+            and decision.decision_hash == decision_content_hash(decision)
+            and derive_decision_state(decision, now=now) is DecisionState.VALID)
+
+    def _ceiling_decision_admits(self, decision, project_id, ceiling, now):
+        """A `GRANT_CAPABILITY` that names exactly the ceiling being set.
+
+        `grants == frozenset(ceiling)` rather than a superset: the human
+        decided *this* bound, and admitting a decision that named more would
+        install a ceiling wider than the one they approved.
+        """
+        return (self._provisioning_decision_admits(decision, project_id,
+                    decision_kind=DecisionKind.GRANT_CAPABILITY, now=now)
+                and decision.grants == frozenset(ceiling))
+
+    def _budget_decision_admits(self, decision, project_id, now):
+        """An `EXTEND_BUDGET` over the project.
+
+        `EXTEND_BUDGET` is the only budget-shaped member of the frozen
+        `DecisionKind` enum. DESIGN-03 §3 proposes a `GRANT_BUDGET` for the
+        initial grant; adding an enum member is a frozen-vocabulary change
+        this stage does not make, so the initial grant is recorded as the
+        budget decision the frozen enum has.
+        """
+        return self._provisioning_decision_admits(decision, project_id,
+            decision_kind=DecisionKind.EXTEND_BUDGET, now=now)
+
+    def set_capability_ceiling(self, project_id, *, ceiling, decision_id):
+        """Set `Project.capability_ceiling` from one human decision.
+
+        The first of the two per-field provisioning operations. Until it runs,
+        a project created through `create_project` has the model's default
+        empty ceiling, and `guard:gr06_activation_ceiling` refuses every
+        contract against it: `XC-8` requires `capability_request ⊆ ceiling`,
+        and nothing is a subset of nothing. That is the state the runtime
+        shipped in — a project could be created and then could do nothing —
+        and no production code wrote the field.
+
+        Per-field, not one combined provisioning act: the ceiling and the
+        budget are separate bounds, separately decided, and a single decision
+        covering both would make a human approving a budget also approve a
+        capability bound they were not asked about.
+
+        One `BEGIN IMMEDIATE` transaction. The event, the decision's
+        consumption and the field all land together or not at all: a ceiling
+        installed without the event that attests it is an authority bound no
+        audit accounts for, and a consumed decision without the ceiling would
+        spend the human's act on nothing.
+        """
+        require(self._genesis_admits(project_id), f"project {project_id} is mid-genesis: its creation transaction is open, and installing a capability ceiling would durably mutate a project that no commit has yet established", IntegrityViolation)  # guard:gr31_ceiling_pending_genesis
+        db = self.store.connection
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            record = self._set_capability_ceiling(project_id, ceiling, decision_id)
+            db.execute("COMMIT")
+            return record
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
+
+    def _set_capability_ceiling(self, project_id, ceiling, decision_id):
+        project = self.store.get_project(project_id)
+        now = now_ts()
+        ceiling = frozenset(ceiling)
+        require(all(c in REGISTER for c in sorted(ceiling)), f"a capability ceiling bounds the register's capabilities: {sorted(ceiling - set(REGISTER))} name nothing the register defines, and a bound over an unknown identifier is the unbacked label F03-003 condemned", PolicyDenied)  # guard:gr31_ceiling_registered
+        decision = self.store.get_decision(decision_id) if decision_id else None
+        require(self._ceiling_decision_admits(decision, project_id, ceiling, now), f"setting a project capability ceiling is project.ceiling.set, a HUMAN-class capability: it needs a live GRANT_CAPABILITY by an authenticated, named human over PROJECT {project_id}, scoped PROJECT, granting exactly the ceiling being set", CapabilityDenied)  # guard:gr31_ceiling_decision
+        event = self._append(project_id, event_type="project.ceiling_set",
+            epistemic_class=EpistemicClass.DECISION, subject={"project_id": project_id},
+            payload={"previous": sorted(project.capability_ceiling), "ceiling": sorted(ceiling)},
+            capability_used="project.ceiling.set", authority_ref=decision.decision_id,
+            actor=decision.decided_by)
+        # Consumed here, in this transaction, and for this reason: `human_covers`
+        # accepts a GRANT_CAPABILITY over PROJECT scoped PROJECT as an
+        # activation grant basis for any capability in `.grants`. Left VALID,
+        # the one decision that *bounds* the ceiling would also *confer* every
+        # capability in it, and the two-step containment `AX-4` rests on would
+        # collapse into one. `human_covers`' last conjunct requires VALID, so
+        # consuming it makes that impossible by construction rather than by
+        # convention.
+        self._consume_decision(project_id, decision, discharged=event)
+        # Re-read before writing: the two appends above advanced this
+        # project's `event_seq` and `event_head`, and putting back the row
+        # read before them would roll the chain state back to a seq the log
+        # has already used.
+        project = self.store.get_project(project_id)
+        project.capability_ceiling = ceiling
+        self.store.put_project(project)
+        return ceiling
+
+    def grant_project_budget(self, project_id, *, budget, decision_id):
+        """Set `Project.budget` from one human decision. Initial grant only.
+
+        The second per-field provisioning operation. `budget.grant`'s register
+        verb is "set initial Budget"; raising an existing one is
+        `budget.extend`, a different capability and a different act, and this
+        operation refuses it rather than quietly serving as both.
+        """
+        require(self._genesis_admits(project_id), f"project {project_id} is mid-genesis: its creation transaction is open, and granting a budget would durably mutate a project that no commit has yet established", IntegrityViolation)  # guard:gr31_budget_pending_genesis
+        db = self.store.connection
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            record = self._grant_project_budget(project_id, budget, decision_id)
+            db.execute("COMMIT")
+            return record
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
+
+    def _grant_project_budget(self, project_id, budget, decision_id):
+        project = self.store.get_project(project_id)
+        now = now_ts()
+        require(project.budget == Budget(), f"budget.grant sets a project's initial Budget; {project_id} already holds {asdict(project.budget)}, and raising it is budget.extend, a capability this operation does not exercise", PolicyDenied)  # guard:gr31_budget_initial_only
+        decision = self.store.get_decision(decision_id) if decision_id else None
+        require(self._budget_decision_admits(decision, project_id, now), f"granting a project budget is budget.grant, a HUMAN-class capability: it needs a live EXTEND_BUDGET by an authenticated, named human over PROJECT {project_id}, scoped PROJECT", CapabilityDenied)  # guard:gr31_budget_decision
+        event = self._append(project_id, event_type="project.budget_granted",
+            epistemic_class=EpistemicClass.DECISION, subject={"project_id": project_id},
+            payload={"previous": asdict(project.budget), "budget": asdict(budget)},
+            capability_used="budget.grant", authority_ref=decision.decision_id,
+            actor=decision.decided_by)
+        self._consume_decision(project_id, decision, discharged=event)
+        project = self.store.get_project(project_id)
+        project.budget = budget
+        self.store.put_project(project)
+        return budget
 
     def evaluate_grant_policy(self, project_id):
         """Persist evaluation of a human-authored, content-addressed policy.

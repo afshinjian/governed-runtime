@@ -158,11 +158,19 @@ def configure(ctx, upstream, certificate, **changes):
 
 
 def bridge_for(ctx):
-    c, _, run = ctx
+    c, project, run = ctx
     transport = Transport(ClaudeCodeProvider)
     provider = ClaudeCodeProvider(c.governance_dir/'workers', transport=transport, read_artifact=c.store.artifact_bytes)
     c.register_provider(provider)
-    inv = c.create_invocation(run, prompt=b'Use the relay', provider_id=provider.provider_id)
+    # Row 7.2-1 is CONFIRM on the first invocation of a run under SUPERVISED
+    # (transition-matrix.md:305), and `activate` above puts these projects in
+    # SUPERVISED. The confirmation is a real recorded HumanDecision over this
+    # run, exactly as GR-31 requires; nothing here weakens the gate.
+    confirmation = decision(c, project, kind=DecisionKind.APPROVE,
+                            subject_kind=DecisionSubjectKind.RUN, subject=run,
+                            scope=DecisionScope.RUN)
+    inv = c.create_invocation(run, prompt=b'Use the relay', provider_id=provider.provider_id,
+                              confirmation_id=confirmation.decision_id)
     request = c._request_for(inv)
     lease = WorkerLease('lease', inv.invocation_id, run, inv.controller_epoch, request.deadline_at, request.session_id)
     return InvocationBridge(c, inv, request, lease), inv, provider, transport

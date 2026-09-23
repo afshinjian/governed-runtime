@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from genesis_support import AUTONOMOUS, OWNER, create_project
-from gruntime.errors import IntegrityViolation
+from gruntime.errors import IntegrityViolation, PolicyDenied
 from gruntime.models import (
     CommitPreconditions,
     Independence,
@@ -70,6 +70,15 @@ def test_preconditions_reject_a_review_reference(h):
 
 
 def test_preconditions_accept_an_attestation_reference(h):
+    """A typed attestation reference is accepted into `CommitPreconditions`.
+
+    Authorizing on one is a separate question, and GR-31 `Q2a` now defers it:
+    `evaluate_preconditions` discards `resolve_attestation`'s result
+    (`commit.py:101-104`), so a `FAIL` attestation discharges a review exactly
+    as this passing one would, and `authorize_commit` refuses to meet such a
+    precondition hollowly (`B6`). The refusal is the current, deliberate
+    boundary; when `B6` closes, this becomes an authorization again.
+    """
     project_id, run_id, snapshot_id = _project(h)
     with h.controller(with_repo=True) as c:
         reviews = [_review(c, run_id, snapshot_id, Verdict.PASS) for _ in range(2)]
@@ -78,6 +87,7 @@ def test_preconditions_accept_an_attestation_reference(h):
         preconditions = CommitPreconditions(
             reviews=(Ref("ReviewAttestation", attestation.attestation_id),)
         )
+        assert preconditions.reviews[0].kind == "ReviewAttestation"
         intent = c.propose_commit(
             run_id,
             path="x.txt",
@@ -85,8 +95,9 @@ def test_preconditions_accept_an_attestation_reference(h):
             message="x",
             preconditions=preconditions,
         )
-        c.authorize_commit(intent.intent_id)
-        assert c.store.get_commit_intent(intent.intent_id).preconditions_met is True
+        with pytest.raises(PolicyDenied, match="discards the result"):
+            c.authorize_commit(intent.intent_id)
+        assert c.store.get_commit_intent(intent.intent_id).preconditions_met is not True
 
 
 def test_authorization_refuses_a_review_backed_precondition(h):
@@ -98,7 +109,12 @@ def test_authorization_refuses_a_review_backed_precondition(h):
         # Bypass the constructor the way a careless caller would, and check the
         # consuming path refuses it rather than trusting the stored value.
         c.store.force_precondition_reviews(intent.intent_id, [review.review_id])
-        with pytest.raises(IntegrityViolation):
+        # GR-31 `Q2a` refuses any review-backed precondition at an earlier
+        # boundary than the typed-reference check this test was written
+        # against, so the refusal arrives as `PolicyDenied`. The consuming
+        # path still refuses rather than trusting the stored value; it now
+        # refuses sooner and for a broader reason.
+        with pytest.raises(PolicyDenied, match="discards the result"):
             c.authorize_commit(intent.intent_id)
 
 
