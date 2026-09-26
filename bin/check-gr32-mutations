@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Run bin/mutate once per GR-32 guard, sequentially; retain its full evidence.
+
+Needles are built from the AST, never from the `# guard:` tag. A tag needle
+mutates only the comment and reports SURVIVED for a guard that is in fact
+killed (`CLAUDE.md` Tooling); `bin/check-gr31-mutations` is the model this
+follows, including its rule for block guards: where the tagged statement is
+the sole body of an `if`, the `if` is taken whole so the mutant stays
+importable. A guard that is not a single deletable statement orphans its body
+and reports ERROR (pytest exit 4), which proves nothing either way.
+
+No mutants run concurrently against this shared checkout. Allow at least ten
+minutes: `bin/mutate` runs the whole suite twice per guard — once mutated,
+once restored — and an interrupted run skips its restore trap and leaves the
+mutant in `src/`. After any interruption, run `git diff --quiet -- src` before
+anything else.
+
+Any SURVIVED or ERROR is a finding, not a pass: this stops at the first one and
+says where to look.
+"""
+import argparse
+import ast
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+#: Every file GR-32 added a guard to, relative to the repository root.
+#: `driver.py` is the stage's own module; `controller.py` carries the one `D6`
+#: guard, in `main()`; `bin/pilot-run` carries the four `GR32-F-002` guards
+#: that keep the credential out of the provider probe's environment, off its
+#: whole launch surface, out of what it printed and out of the report, and the
+#: two `GR32-F-004` guards that decide the re-exec by interpreter identity.
+FILES = ('src/gruntime/driver.py', 'src/gruntime/controller.py', 'bin/pilot-run')
+
+PREFIX = 'gr32_'
+
+
+def selected_guard(name, only):
+    if not name.startswith(PREFIX):
+        return False
+    return only is None or name in only
+
+
+def needle_for(lines, tree, parents, number):
+    """The whole statement carrying the guard, as bytes bin/mutate can find."""
+    start, end = number, number
+    nodes = [node for node in ast.walk(tree)
+             if isinstance(node, ast.stmt) and node.lineno == number]
+    if nodes:
+        node = min(nodes, key=lambda node: node.end_lineno - node.lineno)
+        parent = parents.get(node)
+        if isinstance(parent, ast.If) and parent.body == [node] and not parent.orelse:
+            node = parent
+        start, end = node.lineno, node.end_lineno
+    return ''.join(lines[start - 1:end]).rstrip('\n'), start
+
+
+def discover(only):
+    found = []
+    for filename in FILES:
+        path = ROOT / filename
+        source = path.read_text()
+        lines = source.splitlines(keepends=True)
+        tree = ast.parse(source)
+        parents = {child: parent
+                   for parent in ast.walk(tree)
+                   for child in ast.iter_child_nodes(parent)}
+        for number, line in enumerate(lines, 1):
+            match = re.search(r'# guard:([a-z0-9_]+)', line)
+            if not match or not selected_guard(match.group(1), only):
+                continue
+            needle, start = needle_for(lines, tree, parents, number)
+            found.append((match.group(1), path, start, needle))
+    return found
+
+
+def verify(found):
+    """Every needle occurs exactly once, is one statement, and deletes cleanly.
+
+    Checked before the first mutant runs, so an ERROR from an orphaned body is
+    never mistaken for a result that says something about the guard.
+    """
+    problems = []
+    for name, path, start, needle in found:
+        source = path.read_text()
+        if source.count(needle) != 1:
+            problems.append(f'{name}: needle occurs {source.count(needle)} times')
+            continue
+        try:
+            ast.parse(source.replace(needle, '# mutation: removed', 1))
+        except SyntaxError:
+            problems.append(f'{name}: deleting the needle leaves an unparseable module')
+    return problems
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--only', nargs='+',
+                        help='check only these guard names (default: every GR-32 guard)')
+    parser.add_argument('--list', action='store_true',
+                        help='print the guards that would be checked and exit')
+    args = parser.parse_args()
+    only = None if args.only is None else set(args.only)
+
+    found = discover(only)
+    if args.list:
+        for name, path, start, _ in found:
+            print(f'{name}\t{path.relative_to(ROOT)}:{start}')
+        return 0
+    if only is not None and len(found) != len(only):
+        missing = only - {name for name, _, _, _ in found}
+        print(f'No such guard: {sorted(missing)}', flush=True)
+        return 2
+    problems = verify(found)
+    if problems:
+        for problem in problems:
+            print(problem, flush=True)
+        return 2
+
+    evidence = ROOT / '.evidence'
+    evidence.mkdir(exist_ok=True)
+    results = []
+    for name, path, start, needle in found:
+        relative = path.relative_to(ROOT)
+        print(f'Checking {name} ({relative}:{start})', flush=True)
+        result = subprocess.run(
+            [str(ROOT / 'bin' / 'mutate'), str(relative), needle], cwd=ROOT)
+        results.append({'guard': name, 'file': str(relative), 'line': start,
+                        'passed': result.returncode == 0})
+        (evidence / 'gr32-mutations.json').write_text(
+            json.dumps(results, indent=2) + '\n')
+        if result.returncode != 0:
+            print(f'Stopped at {name}; inspect .evidence before continuing.',
+                  flush=True)
+            return result.returncode
+    print(f'All {len(results)} guards killed; every restored suite passed.',
+          flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

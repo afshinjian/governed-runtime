@@ -2799,25 +2799,87 @@ class Controller(WorkerController, ContractController, ValidationController, Rel
         return Settlement(state=state, escalation_id=escalation_id)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Entry point for `python -m gruntime.controller`.
+#: Every subcommand the legacy `main()` surface offers, mapped to whether it
+#: performs a governed effect that a `SUPERVISED` row requires a human act
+#: for. These six commands predate GR-31's `CONFIRM` enforcement and carry no
+#: confirmation plumbing: `invoke` cannot present row 7.2-1, `commit` cannot
+#: present row 7.4-4, and `validate` runs on a run that a supervised project
+#: could only have opened under row 5-1. The parser below is built from this
+#: mapping, so the gated set and the parser surface cannot drift apart (`D6`).
+LEGACY_COMMANDS: dict = {
+    "start": False,
+    "recover": False,
+    "snapshot": False,
+    "invoke": True,
+    "validate": True,
+    "commit": True,
+}
 
-    Parses the command line documented in the module docstring, opens the
-    store, runs the named command, and prints its JSON result on stdout.
+#: The legacy commands admissible only under `AUTONOMOUS`. Derived from the
+#: mapping rather than listed again.
+GATED_COMMANDS = frozenset(name for name, gated in LEGACY_COMMANDS.items() if gated)
 
-    This is the composition root: the only place that names concrete adapters.
+#: The commands GR-32 adds. They are the supervised composition path and are
+#: driven from `driver.py`; none of them is a legacy command, and the gate
+#: below does not apply to them because they present every human act their
+#: rows declare rather than proceeding without one.
+DRIVER_COMMANDS: dict = {
+    "pilot": "create, provision, activate, invoke, propose, authorize and apply, then stop",
+    "observe": "observe the workspace after materialization; discharges nothing",
+    "resume": "a new epoch, recover, report, and stop for the owner",
+}
+
+#: The one command that creates the project it works on, so `--project` names
+#: nothing yet when it runs.
+CREATING_COMMANDS = frozenset({"pilot"})
+
+
+def legacy_command_admits(store, command: str, project_id: Id) -> bool:
+    """Whether a legacy `main()` subcommand may run against this project.
+
+    `D6`. The three effecting commands have no confirmation parameter and no
+    presentation boundary, so under `SUPERVISED` they would drive rows 7.2-1
+    and 7.4-4 with `confirmation_id=None` and be refused by GR-31 — but only
+    *after* `Controller(...)` had built a live provider, `start` had bumped the
+    epoch and `controller.started` had been appended. A refusal that costs an
+    epoch and an event is not a structural refusal. This is asked in front of
+    all of that instead, and answers for the mode the project is actually in:
+    the historical crash and gate evidence runs `AUTONOMOUS` projects through
+    these commands and is untouched by it.
+
+    A command that is not gated is admitted without reading the project at
+    all, so `start`, `recover` and `snapshot` behave exactly as before,
+    including for a project that does not exist.
+    """
+    if command not in GATED_COMMANDS:
+        return True
+    return store.get_project(project_id).governance_mode is GovernanceMode.AUTONOMOUS
+
+
+def build_parser():
+    """The command line, built from `LEGACY_COMMANDS` and `DRIVER_COMMANDS`.
+
+    Built from the mappings rather than beside them: a command added to the
+    parser without a gating decision, or gated without being reachable, is the
+    drift `D6` forbids, and here it cannot happen because the subparsers *are*
+    the mappings.
     """
     import argparse
 
-    from .adapters.fake_provider import FakeProvider
-    from .adapters.git_repo import GitRepository
+    from .driver import BUDGET_FIELDS, DEFAULT_CREDENTIAL_HEADER, DEFAULT_CREDENTIAL_PREFIX
+    from .models import Budget
 
     parser = argparse.ArgumentParser(prog="gruntime.controller")
-    parser.add_argument("--db", required=True)
-    parser.add_argument("--artifacts", required=True)
-    parser.add_argument("--journal", required=True)
+    parser.add_argument("--db")
+    parser.add_argument("--artifacts")
+    parser.add_argument("--journal")
     parser.add_argument("--repo")
-    parser.add_argument("--project", required=True)
+    parser.add_argument("--project")
+    # No provider is hardcoded any more. `fake` keeps every historical
+    # AUTONOMOUS crash, lease and validation test on the journaling provider
+    # it has always used; `driver.build_provider` is where the concrete
+    # adapters are named.
+    parser.add_argument("--provider", default="fake")
     parser.add_argument(
         "--lease-ttl-ms",
         type=int,
@@ -2828,37 +2890,105 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    legacy = {name: subparsers.add_parser(name) for name in LEGACY_COMMANDS}
 
-    subparsers.add_parser("start")
-    subparsers.add_parser("recover")
-    subparsers.add_parser("snapshot")
+    legacy["invoke"].add_argument("--run", required=True)
+    legacy["invoke"].add_argument("--prompt", default="work")
 
-    invoke_parser = subparsers.add_parser("invoke")
-    invoke_parser.add_argument("--run", required=True)
-    invoke_parser.add_argument("--prompt", default="work")
+    legacy["validate"].add_argument("--run", required=True)
+    legacy["validate"].add_argument("--spec", required=True)
 
-    validate_parser = subparsers.add_parser("validate")
-    validate_parser.add_argument("--run", required=True)
-    validate_parser.add_argument("--spec", required=True)
+    legacy["commit"].add_argument("--run", required=True)
+    legacy["commit"].add_argument("--path", required=True)
+    legacy["commit"].add_argument("--content", required=True)
+    legacy["commit"].add_argument("--message", default="governed change")
 
-    commit_parser = subparsers.add_parser("commit")
-    commit_parser.add_argument("--run", required=True)
-    commit_parser.add_argument("--path", required=True)
-    commit_parser.add_argument("--content", required=True)
-    commit_parser.add_argument("--message", default="governed change")
+    driver = {name: subparsers.add_parser(name, help=help_text)
+              for name, help_text in DRIVER_COMMANDS.items()}
+    for name, sub in driver.items():
+        # Who is answering. `record_decision` refuses a HUMAN actor with no
+        # principal key, so both are required of every driver entry.
+        sub.add_argument("--owner", required=True)
+        sub.add_argument("--owner-key", required=True)
+        sub.add_argument("--owner-auth", default="SESSION",
+                         choices=("SESSION", "SIGNATURE", "MTLS"))
+        sub.add_argument("--workspace", required=True)
+        sub.add_argument("--governance-root", required=True)
+    # Pilot-specific values are inputs, never constants in `src/` (`D5`).
+    pilot = driver["pilot"]
+    pilot.add_argument("--name", required=True)
+    pilot.add_argument("--slug", required=True)
+    pilot.add_argument("--objective", required=True)
+    pilot.add_argument("--allow-path", required=True, action="append", default=[])
+    pilot.add_argument("--exclude-path", action="append", default=[])
+    pilot.add_argument("--capability", required=True, action="append", default=[])
+    pilot.add_argument("--worker-role", required=True)
+    pilot.add_argument("--prompt", required=True)
+    pilot.add_argument("--commit-message", required=True)
+    pilot.add_argument("--origin", required=True)
+    pilot.add_argument("--secret-name", required=True)
+    pilot.add_argument("--secret-env", required=True,
+                       help="the NAME of the environment variable holding the credential")
+    pilot.add_argument("--credential-header", default=DEFAULT_CREDENTIAL_HEADER)
+    pilot.add_argument("--credential-prefix", default=DEFAULT_CREDENTIAL_PREFIX)
+    pilot.add_argument("--base-revision")
+    pilot.add_argument("--deadline-ms", type=int, default=3600000)
+    # `GR32-F-006`: one required flag per `Budget` field, typed as the model
+    # types it. No default: the pilot's budget is the owner's input.
+    for name in BUDGET_FIELDS:
+        pilot.add_argument(f"--budget-{name.replace('_', '-')}", dest=f"budget_{name}",
+                           required=True, type=type(getattr(Budget(), name)))
+    pilot.add_argument("--validation-spec", default="check")
+    pilot.add_argument("--validation-operation", default="pilot.check")
+    pilot.add_argument("--validation-version", default="1.0.0")
+    pilot.add_argument("--validation-argv", action="append", default=[])
+    pilot.add_argument("--validation-cwd")
+    pilot.add_argument("--validation-timeout-ms", type=int, default=60000)
+    driver["observe"].add_argument("--run")
+    driver["observe"].add_argument("--validation-spec-id")
+    return parser
 
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Entry point for `python -m gruntime.controller`.
+
+    Parses the command line, opens the store, runs the named command, and
+    prints its JSON result on stdout.
+
+    This is the composition root. The supervised orchestration half of it lives
+    in `driver.py`, which this delegates to: `pilot`, `observe` and `resume`
+    are that driver, and the six legacy commands are what the runtime shipped
+    with. No provider is hardcoded any more — `--provider` selects one, and
+    `driver.build_provider` is where the concrete adapters are named.
+    """
+    from .adapters.git_repo import GitRepository
+    from .driver import build_provider, drive
+
+    parser = build_parser()
     args = parser.parse_args(argv)
+    for name in ("db", "artifacts", "journal"):
+        if args.command in LEGACY_COMMANDS and getattr(args, name) is None:
+            parser.error(f"--{name} is required for {args.command}")
+    if args.command not in CREATING_COMMANDS and not args.project:
+        parser.error(f"--project is required for {args.command}")
+
+    if args.command in DRIVER_COMMANDS:
+        report, status = drive(args)
+        print(json.dumps(report))
+        return status
 
     store = StateStore.open(Path(args.db))
     try:
+        project_id = args.project
+        require(legacy_command_admits(store, args.command, project_id), f"{args.command!r} is a legacy command with no confirmation plumbing: it cannot present rows 5-1, 7.2-1 or 7.4-4, and project {project_id} is SUPERVISED. The supervised composition path is the GR-32 driver ({sorted(DRIVER_COMMANDS)}); this refuses before the controller is built, before the epoch is bumped and before controller.started is appended", PolicyDenied)  # guard:gr32_legacy_command_mode
         controller = Controller(
             store=store,
             artifacts=ArtifactStore(Path(args.artifacts)),
-            provider=FakeProvider(Path(args.journal)),
+            provider=build_provider(args.provider, journal_dir=Path(args.journal),
+                                    read_artifact=store.artifact_bytes),
             repo=GitRepository(Path(args.repo)) if args.repo else None,
             lease_ttl_ms=args.lease_ttl_ms,
         )
-        project_id = args.project
         epoch = controller.start(project_id)
         result: dict = {"project_id": project_id, "controller_epoch": epoch}
 

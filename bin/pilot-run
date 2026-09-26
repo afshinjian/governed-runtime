@@ -1,33 +1,30 @@
 #!/usr/bin/env python3
-"""Preflight the first supervised pilot, using only the throwaway repository.
+"""Preflight the first supervised pilot. Observes; performs no transition.
 
-This pilot is BLOCKED before registration, and what blocks it is **not** a
-missing transport. An earlier version of this script said the only shipped
-transport was ProcessTransport; that was already untrue when it was written.
-`WorkerRelayTransport` (`adapters/relay_process.py`), `InferenceRelay` and
-`RelayController.configure_inference_relay` ship and are tested, and were
-added in the same commit as this file (`git show --stat 361e06e`). Anyone
-acting on the old claim would rebuild a transport that already exists, which
-is the single most likely wrong turn out of here.
+What this checks, and nothing more: that the throwaway target is the
+repository the owner says it is, at the revision they say it is, holding the
+tracked files they say it holds, with no local changes; that the governance
+root does not already exist; that the selected provider's executable is on
+`PATH`; and that the credential variable they named holds a credential the
+relay will accept. Every one of those is an observation.
 
-What is actually missing is the composition root: `controller.py`'s `main()`
-hardcodes `FakeProvider` and has no command for project creation, ceiling or
-budget provisioning, decision recording, contract authoring or activation, run
-allocation, relay configuration, invoke, propose/authorize/apply, snapshot or
-validate — and no way to pass `protocol_headers=ClaudeCodeProvider.relay_headers`
-into `configure_inference_relay`. That driver is GR-32; the live run is GR-33.
+It is not the pilot. The supervised composition root is `gruntime.driver`,
+reached through `python -m gruntime.controller pilot`, and running it is
+GR-33. This script performs no governed transition, records no decision,
+creates no store and opens no relay, so there is nothing here for a human to
+approve and nothing here that could fabricate an approval.
 
-GR-31 supplied the authority surface underneath both: governed per-field
-provisioning (`set_capability_ceiling`, `grant_project_budget`) and enforced
-`SUPERVISED` `CONFIRM` on rows 5-1, 7.2-1 and 7.4-4. A driver must therefore
-record a real `HumanDecision` for each confirmed step and never fabricate one.
+What it used to say is no longer true and has been removed. It asserted that
+no composition root existed and that `main()` hardcodes `FakeProvider`; GR-32
+added the first and removed the second. It also probed Claude Code's own
+credential store in the user's home directory. It does not, and neither does
+any file under `src/`: under `D2` a credential is named by an environment
+variable and is never discovered, never read from a file, and never reported —
+not its value, not its length, not a fragment of it.
 
-Run: bin/pilot-run
-Exit 2 means a missing prerequisite; exit 1 means an invalid pilot target.
-The JSON report distinguishes requested transitions from observed execution.
-No runtime transition is performed, so no human approval is fabricated. Do not
-replace this refusal with an unsandboxed subprocess, a fixture, or a
-manufactured receipt.
+Exit 0: every precondition observed to hold. Exit 1: a precondition does not
+hold, and the JSON report says which. Exit 2: the invocation itself is
+malformed. Nothing here is repaired, created or deleted.
 """
 
 from __future__ import annotations
@@ -42,135 +39,381 @@ import sys
 
 
 RUNTIME = Path(__file__).resolve().parents[1]
-TARGET = Path('/tmp/pilot-sandbox')
-DATABASE = Path('/tmp/pilot-db')
-BASE = '27e6c88'
-TRANSITIONS = (
-    ('register_project', 'project.create'),
-    ('take_reality_snapshot', 'snapshot.take'),
-    ('activate_stage_contract', 'contract.activate'),
-    ('dispatch_claude_code_implementer', 'worker.invoke'),
-    ('execute_catalog_validation', 'validation.execute'),
-    ('propose_commit_intent', 'commit.propose'),
-    ('authorize_commit_intent', 'commit.authorize'),
-    ('apply_commit_intent_gr10', 'commit.apply'),
+VENV = RUNTIME / '.venv'
+INTERPRETER = VENV / 'bin' / 'python'
+
+
+def running_in_project_venv() -> bool:
+    """Whether this interpreter is executing *in* the project's virtualenv.
+
+    `GR32-F-004`. Decided by the interpreter's own runtime identity: `site`
+    sets `sys.prefix` to a virtualenv's root only when it has activated that
+    virtualenv, i.e. put its `site-packages` on the path. A bare `python3` has
+    its installation prefix (`/usr`), and so does one started with `-S`, which
+    never activates anything. No environment variable this script reads can
+    make that true: an interpreter for which it holds is the project
+    interpreter, dependencies and all, however it was launched. `PYTHONHOME`
+    naming the virtualenv does not start at all (the virtualenv has no
+    standard library); `PYTHONEXECUTABLE` or `exec -a` naming its `bin/python`
+    make `site` activate the virtualenv for real, so what they produce *is* an
+    interpreter in it. Nothing is compared against a value a caller supplies.
+    """
+    return Path(sys.prefix).resolve() == VENV.resolve()
+
+
+def reexec_under_project_interpreter() -> None:
+    """Run under the interpreter that has the runtime's dependencies.
+
+    The credential check below is `driver.preflight_credential` itself rather
+    than a second implementation of it, so this script imports `gruntime` —
+    and `gruntime` needs the project's dependencies, which the bare `python3`
+    on `PATH` does not have. Rather than reimplement the check (a second
+    opinion that could disagree with the one the driver will actually apply at
+    step 12), re-exec once under the project interpreter, located relative to
+    this file rather than by an absolute path that would be true on one
+    machine.
+
+    "Already under it" is `running_in_project_venv` — runtime identity, not a
+    marker. `GR32-F-004`: the environment marker this used to set and honour
+    is gone, so `GRUNTIME_PILOT_REEXEC`, whatever a caller sets it to, is read
+    by nothing and has no authority.
+
+    The one loop guard is the process's own launch path. The exec below
+    launches `INTERPRETER` by that path, so the child's `sys.executable` is
+    `INTERPRETER` and it never execs again, even should that interpreter fail
+    to activate the virtualenv. Such a child runs on, fails to import the
+    runtime, and reports a BLOCKED preflight rather than a traceback
+    (`inspect_credential`), never a READY one.
+    """
+    if not INTERPRETER.is_file() or running_in_project_venv():  # guard:gr32_reexec_identity
+        return
+    if Path(sys.executable) == INTERPRETER:  # guard:gr32_reexec_once
+        return
+    os.execv(str(INTERPRETER), [str(INTERPRETER), str(Path(__file__).resolve()),
+                                *sys.argv[1:]])
+
+
+#: The system directories a version probe's `PATH` may name besides the
+#: provider's own. Fixed here, never read from the caller.
+PROBE_SYSTEM_PATH = ('/usr/local/bin', '/usr/bin', '/bin')
+
+#: The working directory every provider probe runs in.
+PROBE_CWD = '/tmp'
+
+
+def probe_environment(executable: str) -> dict:
+    """The environment a provider's `--version` probe runs with. Nothing else.
+
+    `GR32-F-002`. The probe used to inherit this process's whole environment,
+    and so the credential variable the owner named, and it copied the
+    executable's stdout into the report: a provider that echoed its
+    environment put the secret in a READY report. The second remediation
+    reduced that to `PATH` and a fixed locale, but forwarded the caller's
+    `PATH` verbatim, and closure review put the credential in a `PATH` entry.
+
+    Built from the already-resolved executable alone, so nothing of the
+    caller's environment is read here at all. The executable is launched by
+    its absolute path and needs no `PATH` to be found; what it runs in turn —
+    the `node` a `#!/usr/bin/env node` shim names, the utilities a shell
+    script calls — is looked up on the executable's own directory, its link
+    target's directory and `PROBE_SYSTEM_PATH`, in that order. Every one of those is checked again,
+    with everything else about the launch, by `refuse_secret_bearing_launch`.
+    """
+    directories = [os.path.dirname(executable),
+                   os.path.dirname(os.path.realpath(executable)), *PROBE_SYSTEM_PATH]
+    return {'PATH': ':'.join(dict.fromkeys(directories)), 'LC_ALL': 'C'}
+
+
+def refuse_secret_bearing_launch(secret: str, argv, environment, cwd) -> None:
+    """Refuse a provider probe whose launch surface holds the credential.
+
+    `GR32-F-002`, the pre-launch invariant. Checked immediately before the
+    probe starts, over everything the child can learn about how it was
+    launched: every argv string (the executable's path is `argv[0]`), that
+    path's link target, every environment key and value — `None` meaning
+    what `subprocess` would then pass, this process's own environment — and
+    the working directory. Any occurrence of the value refuses the launch
+    outright: nothing is normalized, encoded, truncated or redacted to let it
+    proceed, and the refusal is fixed text that repeats none of it.
+    """
+    effective = os.environ if environment is None else environment
+    surface = [*argv, os.path.realpath(argv[0]), cwd,
+               *effective.keys(), *effective.values()]
+    if carries_secret(secret, surface):
+        raise ValueError('The provider probe\'s launch surface — its executable path, '
+                         'arguments, environment or working directory — contained the '
+                         'value of the credential variable; the probe was not launched '
+                         'and nothing from it is repeated here.')
+
+
+def report_strings(value):
+    """Every string in `value` — keys and values, at any depth — as it is.
+
+    The semantic strings, not their serialization: `GR32-F-002`'s second
+    reproduction was a credential containing `"`, which `json.dumps` writes as
+    `\\"`, so a substring search over serialized text never saw it while the
+    parsed report held it whole.
+    """
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from report_strings(key)
+            yield from report_strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from report_strings(item)
+
+
+def carries_secret(secret: str, *texts) -> bool:
+    """Whether any of `texts` — raw strings or report structures — holds `secret`.
+
+    Checked against the value the named variable actually holds, never a
+    known fixture, as a plain substring of each raw string. Stdlib only, and
+    deliberately not the runtime's `SecretGuard`: this is the check that must
+    still hold when the runtime is not importable, which is itself a report
+    this script emits (`inspect_credential`).
+    """
+    return bool(secret) and any(secret in text for item in texts
+                                for text in report_strings(item))
+
+
+def refuse_secret_bearing_output(secret: str, completed) -> None:
+    """Refuse a provider probe whose raw output holds the credential.
+
+    `GR32-F-002`. The provider's stdout and stderr are untrusted raw strings,
+    checked before any of them is put into a report object. The refusal names
+    what happened and repeats nothing the provider printed.
+    """
+    if carries_secret(secret, completed.stdout, completed.stderr):
+        raise ValueError('The provider\'s --version output contained the value of the '
+                         'credential variable; the probe output is withheld and '
+                         'nothing from it is repeated here.')
+
+
+def secret_free(report: dict, text: str, secret: str) -> tuple:
+    """`(report, text)` unchanged, or a BLOCKED report that repeats nothing of it.
+
+    `GR32-F-002`. The last check before anything is printed, against the value
+    the named variable actually holds. It asks two questions and emits only
+    when both answers are no: does any string *in* the report — every key and
+    value, as parsed, not as serialized — contain the credential; and does the
+    exact `text` about to be printed contain it (an escape can spell the
+    credential in output even where no one string holds it). A report failing
+    either is replaced by one that says why and carries none of the original's
+    text: its wording is fixed, so it discloses nothing of the value.
+    """
+    if not carries_secret(secret, report, text):
+        return report, text
+    blocked = {'mode': report.get('mode'), 'stage': report.get('stage'),
+               'state': 'BLOCKED', 'blocked_before': 'project.create',
+               'runtime_transitions_performed': 0,
+               'reason': 'The preflight report would have contained the value of the '
+                         'credential variable it was given; it is withheld whole and '
+                         'nothing from it is repeated here.'}
+    return blocked, json.dumps(blocked, indent=2)
+
+#: The `D5` values this preflight needs, each one an argument. None of them is
+#: a constant here, and none of them is a constant in `src/`.
+REQUIRED = ('target', 'governance_root', 'base_revision', 'objective',
+            'allow_path', 'provider', 'origin', 'secret_name', 'secret_env')
+
+#: The steps the GR-32 driver takes, in the order it takes them, so this report
+#: names the sequence a reader is about to authorize rather than a guess at it.
+SEQUENCE = (
+    ('project.create', 'project.create'),
+    ('controller.start', 'controller.start'),
+    ('project.ceiling.set', 'project.ceiling.set'),
+    ('budget.grant', 'budget.grant'),
+    ('run.start', 'run.start'),
+    ('contract.author', 'contract.author'),
+    ('capability.grant', 'decision.record'),
+    ('contract.approve', 'decision.record'),
+    ('contract.activate', 'contract.activate'),
+    ('validation.bind', 'contract.author'),
+    ('secret.read', 'secret.read'),
+    ('worker.invoke', 'worker.invoke'),
+    ('commit.propose', 'commit.propose'),
+    ('commit.authorize', 'commit.authorize'),
+    ('commit.apply', 'commit.apply'),
 )
 
+#: Rows whose `SUPERVISED` cell is `CONFIRM`, enforced since GR-31. A driver
+#: records one live `HumanDecision` for each and fabricates none.
+CONFIRMED_ROWS = {'run.start': '5-1', 'contract.approve': '6-2',
+                  'worker.invoke': '7.2-1', 'commit.authorize': '7.4-4'}
 
-def git(*arguments: str) -> str:
+
+def git(target: Path, *arguments: str) -> str:
     # Read only, and immune to an ambient GIT_DIR redirecting the target.
     environment = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
     environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null')
     return subprocess.run(
-        ['git', '--no-optional-locks', '-C', str(TARGET), *arguments],
+        ['git', '--no-optional-locks', '-C', str(target), *arguments],
         check=True, capture_output=True, text=True, timeout=10,
         env=environment, cwd='/tmp',
     ).stdout.strip()
 
 
-def inspect_target() -> dict:
-    if TARGET.is_symlink() or TARGET.resolve() != TARGET:
-        raise ValueError('The pilot target must be the real /tmp/pilot-sandbox directory.')
-    if not TARGET.is_dir() or TARGET.resolve() == RUNTIME:
+def inspect_target(args) -> dict:
+    """The throwaway repository, exactly as the owner described it."""
+    target = Path(args.target)
+    if target.is_symlink() or target.resolve() != target:
+        raise ValueError(f'The pilot target must be the real {target} directory.')
+    if not target.is_dir() or target.resolve() == RUNTIME:
         raise ValueError('The pilot target is absent or resolves to the runtime checkout.')
-    if Path(git('rev-parse', '--show-toplevel')).resolve() != TARGET:
+    if Path(git(target, 'rev-parse', '--show-toplevel')).resolve() != target:
         raise ValueError('The pilot target must be its own repository root.')
-    if DATABASE.exists() or DATABASE.is_symlink():
-        raise ValueError('/tmp/pilot-db already exists; refusing to reuse or delete it.')
-    head = git('rev-parse', 'HEAD')
-    if head != git('rev-parse', '--verify', BASE + '^{commit}'):
-        raise ValueError('The pilot target is no longer at commit 27e6c88.')
-    paths = git('ls-files', '-z').split('\0')
-    if paths != ['main.py', '']:
-        raise ValueError('The pilot must contain exactly one tracked file: main.py.')
-    if git('status', '--porcelain=v1', '--untracked-files=all'):
+    governance = Path(args.governance_root)
+    if governance.exists() or governance.is_symlink():
+        raise ValueError(f'{governance} already exists; refusing to reuse or delete it.')
+    if governance.resolve() == target.resolve() or governance.resolve().is_relative_to(target.resolve()):
+        raise ValueError('The governance root must be outside the workspace.')
+    head = git(target, 'rev-parse', 'HEAD')
+    if head != git(target, 'rev-parse', '--verify', args.base_revision + '^{commit}'):
+        raise ValueError(f'The pilot target is no longer at {args.base_revision}.')
+    tracked = [path for path in git(target, 'ls-files', '-z').split('\0') if path]
+    if args.tracked_path and tracked != list(args.tracked_path):
+        raise ValueError(f'The pilot target tracks {tracked}, not {list(args.tracked_path)}.')
+    if git(target, 'status', '--porcelain=v1', '--untracked-files=all'):
         raise ValueError('The pilot target has local changes; refusing to proceed.')
-    if (TARGET / 'main.py').is_symlink() or not (TARGET / 'main.py').is_file():
-        raise ValueError('main.py must be a regular file.')
-    return {'head': head, 'tracked_paths': ['main.py'], 'clean': True,
-            'store_exists': False}
+    for path in args.allow_path:
+        candidate = target / path
+        if candidate.is_symlink():
+            raise ValueError(f'{path} must not be a symlink.')
+        if candidate.exists() and not candidate.is_file():
+            raise ValueError(f'{path} exists and is not a regular file.')
+    return {'head': head, 'tracked_paths': tracked, 'clean': True,
+            'governance_root_exists': False}
 
 
-def inspect_claude() -> dict:
-    executable = shutil.which('claude')
-    result = {'executable': executable, 'version': None,
-              'credential_file_present': (Path.home() / '.claude/.credentials.json').is_file(),
-              'authentication_verified': False, 'inference_attempted': False}
-    if executable:
-        version = subprocess.run(
-            [executable, '--version'], capture_output=True, text=True,
-            timeout=15, cwd='/tmp', check=True,
-        )
-        result['version'] = version.stdout.strip()
-    # Credential contents and environment values never enter the report.
-    return result
+def inspect_provider(args) -> dict:
+    """Is the selected provider's executable here, and what version is it?"""
+    executables = {'claude-code': 'claude', 'codex': 'codex', 'fake': None}
+    if args.provider not in executables:
+        raise ValueError(f'Unknown provider {args.provider!r}; '
+                         f'choose one of {sorted(executables)}.')
+    name = executables[args.provider]
+    if name is None:
+        return {'provider': args.provider, 'executable': None, 'version': None}
+    # Resolved here, against this process's PATH; the child is handed the
+    # absolute result and never the PATH it was found on.
+    executable = shutil.which(name)
+    if executable is None:
+        raise ValueError(f'The {name!r} executable is absent from PATH.')
+    executable = os.path.abspath(executable)
+    secret = os.environ.get(args.secret_env, '')
+    argv = [executable, '--version']
+    # `None` is subprocess's "inherit everything"; the next line replaces it.
+    environment = None
+    environment = probe_environment(executable)  # guard:gr32_probe_environment
+    refuse_secret_bearing_launch(secret, argv, environment, PROBE_CWD)  # guard:gr32_probe_launch_secret_free
+    version = subprocess.run(argv, capture_output=True, text=True,
+                             timeout=15, cwd=PROBE_CWD, check=True, env=environment)
+    refuse_secret_bearing_output(secret, version)  # guard:gr32_probe_output_secret_free
+    return {'provider': args.provider, 'executable': executable,
+            'version': version.stdout.strip()}
 
 
-def main() -> int:
+def inspect_credential(args) -> dict:
+    """The named variable, checked by the runtime's own preflight.
+
+    `driver.preflight_credential` is imported rather than reimplemented, so
+    this reports exactly what the driver will decide at step 12 rather than a
+    second opinion that could disagree with it. Nothing about the value enters
+    the report: only the variable's name, which the owner supplied.
+    """
+    sys.path.insert(0, str(RUNTIME / 'src'))
+    try:
+        from gruntime.driver import preflight_credential
+        from gruntime.errors import PolicyDenied
+    except ImportError as exc:
+        # `GR32-F-004`: reported, not raised. The name of the missing module is
+        # the runtime's, never anything read from the credential variable.
+        raise ValueError(f'The runtime is not importable under {sys.executable} '
+                         f'({type(exc).__name__}: {exc}); run the preflight under the '
+                         f'project interpreter {INTERPRETER}.') from None
+
+    try:
+        preflight_credential(args.secret_env, os.environ)
+    except PolicyDenied as exc:
+        raise ValueError(str(exc)) from None
+    return {'credential_variable': args.secret_env, 'accepted': True,
+            'credential_header': args.credential_header,
+            'credential_prefix': args.credential_prefix,
+            'source': 'process environment variable, by name'}
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
+    parser.add_argument('--target', required=True,
+                        help='the throwaway repository the pilot would govern')
+    parser.add_argument('--governance-root', required=True,
+                        help='where the store, artifacts and worktree would live')
+    parser.add_argument('--base-revision', required=True)
+    parser.add_argument('--objective', required=True)
+    parser.add_argument('--allow-path', required=True, action='append', default=[])
+    parser.add_argument('--tracked-path', action='append', default=[],
+                        help='the exact tracked file list to require, if any')
+    parser.add_argument('--provider', required=True)
+    parser.add_argument('--origin', required=True)
+    parser.add_argument('--secret-name', required=True)
+    parser.add_argument('--secret-env', required=True,
+                        help='the NAME of the environment variable holding the credential')
+    parser.add_argument('--credential-header', default='x-api-key')
+    parser.add_argument('--credential-prefix', default='')
+    return parser
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
     report = {
         'mode': 'SUPERVISED',
-        'target_repository': str(TARGET),
-        'fresh_store_root': str(DATABASE),
-        'objective': 'Add greet(name) to main.py, returning a greeting.',
-        # StageContract calls this scope_include; allowed_paths is the user's
-        # requested scope, not an invented schema field or an actual grant.
-        'requested_scope': {'allowed_paths': ['main.py'], 'scope_include': ['main.py']},
+        'stage': 'GR-32 preflight; the live run is GR-33',
+        'target_repository': args.target,
+        'governance_root': args.governance_root,
+        'objective': args.objective,
+        # StageContract calls this scope_include; allowed_paths is the owner's
+        # requested scope, not an invented schema field and not a grant.
+        'requested_scope': {'allowed_paths': list(args.allow_path),
+                            'scope_include': list(args.allow_path)},
+        'inference_origin': args.origin,
+        'secret_name': args.secret_name,
         'state': 'PREFLIGHT',
-        'capability_grant': None,
-        'receipt': None,
         'runtime_transitions_performed': 0,
-        'steps': [dict(step=i, transition=name, state='NOT_ATTEMPTED',
-                       requested_capability=capability, capability_grant=None, receipt=None)
-                  for i, (name, capability) in enumerate(TRANSITIONS, start=1)],
+        'driver_entry': 'python -m gruntime.controller pilot',
+        'steps': [dict(step=index, act=act, capability=capability,
+                       confirmed_row=CONFIRMED_ROWS.get(act),
+                       state='NOT_ATTEMPTED', receipt=None)
+                  for index, (act, capability) in enumerate(SEQUENCE, start=2)],
+        'supervision': (
+            'Rows 5-1, 6-2, 7.2-1 and 7.4-4 are CONFIRM under SUPERVISED and refuse '
+            'without a live HumanDecision. The driver records one per act, presents '
+            'what is being authorized, and fabricates none.'),
+        'deferred': [
+            'B3 native candidate observation', 'B4 independent worker review',
+            'B6 review-precondition correctness', 'B7 validation-precondition '
+            'correctness: authorize_commit refuses any non-empty precondition '
+            '(guard:gr31_preconditions_deferred)'],
+        'receipt_absence_reason':
+            'No invocation, validation or commit was attempted; no runtime receipt exists.',
     }
     try:
-        report['target_observation'] = inspect_target()
-        report['claude'] = inspect_claude()
+        report['target_observation'] = inspect_target(args)
+        report['provider_observation'] = inspect_provider(args)
+        report['credential_observation'] = inspect_credential(args)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        report.update(state='BLOCKED', reason=str(exc), blocked_before='register_project')
-        print(json.dumps(report, indent=2), flush=True)
-        return 1
-
-    missing = [
-        'A composition root. controller.py main() hardcodes FakeProvider and offers no '
-        'command for project creation, ceiling or budget provisioning, decision recording, '
-        'contract authoring or activation, run allocation, relay configuration, invoke, '
-        'propose/authorize/apply, snapshot or validate. That driver is GR-32.',
-        'Wiring for the transport that already ships: '
-        'ClaudeCodeProvider(state_dir, transport=WorkerRelayTransport(...), read_artifact=...), '
-        'with protocol_headers=ClaudeCodeProvider.relay_headers passed into '
-        'configure_inference_relay — used today only in test_gr08_inference_relay.py. '
-        'WorkerRelayTransport is NOT missing; do not rebuild it.',
-        'A human at the keyboard for each confirmed step. Rows 5-1, 7.2-1 and 7.4-4 are '
-        'CONFIRM under SUPERVISED and refuse without a live HumanDecision (GR-31). '
-        'A driver records one per step and fabricates none.',
-    ]
-    if not report['claude']['executable']:
-        missing.insert(0, 'The Claude Code executable is absent from PATH.')
-    report.update(
-        state='BLOCKED', blocked_before='register_project',
-        reason='No composition root for a live pilot; stopped before creating the store or granting authority.',
-        missing=missing,
-        shipped_already=[
-            'src/gruntime/adapters/relay_process.py: WorkerRelayTransport',
-            'src/gruntime/inference_relay.py: InferenceRelay',
-            'src/gruntime/relay_controller.py: configure_inference_relay',
-            'src/gruntime/contract_controller.py: set_capability_ceiling, grant_project_budget',
-        ],
-        implementation_evidence=[
-            'src/gruntime/adapters/claude_code.py: ClaudeCodeProvider',
-            'src/gruntime/adapters/journaled_worker.py: constructor requires transport',
-            'src/gruntime/controller.py: main() hardcodes FakeProvider',
-            'CLAUDE.md: Known gaps / GR-08; Supervision gates',
-        ],
-        receipt_absence_reason='No invocation, validation, or commit was attempted; no runtime receipt exists.',
-        supervision='Stopped before the first transition. Subsequent transitions require individual human confirmation.',
-    )
-    print(json.dumps(report, indent=2), flush=True)
-    return 2
+        report.update(state='BLOCKED', reason=str(exc), blocked_before='project.create')
+    else:
+        report.update(state='READY', blocked_before=None,
+                      reason='Every precondition this preflight can observe holds. '
+                             'Running the pilot is a separate, human-initiated act (GR-33).')
+    text = json.dumps(report, indent=2)
+    report, text = secret_free(report, text, os.environ.get(args.secret_env, ''))  # guard:gr32_preflight_report_secret_free
+    print(text, flush=True)
+    return 0 if report['state'] == 'READY' else 1
 
 
 if __name__ == '__main__':
+    reexec_under_project_interpreter()
     sys.exit(main())

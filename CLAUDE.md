@@ -98,8 +98,9 @@ Rules:
   refuses again on every later snapshot.
 - No per-stage mutation evidence file exists for GR-17, GR-23 or GR-24; their
   kills are persisted only as bin/mutate summary lines in
-  docs/evidence/recheck-20260916.txt. GR-31 does not join them:
-  docs/gr31-validation.md inlines every summary and states its one log root.
+  docs/evidence/recheck-20260916.txt. GR-31 and GR-32 do not join them:
+  docs/gr31-validation.md inlines every summary and states its one log root,
+  and docs/gr32-validation.md does the same for GR-32.
   Of the committed JSON records, gr07 and
   gr08 inline their summaries and cite no logs; gr06 inlines summaries and also
   cites logs; gr06, gr09, gr10 and suspension cite full logs that exist only
@@ -158,6 +159,122 @@ Evidence: [GR-31 validation](docs/gr31-validation.md).
   relay_environment). Do not claim the production review leg is complete.
 - DESIGN-03 is neither revised nor frozen by GR-31 and no DESIGN-03 finding is
   claimed closed. policy_digest provisioning is omitted; policy.set untouched.
+
+## Composition root
+GR-32 gives the runtime a production caller that walks the supervised sequence
+in order. B2 is closed: before it, a project created through `create_project`
+could be provisioned only by a test writing rows, and `main()`'s six
+subcommands could not create a project, record a decision, author or activate a
+contract, allocate a run or configure the relay. B3, B4, B6 and B7 are
+untouched and open, and no claim here bears on them.
+Evidence: [GR-32 validation](docs/gr32-validation.md).
+
+- `src/gruntime/driver.py` is the orchestration half of the composition root
+  and is the only place outside `controller.main()` that names concrete
+  adapters (`build_provider`). It adds four concepts and no sixth subsystem:
+  PilotSession, OwnerPresenter, StepOutcome/DriverReport and ProposalMapping.
+  No second controller, transport, provider architecture, registry, plugin
+  layer or state machine; every transition it calls is the kernel's existing
+  one.
+- The ordering `docs/gr31-plan.md` records is wrong and the plan is NOT edited.
+  It puts contract construction before `open_run`; `guard:gr06_run_identity`
+  binds a contract to `run.stage_id`, which `open_run` mints, so `open_run`
+  must come first. The corrected order is the table in
+  docs/gr32-validation.md §3 (GR32-P-001).
+- All four confirmations — rows 5-1, 6-2, 7.2-1 and 7.4-4 — are APPROVEs and
+  so snapshot-bound. The driver records each immediately before the act it
+  discharges, with no observation between. Provisioning decisions are not
+  snapshot-bound and do not go stale.
+- The session stops after apply_commit. It takes no snapshot and runs no
+  validation afterwards; `apply_commit`'s own POST_COMMIT snapshot is the
+  kernel settling the commit. Observation is `PilotSession.observe`, a
+  separate entry taken after the owner advances the workspace to the reported
+  revision, and nothing it produces discharges a commit precondition.
+  `guard:gr31_preconditions_deferred` still refuses any non-empty review or
+  validation precondition, through the driver as everywhere else; GR-32
+  neither bypasses nor weakens it.
+- A restart is a new epoch and a new relay, never a continuation:
+  `PilotSession.resume` starts, recovers, reports and stops for the owner. It
+  never resumes steps 12-16.
+- Credential handling (D2): the credential is named by an environment
+  VARIABLE NAME supplied as a runtime parameter. Nothing reads a credential
+  file, a home directory or Claude Code's credential storage, and the value,
+  its length and any fragment of it reach no report, event, artifact, journal
+  or subprocess output — `guard:gr32_report_secret_free` asks the runtime's
+  own SecretGuard. Defaults are header `x-api-key` and an empty prefix; both
+  are configurable and Bearer remains selectable.
+- GR32-P-002 is answered by the driver, not by a kernel fix.
+  `configure_inference_relay` consumes both secret decisions in a transaction
+  that commits before it calls the resolver, so a failing resolver spends two
+  human acts. `driver.preflight_credential` runs before either decision is
+  recorded and refuses an unset, empty or non-printable-ASCII credential
+  unchanged, recording zero secret decisions. The kernel window remains for
+  anything the preflight cannot see — the environment changing between the two
+  points, or a resolver failing for another reason. It is narrowed, not closed.
+- Only a `network='NONE'` validation operation is registered
+  (`guard:gr32_validation_network_none`). The GR-09/GR-17 egress gap recorded
+  under Known gaps is unchanged, and neither ALLOWLIST nor ANY validation
+  execution is made reachable.
+- `propose_commit` is not widened. The driver maps exactly one conforming
+  worker mutation into it, taking the path from the receipt and the content
+  from the artifact `after_ref.digest` names, re-digested before use. Multiple
+  mutations, DELETE, RENAME, CHMOD, `rename_to`, `mode`, a missing
+  `after_ref`, non-UTF-8 content, a non-COMPLETED or reconciled termination,
+  an attempted capability violation and a scope breach are each refused whole
+  and stop the session. The worker's op and `before_digest` are proved against
+  the governed base first (GR32-F-003): CREATE only where the path is absent
+  and with no `before_digest`, MODIFY only where it exists and its
+  `before_digest` is the base content digest. Nothing is translated between
+  them, and a refusal leaves no CommitIntent.
+- Budget and validation plan are runtime inputs, both mandatory (GR32-F-005,
+  F-006). `pilot` requires one `--budget-<field>` flag per `models.Budget`
+  field, derived from the model; step 1 refuses an absent or all-zero budget
+  and a missing validation plan before any transition, so step 11 never
+  reports OK with nothing bound. Step 1 also refuses a budget the contract
+  cannot carry — validated against stage_contract.schema.json's own
+  `$defs/Budget`, where every field is an integer — so a fractional
+  `cost_units` stops before project creation rather than at step 7
+  (guard:gr32_budget_contract_shape, GR32-R-001). Nothing is rounded; `100.0`
+  passes. The `Unit = float` vs schema `integer` mismatch itself is unresolved.
+- Every typed refusal on the driver surface, composition included, is a
+  STOPPED report with the refusing step (GR32-F-001). Only
+  GovernedRuntimeError is a refusal; a defect still propagates as a traceback.
+- D6: `invoke`, `validate` and `commit` carry no confirmation plumbing and are
+  admissible only under AUTONOMOUS. `legacy_command_admits` refuses them on a
+  SUPERVISED project before `Controller(...)`, before the epoch bump and
+  before `controller.started`. `start`, `recover` and `snapshot` are ungated
+  and do not read the project. `build_parser` builds its subparsers from
+  LEGACY_COMMANDS and DRIVER_COMMANDS and GATED_COMMANDS is derived from the
+  first, so the parser surface and the gated set cannot drift apart. This is
+  what keeps tests/test_r2_worker_crash_adoption.py,
+  tests/test_r3_commit_crash_adoption.py, tests/test_gr09_validation.py,
+  tests/test_gr10_git_transaction.py and tests/test_gr03_repository_lease.py
+  passing unedited; their bytes are asserted against HEAD.
+- `main()` hardcodes no provider. `--provider` selects one and defaults to
+  `fake`, which is what the historical AUTONOMOUS evidence has always run on.
+- `bin/pilot-run` is a preflight and performs no transition. It no longer
+  asserts that no composition root exists or that `main()` hardcodes
+  FakeProvider, and no longer probes a credential file; every pilot-specific
+  value is an argument. Running the pilot is GR-33 and `bin/pilot-run` does
+  not do it. Its provider `--version` probe launches the executable by the
+  absolute path the preflight resolved, with only `LC_ALL` and a `PATH` built
+  from that executable's directories and `/usr/local/bin:/usr/bin:/bin` —
+  never the caller's (guard:gr32_probe_environment); immediately before
+  launch its argv, executable realpath, working directory and every
+  environment key and value are refused if they hold the credential
+  (guard:gr32_probe_launch_secret_free). Secret filtering reads raw and
+  parsed values, never serialized JSON (GR32-F-002): the probe's raw stdout
+  and stderr are checked before entering the report
+  (guard:gr32_probe_output_secret_free), and every parsed report string plus
+  the exact text to be printed are checked last
+  (guard:gr32_preflight_report_secret_free); either match is a fixed-text
+  BLOCKED report. No re-exec marker exists (GR32-F-004): the script re-execs
+  unless `sys.prefix` is the project venv (guard:gr32_reexec_identity), and
+  the exec'd child, launched by the interpreter's own path, never execs again
+  (guard:gr32_reexec_once).
+- No Pilot-1 constant is compiled into `src/`: no sandbox path, no database
+  path, no base revision, no objective, no target path and no budget. Two different
+  parameter sets drive two different compositions through the same code.
 
 ## Design baseline
 design-01-frozen is the frozen design and is unchanged. `git diff
