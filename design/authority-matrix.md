@@ -57,6 +57,7 @@ grant time), `NEVER` (`AX-6`).
 |---|---|---|---|---|---|
 | `project.create` | create a `Project` in `DRAFT` | `HUMAN` | `HUMAN_PRINCIPAL` | DENY | `AUTONOMOUS`: DENY |
 | `project.mode.set` | change `governance_mode` | `HUMAN` | `HUMAN_PRINCIPAL` | DENY | both modes require `DEC(SET_MODE)` |
+| `project.ceiling.set` | initial setting of `Project.capability_ceiling`: empty → non-empty, once (transition-matrix §10); no replacement, widening, narrowing or mixed change | `HUMAN` | `HUMAN_PRINCIPAL` | DENY | `SUPERVISED`: `DEC(SET_CEILING)`; `AUTONOMOUS`: DENY. Never grantable to a worker; setting the ceiling bounds and grants nothing (`AX-11`) |
 | `project.lifecycle.advance` | axis-1 transitions other than abandon/archive | `KERNEL` | `RUNTIME_KERNEL` | DENY | — |
 | `project.abandon` | axis-1 → `ABANDONED` | `HUMAN` | `HUMAN_PRINCIPAL` | DENY | — |
 | `project.archive` | axis-1 → `ARCHIVED` | `HUMAN` | `HUMAN_PRINCIPAL` | DENY | — |
@@ -156,6 +157,8 @@ Applied after ceiling, before role defaults.
 |---|---|---|
 | `project.create` | grantable | DENY |
 | `project.mode.set` | `DEC(SET_MODE)` | `DEC(SET_MODE)` |
+| `project.ceiling.set` | `DEC(SET_CEILING)` | DENY |
+| `budget.grant` | `DEC(GRANT_BUDGET)` | DENY |
 | `fs.read.outside_scope` | grantable | DENY |
 | `proc.exec.arbitrary` | grantable | DENY |
 | `net.egress.any` | grantable | DENY |
@@ -299,11 +302,19 @@ a grant, and it is one of `AX-1`'s four forms.
 
 ### 5.2.1 The rows this procedure covers
 
-Seven of the seventeen `HUMAN`-class capabilities in §2 are named as `required_capability`
-by a legal row, on eighteen rows in total: `project.create`, `project.abandon`,
-`project.archive`, `stage.reject`, `stage.abandon`, `finding.waive` and `decision.record`.
-The other ten have no legal row and no exercise this procedure can bind; §5.2 supplies
-their authority form and not their procedure.
+Nine of the eighteen `HUMAN`-class capabilities in §2 are named as `required_capability`
+by a legal row, on twenty rows in total: `project.create`, `project.abandon`,
+`project.archive`, `project.ceiling.set`, `budget.grant`, `stage.reject`, `stage.abandon`,
+`finding.waive` and `decision.record`. The other nine have no legal row and no exercise
+this procedure can bind; §5.2 supplies their authority form and not their procedure.
+
+`project.ceiling.set` and `budget.grant` each have one row, in transition-matrix §10,
+authorized by `DEC(SET_CEILING)` and `DEC(GRANT_BUDGET)` respectively under `SUPERVISED`
+and denied under `AUTONOMOUS`. Neither decision is a grant record: §5.1 and §5.3 step 1
+admit only `decision_kind = GRANT_CAPABILITY`, step 6 above leaves both `grants` and
+`revokes` empty, and step 9 consumes each decision by its own act. Writing a
+`CapabilityId` into `capability_ceiling` confers it on no principal (`AX-11`), and neither
+act reaches a run, an activation or a worker.
 
 | id | rule |
 |---|---|

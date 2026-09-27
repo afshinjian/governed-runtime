@@ -696,7 +696,7 @@ establishes which revision fulfilled which intent.
 | `decision_id` | `Id` | Y | I | R | |
 | `project_id` | `Ref<Project>` | Y | I | R | |
 | `subject` | `{kind: Enum<PROJECT,STAGE,RUN,CONTRACT,FINDING,ESCALATION,COMMIT_INTENT,CAPABILITY>, id: Id}` | Y | I | R | |
-| `decision_kind` | `Enum<APPROVE,REJECT,WAIVE,OVERRIDE,GRANT_CAPABILITY,REVOKE_CAPABILITY,SET_MODE,SUSPEND,RESUME,ABANDON,EXTEND_BUDGET,ACCEPT_RISK>` | Y | I | H | |
+| `decision_kind` | `Enum<APPROVE,REJECT,WAIVE,OVERRIDE,GRANT_CAPABILITY,REVOKE_CAPABILITY,SET_MODE,SUSPEND,RESUME,ABANDON,EXTEND_BUDGET,ACCEPT_RISK,SET_CEILING,GRANT_BUDGET>` | Y | I | H | |
 | `question` | `Str(1..4096)` | Y | I | R | posed by runtime, verbatim |
 | `options_offered` | `[Str(1..512)]` | Y | I | R | |
 | `chosen` | `Str(1..512)` | Y | I | H | MUST be in `options_offered` |
