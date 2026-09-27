@@ -59,7 +59,7 @@ only three of them can make a stage satisfied.**
 
 | class | answers | produced by | verifiable by | can gate a transition | can be fabricated by a worker |
 |---|---|---|---|---|---|
-| `CLAIM` | "what does someone say is true?" | any actor, typically a worker | no — only its provenance is verifiable | **never** | yes, trivially |
+| `CLAIM` | "what does someone say is true?" | any actor, typically a worker | no — only its provenance is verifiable | **never on its asserted content**; a row may name it as a prerequisite (`G-1`) and gate on its existence, its provenance, and the control fields the runtime establishes — for an `Escalation`, `trigger`, `status`, `severity`, `auto_resolvable` and the holder bindings — which prove only what the runtime recorded. The asserted fields, `summary` and `evidence_refs` and any `Claim` they carry, gate nothing | yes, trivially |
 | `EVIDENCE` | "what was measured about reality?" | runtime kernel, or an attested external executor | yes — replay or re-observation | yes, as `required_evidence` | no — minting requires `validation.attest`, `review.attest`, `commit.apply`, `recovery.reconcile`, or `snapshot.take`, all `KERNEL` |
 | `DECISION` | "what did an authenticated human choose?" | `HUMAN` actor only | yes — signature and nonce | yes, as `DECIDE(K)`/`CONFIRM` | no — `HD-INV-1` |
 | `AUTHORITY` | "what was someone permitted to attempt?" | `ContractActivationRecord`, `HumanDecision.grants` | yes — grant chain replay | yes, as `required_capability` | no — `AX-5`, `AX-7` |
@@ -92,7 +92,7 @@ only three of them can make a stage satisfied.**
 | `CLAIM` → `EVIDENCE` | never directly | a claim is corroborated by *separate* evidence; the claim itself stays a claim, and `Claim.corroboration` records the outcome |
 | `Review` verdict → `EVIDENCE` | never; the kernel mints a `ReviewAttestation` | the attestation is EVIDENCE of a *different proposition* — that a review meeting the spec's quorum and independence was performed over a stated snapshot and returned verdict `v`. The verdict's substance stays CLAIM, which is why `RA-INV-3` forbids treating the reviewer's reasoning as fact and why an attestation over a `FAIL` is as much EVIDENCE as one over a `PASS`. This is the only route by which a judgmental criterion is discharged, and it requires `review.attest`, a `KERNEL` capability |
 | `EVIDENCE` → current | `EVIDENCE` bound to the newest `RealitySnapshot` covering its scope | a receipt goes stale, it does not become false |
-| `DECISION` → `AUTHORITY` | a `HumanDecision` with non-empty `grants` | the grant is realized only through an activation record |
+| `DECISION` → `AUTHORITY` | a `HumanDecision` with non-empty `grants` or `revokes` | a run grant is realized through an activation record; a project grant is realized by the decision itself and is never written into an activation (`AX-3`, authority-matrix §5.3). A decision with empty `grants` and empty `revokes` promotes to nothing: it authorizes its own act and delegates no capability (authority-matrix §5.2) |
 | `AUTHORITY` → satisfaction | never | `AX-9`: permission to attempt is not proof of outcome |
 
 ### 2.3 Anti-patterns this taxonomy exists to prevent
@@ -125,15 +125,15 @@ only three of them can make a stage satisfied.**
 | 3 | `event_hash = "sha256:" + lowerhex(sha256(canonical))` |
 | 4 | `body.prev_event_hash` is the `event_hash` of the event at `seq - 1` in the same project |
 | 5 | genesis: `seq = 0`, `prev_event_hash = "sha256:" + lowerhex(sha256(project_id ‖ 0x00 ‖ schema_version))` |
-| 6 | `Project.event_head = event_hash` of the highest `seq`; updated in the same atomic write as the append |
+| 6 | `Project.event_head = event_hash` of the highest `seq`; updated in the same atomic write as the append. At `seq = 0` that write also installs the `Project` record and initializes `event_seq = 0`: a project and its first event become durable together, and no reader ever observes a project whose chain state is uninitialized |
 
 ### 3.2 Append protocol
 
 | step | operation | failure handling |
 |---|---|---|
 | 1 | write payload to artifact store, obtain `payload_ref` | abort; nothing appended |
-| 2 | reserve `seq = event_seq + 1` under a per-project lock | contention retries; `seq` is never skipped |
-| 3 | read `prev_event_hash = event_head` | — |
+| 2 | reserve `seq = event_seq + 1` under a per-project lock; for a project with no prior event, `event_seq` is unset and the reserved value is `seq = 0` | contention retries; `seq` is never skipped |
+| 3 | read `prev_event_hash = event_head`; at `seq = 0`, `event_head` is unset and `prev_event_hash` is the §3.1 genesis constant instead | — |
 | 4 | compute `event_hash` | — |
 | 5 | atomically persist the event and advance `event_head`, `event_seq` | on partial failure the reservation is rolled back and the artifact becomes unreferenced (`refcount = 0`) |
 | 6 | only now is the state change observable to any reader | `AE-INV-2` |
@@ -173,9 +173,9 @@ its identity is durable is unrecoverable by construction and is illegal
 | chain continuity | for each `seq` from 0 to head: recompute `event_hash`, compare to stored; compare `prev_event_hash` to predecessor's `event_hash` | `INTEGRITY_VIOLATION`, project → `SUSPENDED_BY_INTEGRITY` |
 | gaplessness | `seq` values form `0..head` with no gaps or duplicates | same |
 | payload binding | `payload_digest == payload_ref.digest`, and the stored bytes rehash to it unless `redacted` | same |
-| authority binding | every event with `capability_used` has an `authority_ref` resolving to a live grant at `recorded_at` | same |
+| authority binding | every event with `capability_used` resolves it at `recorded_at` by exactly one authority form (`AX-1`): a `KERNEL`-class capability by the kernel's own holding, requiring `actor.actor_kind = RUNTIME` and absent `authority_ref` (`AX-7`); `decision.record` by the principal's own holding, requiring `actor.actor_kind = HUMAN` with `auth_method ∈ {SESSION, SIGNATURE, MTLS}` and absent `authority_ref` (`AX-15`); any other `HUMAN`-class capability by `authority_ref` naming the live `HumanDecision` that authorized this act (authority-matrix §5.2); every other capability by `authority_ref` naming a live grant carrying it — a `ContractActivationRecord` whose `granted_capabilities` contains it, or a project grant per authority-matrix §5.3 | same |
 | monotonic time | `recorded_at` non-decreasing in `seq`, allowing for `clock_skew_ms` | `Escalation(INTEGRITY_VIOLATION)`, severity `MEDIUM` |
-| evidence reachability | every `required_evidence` cited by a transition event resolves to an event of class `EVIDENCE` with `seq` lower than the transition's | `INTEGRITY_VIOLATION` |
+| evidence reachability | for each citation in the row's `required_evidence` (`G-1`), and for a disjunctive citation the one alternative the transition event names, that citation resolves to an earlier event of the same project with `seq` lower than the transition's, of the class its record carries: `EVIDENCE` for an evidence citation; `AUTHORITY` for an activation; `DECISION` for a `HumanDecision`; `CLAIM` for an `Escalation`; and any class for an `AuditEvent` the row names, including one that persisted a cited artifact or durable identity. A cell element naming no record is a precondition and resolves to no event. A citation of any other kind is not resolved by this check and its row is not closed (`G-1`) | `INTEGRITY_VIOLATION` |
 
 Verification requires only the event records; the artifact store is needed for
 payload binding but not for chain continuity.
@@ -279,7 +279,7 @@ stale independently and both are checked.
 |---|---|---|
 | chain manifest | `(seq, event_hash, prev_event_hash, event_type, epistemic_class, actor, payload_digest)` per event | offline verification without payloads |
 | evidence bundle | for one stage: pinned contract, activation record, all receipts, snapshots, reviews, findings, decisions, plus the chain manifest slice | answering "why is this stage satisfied?" |
-| authority trace | for one action: capability used, activation record, grant chain, mode, policy digest | answering "what allowed this?" |
+| authority trace | for one action: capability used, mode, policy digest, and the authority the action was exercised under — the activation record and grant chain for a run grant; the granting `HumanDecision` for a project grant; the authorizing `HumanDecision` for a per-act exercise; the kernel's own holding for a `KERNEL` capability; and for `decision.record` the recording principal's own authenticated holding under `AX-1`'s named exception (`AX-15`), naming the authenticated principal and `auth_method` with no authority record and no `authority_ref` | answering "what allowed this?" |
 | claim ledger | every `Claim` with its `corroboration` outcome | measuring how often self-reports held up |
 
 Each export is itself written to the artifact store and appended as an

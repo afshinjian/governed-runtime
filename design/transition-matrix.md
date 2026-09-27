@@ -45,8 +45,8 @@ The most restrictive axis wins.
 | column | meaning |
 |---|---|
 | `preconditions` | boolean predicate over entity fields; ALL must hold |
-| `required_evidence` | receipt/snapshot classes that must exist and be current; `—` means none |
-| `required_capability` | the single `CapabilityId` the actor must hold; absent ⇒ DENY |
+| `required_evidence` | a conjunction of citations that must exist and be current, each typed on its own and each possibly a disjunction of alternatives (`G-1`): an evidence citation (receipt or snapshot) discharges the row's criterion; a prerequisite citation — an activation, a decision, an `Escalation`, or an `AuditEvent` the row names, including one that persisted a cited artifact or durable identity — must exist and discharges a criterion only where another rule gives it that effect, as a waiver decision does; an element naming no record is a precondition; a citation of any other kind is not admitted by `G-1`; `—` means none |
+| `required_capability` | the single `CapabilityId` the actor must hold at the transition, by any authority form in `AX-1` (authority-matrix §5, §5.2, §5.3, `AX-7`) or under `AX-1`'s named `decision.record` exception (`AX-15`); absent ⇒ DENY |
 | `supervised_policy` | verdict when `project.governance_mode = SUPERVISED` |
 | `autonomous_policy` | verdict when `project.governance_mode = AUTONOMOUS` |
 | `illegal_because` | `—` for legal rows; populated only in §9 |
@@ -390,7 +390,7 @@ the `RealitySnapshot` whose evidence the human was shown.
 
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
-| `∅` | `VALID` | recorded per `HD-INV-1`/`HD-INV-2`; `snapshot_bound = true` ⇒ `subject_snapshot_id` is the newest `COMPLETE` snapshot covering the subject's scope and every `evidence_shown` artifact is current against it | `SNAP` as `subject_snapshot_id` | `decision.record` | `AUTO` | `AUTO` | — |
+| `∅` | `VALID` | recorded per `HD-INV-1`/`HD-INV-2`; `snapshot_bound = true` ⇒ `subject_snapshot_id` is the newest `COMPLETE` snapshot covering the subject's scope and every `evidence_shown` artifact is current against it | `SNAP` as `subject_snapshot_id` where `snapshot_bound = true`; `—` otherwise | `decision.record` | `AUTO` | `AUTO` | — |
 | `VALID` | `CONSUMED` | the decision discharged the transition it was recorded for; `nonce` spent | the transition's own `AuditEvent` | `audit.append` | `AUTO` | `AUTO` | — |
 | `VALID` | `STALE` | `snapshot_bound = true` and a newer `COMPLETE` snapshot whose `drift_summary` touches the subject's scope superseded `subject_snapshot_id` | the newer `SNAP` | `audit.append` | `AUTO` | `AUTO` | — |
 | `VALID` | `EXPIRED` | `now > expires_at`, or the `scope` boundary was left | — | `audit.append` | `AUTO` | `AUTO` | — |

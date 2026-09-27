@@ -377,8 +377,10 @@ excluding it is what lets the legal transitions `DRAFT → ACTIVE` and
 into `StageRun.contract_hash`, while `XC-13` keeps `status` the only member that
 may differ between persisted documents sharing a `contract_id`. Mutation of any
 field inside the preimage after `ACTIVE` is an integrity violation.
-**C-INV-3** `capability_request` is a request. Grants come only from
-`ContractActivationRecord`.
+**C-INV-3** `capability_request` is a request. A run's grants come only from
+`ContractActivationRecord`; a project grant comes only from a live
+`HumanDecision{kind: GRANT_CAPABILITY, scope: PROJECT}` (authority-matrix §5.3) and never
+reaches a run.
 
 ### 6.2 `ContractActivationRecord`
 
@@ -407,7 +409,11 @@ field inside the preimage after `ACTIVE` is an integrity violation.
 
 **A-INV-1** `granted_capabilities ⊆ capability_request ∩ role_defaults ∩
 project.capability_ceiling ∩ mode_allowed`. Anything not granted is DENIED.
-**A-INV-2** Activation is the **only** entity that confers authority on a run.
+**A-INV-2** Activation is the **only** entity that confers a run's **execution authority**:
+its `granted_capabilities`, and the `StageRun.effective_capabilities` frozen from them.
+Authority to govern a run from outside it — a human decision authorizing `stage.reject` on
+the run's own row — is not execution authority, confers no capability on the run, and adds
+nothing to either set (authority-matrix §5.2, `AX-18`).
 **A-INV-3** `capability_grant_basis` has exactly one entry per member of
 `granted_capabilities`, and each entry names a grantor listed in that
 capability's `grantable by` column in authority-matrix §2. A granted capability
@@ -787,7 +793,7 @@ subject must be re-decided. `HD-INV-3` prevents reuse after consumption;
 | `payload_ref` | `ArtifactRef` | Y | I | R | content-addressed body |
 | `payload_digest` | `Hash` | Y | I | R | equals `payload_ref.digest` |
 | `capability_used` | `CapabilityId?` | N | I | R | required for state-changing events |
-| `authority_ref` | `Id?` | N | I | R | activation or decision that permitted it |
+| `authority_ref` | `Id?` | N | I | R | activation or decision that permitted it; on an event carrying `capability_used`, absent exactly when that capability is `KERNEL`-class or is `decision.record` (evidence-model §3.3), and otherwise required. An event carrying no `capability_used` is unconstrained by this note |
 | `causal_parent` | `Ref<AuditEvent>?` | N | I | R | logical causality, not chain order |
 | `clock_skew_ms` | `int64` | Y | I | R | runtime vs reference clock |
 | `signature` | `Hash?` | N | I | R | |
@@ -884,7 +890,7 @@ qualify one entity, never the project or the stage.
 
 | id | invariant |
 |---|---|
-| `G-1` | No entity outside `{ValidationReceipt, WorkerReceipt, CommitReceipt, ReviewAttestation, RealitySnapshot}` may be cited as `required_evidence`. A `Review` is never cited directly: the kernel-minted `ReviewAttestation` is what the `RVW(v)` token in `transition-matrix.md` resolves to, so a judgmental criterion is discharged by the kernel's measurement of the review, not by the reviewer's own verdict. |
+| `G-1` | A `required_evidence` cell is a conjunction of **citations**, each of which may itself be a disjunction of alternatives; a cell is not typed as a whole, and each citation carries its own kind. An **evidence citation** names a record that measures reality, and no entity outside `{ValidationReceipt, WorkerReceipt, CommitReceipt, ReviewAttestation, RealitySnapshot}` may be cited as one; a `Review` is never cited directly, the kernel-minted `ReviewAttestation` being what the `RVW(v)` token in `transition-matrix.md` resolves to, so a judgmental criterion is discharged by the kernel's measurement of the review, not by the reviewer's own verdict. A **prerequisite citation** names a record of one of exactly four kinds: an activation, a `HumanDecision`, an `Escalation`, or an `AuditEvent` the row names — the last including a persisted artifact or durable identity, cited as the event that persisted it. These four and the evidence citation are the **only** admissible kinds; a cell naming a record of any other kind is outside this rule and is not closed by it. A prerequisite citation is never a measurement and never makes a criterion `MET`. It has exactly the effect another rule of this design gives it: a `HumanDecision{kind ∈ {WAIVE, ACCEPT_RISK}}` discharges the shortfall it names by producing the `WAIVED` outcome `evidence-model.md` §4 reads, and an `Escalation` gates only as §2's `CLAIM` row permits. Where a cell element names no record at all — a clock reading, a recomputation — it is a precondition, not a citation. |
 | `G-2` | No entity outside `{HumanDecision, ContractActivationRecord}` may be cited as `required_capability` authority. |
 | `G-3` | A worker-authored value is `CLAIM` class regardless of its confidence, formatting, or self-declared certainty. |
 | `G-4` | Every state-changing operation names exactly one `CapabilityId`; absence ⇒ DENY. |
