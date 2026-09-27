@@ -137,7 +137,7 @@ A structured, **non-authoritative** worker assertion. Never gates a transition.
 | `suspension_ref` | `Ref<Escalation>?` | Y | M | R | required iff `suspension ≠ NONE` |
 | `governance_mode` | `Enum<SUPERVISED,AUTONOMOUS>` | Y | M | H | changeable only by `HumanDecision` |
 | `workspace_root` | `Path` | Y | I | H | |
-| `roadmap_id` | `Ref<Roadmap>?` | N | M | R | absent while `DRAFT` |
+| `roadmap_id` | `Ref<Roadmap>?` | N | M | R | absent until the project's first `DRAFT → PLANNING` transaction, which binds `roadmap_id` atomically with that transition (transition-matrix §11 `RI-1`); no other act writes it |
 | `capability_ceiling` | `Set<CapabilityId>` | Y | M | H | upper bound on all grants |
 | `policy_digest` | `Hash` | Y | M | R | digest of active policy document |
 | `budget` | `Budget` | Y | M | H | |
