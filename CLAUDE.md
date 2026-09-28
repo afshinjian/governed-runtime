@@ -317,14 +317,29 @@ GR-33 N2 (accepted and committed, 13b1297a481047c33ddd1b38b43fa1d80813eb86)
 and GR-33 N3 (accepted and committed,
 8ad2c1012d127d882a5e8f792f85e335e7a51548) are unchanged here.
 
-GR-33 N4 (normative candidate, implemented, under independent review; not
-accepted): transition-matrix §12 adds one non-axis `secret.read` row
+GR-33 N4 (accepted and committed,
+bddbf83b08cce98dbd6208f2e47c788a75cb88ed): transition-matrix §12 adds one non-axis `secret.read` row
 (SUPERVISED CONFIRM, AUTONOMOUS DENY) and authority-matrix §5.2.1 recounts to
 ten of eighteen HUMAN-class capabilities on twenty-one rows. N4 is normative
 only: production code does NOT yet conform, and F-N4-01..F-N4-07 remain open
 for later production conformance. F-N4-06 (`secret.resolved` persists the
 secret's length) contradicts the GR-32 D2 credential claim under Composition
 root, which N4 does not edit. Pilot-1 remains BLOCKED.
+
+GR-33 N5 (normative candidate, implemented, under independent review; not
+accepted): transition-matrix §13 "Worker dispatch lifecycle" (WD-1..WD-15,
+ordering, admission partition, outcome recording, disposal, crash, events)
+plus edited cells 7.2-2 and 5-5, an appended §7.2 `DISPATCHED → FAILED` row
+(exact pair `REFUSED + REFUSAL` only) and an appended §9.3 `invoke` row.
+`REFUSAL` is added to `WorkerReceipt.termination_reason` as an enum value
+only; no `DISPATCHING`, no field, DecisionKind, CapabilityId or lifecycle
+value. worker_provider adds WP-18, CF-16 and context-sensitive §2.1 responses
+(a `ProviderError` from `invoke` asserts nothing). The key uses the canonical
+`KEY_PREIMAGE` encoding (§13.3). The WD-11 disposal of a run spent before T2,
+and resolution of an ambiguous invocation, both depend on a controller
+restart (N6). The `>` (domain-model:768) versus `≥` (§3) inconsistency is
+left unchanged. N5 is normative only: production does NOT conform
+(DV-01..DV-12 in the N5 plan). Pilot-1 remains BLOCKED.
 
 DESIGN-03 is not frozen and, per DESIGN-04 §5, must be revised against
 DESIGN-04, reviewed by the reviewer that raised DESIGN-03-FINDINGS-01.

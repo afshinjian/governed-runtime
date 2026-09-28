@@ -40,14 +40,26 @@ Interface only. No implementation, no vendor, no model identifiers. Core treats
 
 | code | meaning | core response |
 |---|---|---|
-| `UNSUPPORTED_ROLE` | provider cannot serve the contract's role | invocation `REJECTED_BY_POLICY`; try next provider in the registry |
-| `UNKNOWN_BINDING` | `binding_id` not offered by `describe` | `REJECTED_BY_POLICY` |
-| `CONTEXT_TOO_LARGE` | bundle exceeds `max_context_bytes` | kernel re-bundles or escalates `CONTRACT_AMBIGUITY` |
-| `UNAVAILABLE` | transient provider failure | retry with backoff, within budget |
-| `RATE_LIMITED` | provider throttling | retry after `retry_after_ms` |
-| `REFUSED` | provider declined the task | `WorkerReceipt` with `termination_reason = REFUSAL`; not retried against the same binding |
-| `PROVIDER_ERROR` | non-transient failure | run → `CLOSED_ABORTED` |
-| `CANCELLED` | cancellation acknowledged | `WorkerInvocation` → `CANCELLED` |
+| `UNSUPPORTED_ROLE` | provider cannot serve the contract's role | from `preflight`: invocation `REJECTED_BY_POLICY`; try next provider in the registry. From `invoke`: see the note |
+| `UNKNOWN_BINDING` | `binding_id` not offered by `describe` | from `preflight`: `REJECTED_BY_POLICY`. From `invoke`: see the note |
+| `CONTEXT_TOO_LARGE` | bundle exceeds `max_context_bytes` | from `preflight`: kernel re-bundles or escalates `CONTRACT_AMBIGUITY`. From `invoke`: see the note |
+| `UNAVAILABLE` | transient provider failure | retry with backoff, within budget; for `invoke`, only as a same-key re-issue under transition-matrix §13 `WD-5`, and otherwise see the note |
+| `RATE_LIMITED` | provider throttling | retry after `retry_after_ms`; for `invoke`, only as a same-key re-issue under §13 `WD-5`, and otherwise see the note |
+| `REFUSED` | provider declined the task | a refusal is recorded only from an `InvocationOutcome` with exactly `status = REFUSED` and `termination_reason = REFUSAL`: `WorkerReceipt` with `termination_reason = REFUSAL`, not retried against the same binding (`WP-13`, `WP-18`). This code raised by `invoke`: see the note; no receipt is minted from it |
+| `PROVIDER_ERROR` | non-transient failure | raised by `invoke`: see the note. The code alone does not close the run |
+| `CANCELLED` | cancellation acknowledged | a cancellation is recorded only from an `InvocationOutcome` with `status = CANCELLED` or by transition-matrix §7.2 row 7.2-8 (§13 `WD-6`). This code raised by `invoke`: see the note |
+
+**Errors raised by `invoke` (`WP-18`).** A `ProviderError` raised by `invoke`,
+whatever its code, establishes neither that execution started nor that it did
+not. Its code alone authorizes no terminal `WorkerInvocation` transition and no
+`StageRun` or `Stage` transition, mints no direct `WorkerReceipt`, and implies
+nothing about execution. The invocation stays `DISPATCHED`. A same-key re-issue
+is permitted only under transition-matrix §13 `WD-5` (current epoch, still
+`DISPATCHED`, before `deadline_at`). After `deadline_at`, resolution waits for a
+controller restart and `lookup` reconciliation (§6.1). The only direct refusal
+path is an `InvocationOutcome` with `status = REFUSED` and
+`termination_reason = REFUSAL`. Responses to errors from
+`preflight`, `describe`, `lookup`, `cancel` and `health` are unchanged.
 
 ---
 
@@ -102,6 +114,7 @@ recorded with `capability_violations_attempted`.
 | `WP-15` | **Request-before-call.** The kernel persists the full `InvocationRequest` as `WorkerInvocation.request_ref`, with its `idempotency_key` and `controller_epoch`, and appends that event, *before* calling `invoke`. The persisted bytes are the durable, auditable record of exactly what was sent and the reason the `idempotency_key` survives a restart; recovery reads them but never re-sends them (`WP-16`). Recovery equally never rebuilds context, because a rebuilt bundle yields a different `context_digest`, a different `idempotency_key`, and therefore a second execution (`G-9`, transition-matrix §9.3). |
 | `WP-16` | **Answerable by key, without executing.** `lookup(idempotency_key)` is an operation in its own right (§3), distinct from `invoke` and gated by `recovery.reconcile` rather than `worker.invoke`. It returns `FINISHED(outcome)`, `LIVE(handle)`, or `ABSENT`, and performs no execution in any of the three cases. Recovery resolves an unreconciled invocation by `lookup` alone; it never resubmits `request_ref` bytes to `invoke`, because an `ABSENT` key would then execute the work rather than report that nothing happened. An implemented `lookup` that cannot answer for a given key leaves that invocation `reconciliation_state = UNRESOLVABLE`, which stops the run and raises `Escalation(RECOVERY_AMBIGUITY)` rather than permitting a replacement dispatch. |
 | `WP-17` | **Lookup is an admissibility condition.** A provider that cannot implement `lookup` is inadmissible for governed mutation: it may not be registered for, or dispatched under, any run whose contract can reach a `CommitIntent` or any capability that mutates state outside the kernel's own store. Without `lookup` the `G-9` ordering has no reader, so a crashed invocation is unresolvable by construction — an operation the kernel can start and can never learn the outcome of is not governable, whatever its receipts say afterwards. |
+| `WP-18` | **Outcome reports execution.** An `InvocationOutcome` returned by `invoke`, or reported by `lookup` as `FINISHED`, with `status ≠ REFUSED` reports that execution under its `idempotency_key` was established. One with `status = REFUSED` and `termination_reason = REFUSAL` reports that the provider declined the task and execution did not start. A `REFUSED` outcome with any other `termination_reason` is malformed and reports neither. An outcome's `status` and `termination_reason` form one evidence pair, which the kernel records as reported and never rewrites; a lifecycle row consumes it only when the complete pair satisfies that row's required evidence. A `ProviderError` raised by `invoke` asserts nothing about whether execution started, and no `ErrorCode` proves that it did not. These reports are `CLAIM` class (`WP-1`); they are what transition-matrix §7.2 `DISPATCHED → RUNNING` and §5 `DISPATCHED → WORKING` read as "provider reported start", and what §13 `WD-6`/`WD-7` classify. |
 
 ---
 
@@ -133,9 +146,9 @@ computed by `authority-matrix.md` §5 and frozen for the run.
 | 1 | kernel | resolve capabilities, freeze `effective_capabilities` | `ContractActivationRecord` (AUTHORITY) |
 | 2 | kernel | take `RealitySnapshot`, build `ScopeView` | `RealitySnapshot` (EVIDENCE) |
 | 3 | kernel | assemble prompt bundle and context, store content-addressed, compute `context_digest` | artifacts |
-| 4 | provider | `preflight` | `AuditEvent` |
-| 5 | kernel | persist the `InvocationRequest` as `request_ref` with its `idempotency_key` and `controller_epoch`, and append it — **before** any provider call (`WP-15`) | `AuditEvent` (durable identity) |
-| 6 | kernel | `WorkerInvocation` → `DISPATCHED` | `AuditEvent` |
+| 4 | kernel | persist the `InvocationRequest` as `request_ref` with its `idempotency_key` and `controller_epoch`, and append it — **before** any provider call, `preflight` included (`WP-15`) | `AuditEvent` (durable identity) |
+| 5 | provider | `preflight`; a §2.1 `UNSUPPORTED_ROLE` or `UNKNOWN_BINDING` refusal is `REJECTED_BY_POLICY` (transition-matrix §7.2, §13 `WD-3`) | `AuditEvent` |
+| 6 | kernel | `WorkerInvocation` → `DISPATCHED`, co-committed for a run's first invocation with the run and stage rows (transition-matrix §13 `WD-4`) | `AuditEvent` |
 | 7 | provider | `invoke`; each side effect via `ToolBridge.call` | one `AuditEvent` per call, with `capability_used` |
 | 8 | kernel | measure usage, bound output, mint `WorkerReceipt` with `attribution = DIRECT` | `WorkerReceipt` (EVIDENCE of what was said) |
 | 9 | kernel | convert `requested_validations` into `ValidationOperation` records | CLAIM → request |
@@ -191,3 +204,4 @@ The whole sequence only decides what already happened.
 | `CF-13` | `lookup` on a key whose execution finished returns `FINISHED` with that outcome, on a key still executing returns `LIVE`, and in neither case starts, resumes, extends, or bills an execution — verified by usage metering showing no delta across the call (`WP-16`) |
 | `CF-14` | `lookup` on a `FAILED`, `TIMED_OUT`, `CANCELLED` or `REFUSED` execution returns that status, not `COMPLETED` (`WP-16`, transition-matrix §7.2) |
 | `CF-15` | a provider that does not implement `lookup` is refused registration for governed mutation rather than accepted with recovery degraded (`WP-17`) |
+| `CF-16` | a task the provider declined is reported with the pair `status = REFUSED`, `termination_reason = REFUSAL` and never with another status; an execution that began is never reported `REFUSED`; and `status` and `termination_reason` agree, so a `REFUSED` status always carries `REFUSAL` (`WP-18`) |

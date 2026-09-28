@@ -190,7 +190,7 @@ re-evaluates the remainder; the holder returns to `NONE` only when none hold.
 | `ALLOCATED` | `DISPATCHED` | a `WorkerInvocation` accepted by a provider; `granted_capabilities ⊆ effective_capabilities` | — | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `ALLOCATED` | `CLOSED_ABORTED` | activation revoked before dispatch | revocation record | `run.abort` | `AUTO` | `AUTO` | — |
 | `DISPATCHED` | `WORKING` | provider reported execution started | — | `worker.invoke` | `AUTO` | `AUTO` | — |
-| `DISPATCHED` | `CLOSED_ABORTED` | provider rejected or failed to start | `WR` with `termination_reason = PROVIDER_ERROR` | `run.abort` | `AUTO` | `AUTO` | — |
+| `DISPATCHED` | `CLOSED_ABORTED` | provider rejected or failed to start | `WR` with `termination_reason ∈ {PROVIDER_ERROR, REFUSAL}` | `run.abort` | `AUTO` | `AUTO` | — |
 | `WORKING` | `VALIDATING` | ≥1 `WR` present and ≥1 `ValidationOperation` authorized | `WR` | `validation.request` | `AUTO` | `AUTO` | — |
 | `WORKING` | `AWAITING_DECISION` | `ESC(OPEN)` non-auto-resolvable bound to run | `ESC(OPEN)` | `escalation.raise` | `AUTO` | `AUTO` | — |
 | `WORKING` | `CLOSED_EXPIRED` | `now > deadline_at` | `WR` with `termination_reason = DEADLINE` | `run.abort` | `AUTO` | `AUTO` | — |
@@ -303,7 +303,7 @@ an integrity violation (§9.3).
 | from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
 |---|---|---|---|---|---|---|---|
 | `∅` | `PENDING` | run `lifecycle = ALLOCATED` or `WORKING`; budget headroom; every earlier invocation and commit intent of the run has `reconciliation_state ∈ {NOT_REQUIRED, ADOPTED, ORPHANED}` (`RUN-INV-3`) | `ACT`, and the `InvocationRequest` persisted as `request_ref` with its `idempotency_key` and `controller_epoch` **before** any provider call | `worker.invoke` | `CONFIRM` first invocation of a run, else `AUTO` | `AUTO` | — |
-| `PENDING` | `REJECTED_BY_POLICY` | requested capabilities exceed run's effective set, or provider not in registry | — | `worker.invoke` | `AUTO` | `AUTO` | — |
+| `PENDING` | `REJECTED_BY_POLICY` | requested capabilities exceed run's effective set, or provider not in registry (the invocation's pinned `provider_id` and `provider_version`), or `preflight` returned `UNSUPPORTED_ROLE` or `UNKNOWN_BINDING` (worker_provider §2.1, §13 `WD-3`) | — | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `PENDING` | `DISPATCHED` | provider accepted; prompt bundle stored content-addressed | `prompt_bundle_ref` persisted | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `DISPATCHED` | `RUNNING` | provider reported start | — | `worker.invoke` | `AUTO` | `AUTO` | — |
 | `RUNNING` | `COMPLETED` | provider returned output within deadline | `WR` attested by runtime | `worker.invoke` | `AUTO` | `AUTO` | — |
@@ -312,6 +312,7 @@ an integrity violation (§9.3).
 | `PENDING`, `DISPATCHED`, `RUNNING` | `CANCELLED` | suspension, budget exhaustion, or human stop | `WR` with matching `termination_reason` | `run.abort` | `AUTO` | `AUTO` | — |
 | `PENDING`, `DISPATCHED`, `RUNNING` | `COMPLETED`, `FAILED`, `TIMED_OUT`, `CANCELLED` | reconciliation: `controller_epoch < project.controller_epoch`; `lookup(idempotency_key)` returned `FINISHED(outcome)` (`WP-16`). The invocation takes the status `outcome.status` maps to — `COMPLETED → COMPLETED`, `FAILED → FAILED`, `TIMED_OUT → TIMED_OUT`, `CANCELLED → CANCELLED`, `REFUSED → FAILED` — and never `COMPLETED` for a non-`COMPLETED` outcome | `WR` attested by the runtime carrying `outcome.termination_reason`, with `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
 | `PENDING`, `DISPATCHED`, `RUNNING` | `FAILED` | reconciliation: `lookup(idempotency_key)` returned `ABSENT` — the provider holds no outcome and no live invocation under that key, so the invocation never took effect | `WR` with `termination_reason = PROVIDER_ERROR` and `attribution = RECONCILED` | `recovery.reconcile` | `AUTO` | `AUTO` | — |
+| `DISPATCHED` | `FAILED` | `invoke` returned an `InvocationOutcome` with exactly `status = REFUSED` and `termination_reason = REFUSAL`: the provider declined the task and execution did not start (worker_provider `WP-18`, §13 `WD-6` row R); never taken through `RUNNING`, never on a `ProviderError`, and never on a `REFUSED` outcome with any other reason | `WR` with `termination_reason = REFUSAL`, `attribution = DIRECT` | `worker.invoke` | `AUTO` | `AUTO` | — |
 
 Reconciliation sets `reconciliation_state` per §5.1: `ADOPTED` on the
 `FINISHED(outcome)` row — **for every outcome status, not only `COMPLETED`** —
@@ -522,6 +523,7 @@ or mode can authorize the action.
 | cite a `HumanDecision` with `decision_state ≠ VALID` as `DEC(K)` or `CONFIRM` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `HD-INV-4`; a consumed, expired, void, or stale approval no longer describes the reality it was granted against |
 | mint a `ReviewAttestation` | `WORKER`, `ADAPTER`, `HUMAN` | `NONE_GRANTABLE` | `DENY` | `DENY` | `review.attest` is `KERNEL`; a self-attested review would promote a CLAIM to EVIDENCE by assertion |
 | cite a `Review` directly as `required_evidence` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `G-1`; the `Review` is the judgement, the `ReviewAttestation` is the kernel's measurement of it |
+| call `WorkerProvider.invoke` for a `WorkerInvocation` whose `request_ref`, `idempotency_key` and `controller_epoch` are not yet durable, or that is not in `DISPATCHED` committed under the current `project.controller_epoch` | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `G-9`, evidence-model §3.2.1: an effect with no durable identity is unreconcilable; outside current-epoch `DISPATCHED` the call is either a second execution after an outcome was recorded or a post-restart re-execution `WP-16` forbids. A same-key re-send while still `DISPATCHED` in the current epoch and before `deadline_at` is the `WP-6`/`CF-11` retry and is not this row |
 
 ---
 
@@ -673,3 +675,300 @@ procedure (`AX-8`).
 | `SB-5` | **Equality.** An approved `target.origin` must already be canonical; a non-canonical value is a binding failure. The environment the act configures is taken from the relay configuration's origin input. Only that input may have a path, and the path may only be empty or exactly `/`. It is compared with the approved origin in five steps: (1) parse and validate it — the scheme must be `https`; there must be no userinfo, query or fragment; the path must be empty or exactly `/`; no `%`, whitespace, control character or backslash may appear; (2) require its host to be in the admitted set, form A or form B, refusing anything else, including an IPv6 literal; (3) canonicalize the host and port under `SB-4` — lowercase the host, drop the port if it is 443, and otherwise write the port explicitly; (4) remove the trailing `/`; (5) compare the resulting canonical origin **byte for byte** with the approved artifact's `target.origin`. The act is legal only if they are identical. |
 | `SB-6` | **Runtime-key correspondence, qualified.** The runtime compares relay destinations by one key, the pair `(hostname.lower(), port)` with the port defaulting to 443; `SB-4` gives that key exactly one string form and adds no entity, field, enum or `CapabilityId`. The correspondence holds **only for the admitted host set**: canonical DNS hostnames and canonical IPv4 literals. Over that set the canonical origin corresponds one-to-one with the runtime's `(host, port)` destination key, so the relay's request-time destination check compares the same origin the human approved. No equivalence is claimed for IPv6 or for any other excluded host representation. |
 | `SB-7` | **Binding checks.** The act is legal only if every one of these holds: (1) the artifact resolves to a stored, unredacted, untruncated artifact; (2) its digest verifies; (3) its octets are exactly the `JCS` of the payload they parse to, with no member missing or extra; (4) `act = "secret.read"`; (5) `project_id` equals the decision's `project_id` and the run's project; (6) `run_id` equals the decision's `subject.id` and the acted run; (7) `activation_id` equals `run.activation_id`, and that activation is live; (8) `controller_epoch` equals `project.controller_epoch` at the act; (9) `secret_name` is exactly the name the resolver is called with; (10) `target.kind = "INFERENCE_RELAY"`, `target.origin` is canonical, and it is byte-identical to the canonical form of the configured relay origin (`SB-5`). |
+
+---
+
+## 13. Worker dispatch lifecycle
+
+One ordered, crash-safe procedure that ties together the `RI-8` gates (a) and (b), the
+§7.2 `WorkerInvocation`, §5 `StageRun` and §3 `Stage` rows, and the provider `invoke`
+call. It is **not** an axis, following the precedent of §10 and §12, and it uses the
+existing lifecycle vocabulary only. The durable pre-provider record is the
+`WorkerInvocation` in `DISPATCHED`, committed in T2 (§13.1) of the current
+`controller_epoch`; `PENDING` (T1) carries the durable identity. The dispatch record is
+owned by the `WorkerInvocation` (`status`, `request_ref`, `idempotency_key`,
+`controller_epoch`); the `StageRun` and `Stage` carry only the first-invocation lifecycle
+consequence. `DISPATCHED` is a subordinate lifecycle state (domain-model §10.4), not a
+grant. Transition events are `AUTHORITY`-class envelopes: kernel capability, actor
+`RUNTIME`, no `authority_ref` (`AX-7`, evidence-model §3.3 authority binding). The receipt is `EVIDENCE`.
+Provider reports are `CLAIM` (worker_provider `WP-1`); "provider reported start" reads the
+`WP-18` report.
+
+Four facts are kept apart:
+
+| fact | recorded by |
+|---|---|
+| A0: durable identity | T1 `∅ → PENDING` event |
+| A: durable intent to dispatch | T2 `PENDING → DISPATCHED` event |
+| B: the provider side effect | the `invoke` call carrying the key. Never recorded directly |
+| C: execution established | T3 `DISPATCHED → RUNNING`, only on a non-`REFUSED` outcome (`WP-18`) |
+| D: the result | T3 receipt plus a terminal row, where a legal row exists (`WD-6`) |
+
+Execution-truth categories:
+
+| category | source | consequence |
+|---|---|---|
+| established | `InvocationOutcome` with `status ≠ REFUSED`, returned by `invoke` or by `lookup` `FINISHED` | may support `RUNNING` / `WORKING` |
+| not started | `InvocationOutcome` with the exact pair `status = REFUSED`, `termination_reason = REFUSAL`; recovery-only `lookup` `ABSENT` | `DISPATCHED → FAILED` (direct) or the §7.2 `ABSENT` reconciliation row (recovery); never `RUNNING` |
+| ambiguous | any `ProviderError` (every code, including `REFUSED` raised as an error); an `InvocationOutcome` with `status = REFUSED` and `termination_reason ≠ REFUSAL` (a malformed report, `WP-18`); transport loss; no answer; kernel-forced termination | stays `DISPATCHED`: re-send the same key only in the current epoch while `DISPATCHED` and before `deadline_at`; afterwards wait for restart and reconciliation |
+
+**Evidence-pair rule.** A returned `InvocationOutcome`'s `status` and
+`termination_reason` form one evidence pair. The kernel never rewrites, replaces or
+synthesizes either member to satisfy a lifecycle row. A direct terminal transition is
+legal only when the complete pair satisfies that row's required evidence and the row's
+own preconditions hold. Otherwise no direct terminal row is taken and no direct receipt
+is minted. Recovery and adoption (7.2-9) record the same true pair. Kernel-observed
+deadline or budget state never changes the pair: it can only fail a row's precondition.
+Budget exhaustion is handled separately by the §4 `SUSPENDED_BY_BUDGET` row.
+
+Rows are cited by section and ordinal: 7.2-1 is §7.2 `∅ → PENDING`, 7.2-2
+`PENDING → REJECTED_BY_POLICY`, 7.2-4 `DISPATCHED → RUNNING`, 7.2-5..7.2-8 the
+`RUNNING → COMPLETED`, `TIMED_OUT`, `FAILED` and `→ CANCELLED` rows, 7.2-9 the
+`FINISHED(outcome)` reconciliation row and 7.2-10 the `ABSENT` reconciliation row; 5-2..5-5
+are §5 `ALLOCATED → DISPATCHED`, `ALLOCATED → CLOSED_ABORTED`, `DISPATCHED → WORKING` and
+`DISPATCHED → CLOSED_ABORTED`; 3-7, 3-8 and 3-11 are §3 `CONTRACTED → RUNNING`,
+`CONTRACTED → READY` and `RUNNING → CONTRACTED`.
+
+| id | rule |
+|---|---|
+| `WD-1` | **Dispatch record.** As above. §13 adds no entity, field, lifecycle value, `DecisionKind` or `CapabilityId`, and no `DISPATCHING`. The one enum value this lifecycle adds is `REFUSAL` in `WorkerReceipt.termination_reason` (domain-model §8.2). |
+| `WD-2` | **Admission and key (T1).** Checks per §13.2 A. `attempt = ⟨run_id, invocation_ordinal_within_run⟩`, where the ordinal is 1 + the number of invocation records of the same `run_id` admitted before this one, of any status, counted inside the `∅ → PENDING` transaction. The key is `H(context_digest ‖ role ‖ attempt)`, where `‖` is defined by the canonical `KEY_PREIMAGE` encoding (§13.3) and `idempotency_key = "sha256:" + lowerhex(sha256(KEY_PREIMAGE))`, the default `Hash` form (domain-model §0.1). `run_id` is immutable and globally unique, and the ordinal is deterministic, so keys are distinct within a run and across runs, and stable across a restart. No field is added. **Collision refusal (fail-closed backstop):** if the computed key equals the key of any invocation record in the kernel's store (any project, run or status), `∅ → PENDING` is refused before any write — no event, no invocation, no decision consumed. |
+| `WD-3` | **Preflight.** `preflight` runs only after T1 has made `PENDING` durable and before T2; it is the first provider call. Its dispositions are §13.2 B (record 7.2-2 in its own transaction) and §13.2 C (not recorded). A preflight call that returns nothing writes nothing. |
+| `WD-4` | **Dispatch (T2).** As §13.1. Every check runs before any write. Any failure rolls back all of T2 and consumes nothing. |
+| `WD-5` | **Invoke and re-send.** `invoke` is called only for an invocation committed `DISPATCHED` in the current epoch (§9.3). The same key may be re-sent (`WP-6`, `CF-11`) only while the invocation is still `DISPATCHED`, in the current epoch, and before `deadline_at`. That includes `UNAVAILABLE`/`RATE_LIMITED` retries with backoff (worker_provider §2.1). There is no re-send after `deadline_at` and no `invoke` after a restart (`WP-16`). |
+| `WD-6` | **Outcome recording (T3).** Per §13.4. |
+| `WD-7` | **Ambiguity and deadline.** An ambiguous invocation stays `DISPATCHED` and the run and stage do not advance. At `deadline_at` the kernel terminates the call regardless of provider state (`WP-10`) and may request `cancel` with reason `DEADLINE` under `run.abort`; neither the request nor its acknowledgement takes a row. After `deadline_at` there is no re-send, no same-epoch `lookup` (`recovery.reconcile` is not widened) and no direct timeout row from `DISPATCHED`. Final resolution depends on a controller restart, which requires GR-33 N6 `controller.start`, and on the existing reconciliation (7.2-9, 7.2-10 and the §5 `RECOVERY_AMBIGUITY` row). The session stops for the owner. |
+| `WD-8` | **Stage after a first-invocation run abort.** Row 3-11 `RUNNING → CONTRACTED` is taken in T4 only if its preconditions hold, `attempt_count < max_attempts` included. At equality see `WD-12`. |
+| `WD-9` | **Recovery (existing rows unchanged).** After the barrier clears, each run consequence is taken under its own row and capability in its own transaction, never under `recovery.reconcile`. 7.2-9 always records the outcome's true pair: the status mapping 7.2-9 already defines, with the receipt carrying `outcome.termination_reason` unchanged. A run consequence is justified by the complete reconciled pair, or by the recovery observation itself (`ABSENT`). A receipt's `termination_reason` alone never selects a run row. `FINISHED(outcome)`, `status ≠ REFUSED` (any reason): 7.2-9 terminal, then run 5-4 `DISPATCHED → WORKING`, justified by the status, which establishes execution (`WP-18`). `FINISHED(REFUSED + REFUSAL)`: 7.2-9 `→ FAILED` with the reconciled receipt carrying `REFUSAL`; for a first invocation, run 5-5 `DISPATCHED → CLOSED_ABORTED`, citing that receipt as its "provider rejected" evidence. `FINISHED(REFUSED + any reason ≠ REFUSAL)` — a malformed pair: 7.2-9 `→ FAILED` with the reconciled receipt carrying that true reason, unchanged. The pair establishes neither start nor non-start, so **neither 5-4 nor 5-5 is taken**, even when the reason is `PROVIDER_ERROR`. The run stays `DISPATCHED` and its disposition is left to existing human and escalation handling. This section adds no transition, receipt reason or authority for it. `ABSENT`: 7.2-10, then 5-5 (receipt `PROVIDER_ERROR`). `LIVE`: keep tracking, then adopt. Unanswerable: `UNRESOLVABLE`, a `RECOVERY_AMBIGUITY` escalation and the §5 `RECOVERY_AMBIGUITY` row. Then `WD-8`. |
+| `WD-10` | **Retries.** Transport level: `WD-5` only. Invocation level: a new invocation in the same run only through a fresh E1/T1/P/E2/T2 under the §8 "later" branch; never a replacement for an unreconciled invocation (§9.3). `REFUSED` is never retried on the same binding (`WP-13`). Attempt level: a new `StageRun`, bounded by `attempt_count < max_attempts`. `max_attempts` stays a human import value (`RI-6`); Pilot-1's value of 1 is a pilot parameter, not a default. |
+| `WD-11` | **Disposal of a run spent before T2.** See §13.5. |
+| `WD-12` | **Attempts exhausted.** When a first-invocation run closes and `attempt_count = max_attempts`, 3-11 is barred and the stage stays `RUNNING` with no open run. No new run can start: 5-1 needs the stage `READY` or `CONTRACTED`, and 3-7 needs `attempt_count < max_attempts`. No `REPEATED_FAILURE` is raised automatically; that trigger stays `attempt_count > max_attempts` (domain-model §9.B :768). The exits are the existing human-controlled rows where their predicates hold: `RUNNING → ABANDONED` (`DECIDE(ABANDON)`), or `RUNNING → AWAITING_DECISION` only if a non-auto-resolvable escalation already exists. The pre-existing `>` (domain-model :768) versus `≥` (§3 `AWAITING_VALIDATION → AWAITING_DECISION` and `AWAITING_REVIEW → AWAITING_DECISION`) inconsistency is left unchanged and is not claimed closed. |
+| `WD-13` | **Suspension.** At E1/T1 and E2/T2, project, stage and run suspension are all `NONE`; `QUIESCING` denies both. An invocation in flight is drained through `QUIESCING` (§4 `NONE → QUIESCING`) and 7.2-8. Reconciliation is not gated by §8 (`RI-8` names exactly three rows). |
+| `WD-14` | **After a restart.** Any provider call is a new invocation and passes gates (a) and (b) afresh. The run's `secret.read` must be re-exercised per `SR-7`. §12 admits `secret.read` only at run `ALLOCATED`/`WORKING`, so a relay secret for the first invocation is resolved before T2. This is an observation, not a §12 change. |
+| `WD-15` | **Bounded.** §0–§4, §6, §7.1, §7.3–§7.6, §8, §10, §11 (`RI-8`, `AC-*`) and §12 are unchanged. The other edits this lifecycle makes to this document are exactly: the 7.2-2 preconditions cell, the 5-5 required_evidence cell, the appended §7.2 `DISPATCHED → FAILED` row and the appended §9.3 `invoke` row. |
+
+### 13.1 Ordering
+
+| step | writes | content |
+|---|---|---|
+| E1 | none | Every pre-T1 check (§13.2 A, `WD-2`). |
+| T1 | one immediate transaction | Re-run every E1 check. Compute the ordinal and key; refuse on collision. Append the `∅ → PENDING` event (payload: key, request digest, `controller_epoch`, `activation_id`, ordinal). Write the invocation. First invocation under `SUPERVISED`: consume the 7.2-1 approval (`VALID → CONSUMED` under `audit.append`, citing the act event). Commit. |
+| P | its own transaction only for a 7.2-2 rejection | `preflight(request)`: the first provider call. Disposition per `WD-3`. |
+| E2 | none | Every T2 check (§13.2). |
+| T2 | one immediate transaction | Re-run every E2 check. First invocation: `e_wi` `PENDING → DISPATCHED`; `e_run` run `ALLOCATED → DISPATCHED`; `e_stage` stage `CONTRACTED → RUNNING` with `attempt_count` n → n+1; `SUPERVISED` only: `e_consume` of the 3-7 approval. Later invocations: `e_wi` only. Commit. |
+| B | — | `invoke(request, bridge)` only after T2 has committed, in the same epoch. Same-key re-send only under `WD-5`. |
+| T3 | one immediate transaction | Refuse and write nothing if the epoch changed. Otherwise classify and record per `WD-6`. Commit. |
+| T4 | own transaction | Stage consequence after a first-invocation run abort (`WD-8`). |
+
+Invocation `PENDING → DISPATCHED` and run `ALLOCATED → DISPATCHED` co-commit in T2 as
+separate events; stage `CONTRACTED → RUNNING` co-commits with them, and its distinct
+`SUPERVISED` `CONFIRM` (`AC-3`) is validated and consumed in T2. `attempt_count` is the
+number of `StageRun`s that have entered `RUNNING`; it increments atomically with
+`CONTRACTED → RUNNING` and is checked on the prior value. "First invocation" is the first
+invocation record admitted for the run; `RI-8` is read literally.
+
+### 13.2 Admission partition
+
+**A. Before T1; a refusal writes nothing and spends no first-invocation slot:**
+
+| # | check |
+|---|---|
+| 1 | §8 gate (a), `RI-8` |
+| 2 | run `lifecycle ∈ {ALLOCATED, WORKING}` |
+| 3 | budget headroom |
+| 4 | `RUN-INV-3` barrier: every earlier invocation and commit intent is reconciled |
+| 5 | the run's activation is live (un-revoked, un-expired) |
+| 6 | first invocation under `SUPERVISED`: the 7.2-1 `APPROVE` is valid, current and has an unspent nonce |
+| 7 | the provider resolves in the registry to `(provider_id, provider_version)` |
+| 8 | the provider supports the contract's role, the chosen binding, and the assembled context fits the declared context limit |
+| 9 | deterministic key derivation and key collision refusal (`WD-2`) |
+
+Items 7 and 8 read the `ProviderDescriptor` the registry obtained from `describe` at
+registration. No provider call is made before T1.
+
+**B. After `PENDING`, recorded as 7.2-2 `PENDING → REJECTED_BY_POLICY`, only for causes
+existing semantics support:**
+
+- `preflight` returned `UNSUPPORTED_ROLE` or `UNKNOWN_BINDING` (worker_provider §2.1:
+  "invocation `REJECTED_BY_POLICY`");
+- the invocation's pinned `(provider_id, provider_version)` is no longer in the registry:
+  the row's existing "provider not in registry";
+- the requested capabilities exceed the run's effective set: the row's existing cause.
+
+**C. After `PENDING`, not recorded; the invocation stays `PENDING` unless an existing row
+applies:**
+
+- `preflight` returned `CONTEXT_TOO_LARGE`: the worker_provider §2.1 response applies
+  ("kernel re-bundles or escalates `CONTRACT_AMBIGUITY`"). Re-bundling means a new
+  invocation, which for a run's first invocation is not admissible, so the kernel
+  escalates `CONTRACT_AMBIGUITY` per §2.1.
+- `preflight` returned a bare `accepted = false` with no mapped code: no row and no §2.1
+  response exist, so nothing is written.
+- `RI-8`(b) fails; a suspension is not `NONE`; the barrier is held; the epoch changed; the
+  activation was revoked or expired; the 3-7 approval is missing, stale or used; the
+  prompt bundle is missing.
+- No direct row is used to clear such an invocation. No receipt is minted for an
+  invocation that was never invoked, and `PENDING → CANCELLED` is not taken to clear a
+  run. The invocation stays `PENDING` until a controller restart reconciles it (7.2-10 on
+  `ABSENT`; `WD-11`).
+
+Case C spends the first-invocation slot. If the invocation cannot proceed, the run follows
+the `WD-11` disposition, which depends on a controller restart (GR-33 N6).
+
+**E2 checks (before T2):**
+
+- §8 gate (b), evaluated on the state before T2;
+- barrier clear;
+- invocation epoch equals project epoch;
+- status is `PENDING`;
+- prompt bundle stored;
+- preflight accepted;
+- no case C condition;
+- first invocation only:
+  - row 5-2 preconditions;
+  - row 3-7 preconditions: run reaches `DISPATCHED` in this transaction;
+    `attempt_count < max_attempts` on the prior count; budget remaining; activation live;
+    run `input_snapshot_id` present; project `ACTIVE`/`SETTLING`; project and stage
+    suspension `NONE`;
+  - `SUPERVISED` 3-7 `APPROVE`: subject `{STAGE, stage_id}`; `grants = revokes = ∅`;
+    snapshot-bound to the newest `COMPLETE` snapshot; valid, with an unspent nonce;
+    distinct from every other confirmation (`AC-3`); recorded after preflight,
+    immediately before T2.
+
+### 13.3 `KEY_PREIMAGE`
+
+The `WD-2` tuple is encoded canonically and injectively, components in this fixed order:
+
+```
+KEY_PREIMAGE =
+  u32be(len(C)) || C ||   C = ASCII octets of context_digest in its canonical Hash
+                          form "<alg>:<lowerhex>" (domain-model §0.1)
+  u32be(len(R)) || R ||   R = UTF-8 octets of the WorkerRole member name,
+                          e.g. "IMPLEMENTER"
+  u32be(len(I)) || I ||   I = UTF-8 octets of StageRun.run_id exactly as recorded
+                          (an Id string; no case folding or other normalization)
+  u64be(n)                n = invocation_ordinal_within_run, 1 ≤ n ≤ 2^64 − 1
+```
+
+- `u32be(x)` is the unsigned 32-bit big-endian encoding of the octet length `x`. Each
+  variable-length component must be at most 2^32 − 1 octets, otherwise `∅ → PENDING` is
+  refused before any write.
+- `u64be(n)` is the unsigned 64-bit big-endian encoding. `n = 0` is invalid.
+- Every variable-length component is length-prefixed and the ordinal has a fixed width, so
+  parsing is unambiguous. The same logical tuple always yields the same octets, and
+  distinct tuples always yield distinct octets.
+- The key is `"sha256:" + lowerhex(sha256(KEY_PREIMAGE))`.
+- The collision refusal (`WD-2`) remains the fail-closed backstop against digest
+  collision.
+- No field is added. This defines only the byte encoding of the `WD-2` tuple.
+
+### 13.4 Outcome recording
+
+In every case the receipt event precedes the terminal event (evidence-model §3.3 evidence reachability). T3
+evaluates in this fixed order:
+
+1. **Classify the result.** Was a `ProviderError` raised, or no answer received (step 2)?
+   Otherwise take the returned pair `(status, termination_reason)`.
+2. **`ProviderError`, no answer, transport loss:** ambiguous (row X below).
+3. **`status = REFUSED`:** only the exact pair `REFUSED + REFUSAL` is the refusal path
+   (row R). Any other `REFUSED` pair is malformed (row M).
+4. **`status ≠ REFUSED`:** execution is established (`WP-18`). Record 7.2-4
+   `DISPATCHED → RUNNING` and, for a first invocation, 5-4 run `DISPATCHED → WORKING`.
+   Then look up the exact pair in rows D1–D6. A direct terminal row is taken only if the
+   pair matches exactly **and** that row's own precondition holds.
+5. **Anything else:** fail closed (row F).
+
+The rows are keyed on exact pairs, and each row's precondition is a separate condition, so
+a result matches at most one row. No branch substitutes kernel observation for the
+returned pair.
+
+| row | returned pair / result | row precondition that must also hold | T3 records |
+|---|---|---|---|
+| R | `REFUSED` + `REFUSAL` | — | receipt `REFUSAL`, `DIRECT`; §7.2 `DISPATCHED → FAILED`, never `RUNNING`; first invocation: 5-5 run `DISPATCHED → CLOSED_ABORTED` (evidence cell accepts `REFUSAL`); later invocation: run stays `WORKING` |
+| M | `REFUSED` + any reason ≠ `REFUSAL` | — | Malformed provider evidence. Not classified as execution established and not as not started: **no** `RUNNING`, **no** receipt, **no** refusal row, no run or stage transition. Nothing is written and the invocation stays `DISPATCHED` (as row X). The true pair is preserved (see `WD-9`). |
+| D1 | `COMPLETED` + `COMPLETED` | 7.2-5 "provider returned output within deadline": the kernel-measured end is before `deadline_at` | receipt `COMPLETED`; 7.2-5 `RUNNING → COMPLETED` |
+| D2 | `TIMED_OUT` + `DEADLINE` | 7.2-6 "`deadline_at` passed" | receipt `DEADLINE`; 7.2-6 `RUNNING → TIMED_OUT` |
+| D3 | `FAILED` + `PROVIDER_ERROR` | 7.2-7 "provider error" (the pair itself) | receipt `PROVIDER_ERROR`; 7.2-7 `RUNNING → FAILED` |
+| D4 | `CANCELLED` + `BUDGET` | 7.2-8 "budget exhaustion": the kernel observed budget exhaustion and requested `cancel` with reason `BUDGET` | receipt `BUDGET`; 7.2-8 `RUNNING → CANCELLED` |
+| D5 | `CANCELLED` + `POLICY_STOP` | 7.2-8 "suspension": a suspension of the project, stage or run held and the kernel requested `cancel` with reason `SUSPENSION` | receipt `POLICY_STOP`; 7.2-8 `RUNNING → CANCELLED` |
+| D6 | `CANCELLED` + `HUMAN_STOP` | 7.2-8 "human stop": a human stop was recorded and the kernel requested `cancel` with reason `HUMAN_STOP` | receipt `HUMAN_STOP`; 7.2-8 `RUNNING → CANCELLED` |
+| F | a non-`REFUSED` pair not in D1–D6, or a D-pair whose row precondition fails. Examples: `COMPLETED + COMPLETED` after the kernel-measured deadline; `FAILED` with `BUDGET` / `POLICY_STOP` / `HUMAN_STOP` / `DEADLINE` / `COMPLETED` / `REFUSAL`; `CANCELLED + DEADLINE`; `CANCELLED + BUDGET` with no observed exhaustion; `TIMED_OUT + DEADLINE` before `deadline_at`; any pair whose reason contradicts its status | — | **Fail closed.** Step 4's 7.2-4 and 5-4 stand (execution is established). No receipt is minted, no reason is substituted, and no terminal row is taken. The invocation stays `RUNNING`, so `WD-5` forbids any re-send. The output is retained under the key (`WP-6`). After the next controller start, 7.2-9 records the true pair with `RECONCILED` attribution. No escalation is invented. |
+| X | any `ProviderError` raised by `invoke`, whatever its code (`REFUSED`, `PROVIDER_ERROR`, `CANCELLED`, `UNAVAILABLE`, `RATE_LIMITED`, `UNSUPPORTED_ROLE`, `UNKNOWN_BINDING`, `CONTEXT_TOO_LARGE`); no answer; transport loss | — | Ambiguous (`WD-7`, `WP-18`). The code alone authorizes no terminal invocation transition and no run or stage transition, and no direct receipt is minted from it. It implies neither that execution started nor that it did not. Nothing is written and the invocation stays `DISPATCHED`. A same-key re-issue is allowed only under `WD-5` (current epoch, still `DISPATCHED`, before `deadline_at`). After `deadline_at`, resolution needs a restart and reconciliation. |
+
+Kernel-observed deadline or budget state never selects a row by itself and never rewrites a
+pair. It only decides whether a D-row's precondition holds. When the kernel observation
+and the provider's pair disagree, the result is row F (or M), never a receipt with a
+substituted reason.
+
+### 13.5 Disposal of a run spent before T2
+
+Applies when a run is `ALLOCATED` and its first-invocation slot is spent. That happens
+after a §13.2 B rejection (the invocation is terminal `REJECTED_BY_POLICY`), after a §13.2
+C residual or a refused E2 check (the invocation is still `PENDING`), or after a crash
+between T1 and T2 (an old-epoch `PENDING` invocation). "No run started" in 3-8 means no run
+has been `ALLOCATED` (has `started_at`, domain-model §5), so a run spent before T2 is
+disposed of by human revocation and the stage stays `CONTRACTED`.
+
+Phase 1 — only while any invocation of the run is still `PENDING`:
+
+| step | act | authority |
+|---|---|---|
+| 1 | Do not mint a direct `WorkerReceipt`. Do not take `PENDING → CANCELLED` to clear the run. | truthful receipts (domain-model §8.2); no invented drain |
+| 2 | A controller restart and recovery boundary is required: `project.controller_epoch` increments, which requires GR-33 N6 `controller.start`. The `PENDING` invocation is now old-epoch, so its `reconciliation_state` is `PENDING` (§5.1). | `P-INV-4`; §5.1; worker_provider §6.1 |
+| 3 | Reconcile it by `lookup(idempotency_key)` under `recovery.reconcile` only. **`ABSENT`:** 7.2-10 `→ FAILED`, `ORPHANED`, receipt `PROVIDER_ERROR` with `attribution = RECONCILED` (a truthful record that nothing ran). **`FINISHED(outcome)`:** 7.2-9, `ADOPTED`, receipt carrying the outcome's reason (`REFUSAL` is representable). **`LIVE`:** keep tracking under the same key until the outcome arrives, then adopt. **Unanswerable:** `UNRESOLVABLE` and a `RECOVERY_AMBIGUITY` escalation. | 7.2-9, 7.2-10 and the paragraph after the §7.2 table; `WP-16` |
+| 4 | The run is not closed until every one of its invocation records is terminal and reconciled (`NOT_REQUIRED`, `ADOPTED` or `ORPHANED`). An `UNRESOLVABLE` invocation keeps the run `ALLOCATED`, waiting on the human resolution of its `RECOVERY_AMBIGUITY` escalation. No further exit is added for that case: the §5 `RECOVERY_AMBIGUITY` row does not cover `ALLOCATED`. | `RUN-INV-3`; §5 `RECOVERY_AMBIGUITY` row |
+
+Phase 2 — once every invocation of the run is terminal and reconciled (a §13.2 B rejection
+enters here directly, with no restart):
+
+| step | act | authority |
+|---|---|---|
+| 5 | A `HUMAN` records `DEC(REVOKE_CAPABILITY)`: subject `{CONTRACT, contract_id}`, `scope ≠ PROJECT` (so `AX-19`(c) retires no project grant). This decision kind is not snapshot-bound. Under `AUTONOMOUS` the row verdict is `CONFIRM` (an `APPROVE`). | §6 `ACTIVE → REVOKED`: `SUPERVISED` `DECIDE(REVOKE_CAPABILITY)`; `AUTONOMOUS` "else `CONFIRM`" |
+| 6 | Transaction TR1: contract `ACTIVE → REVOKED` (`contract.revoke`, `KERNEL`, actor `RUNTIME`). **In the same transaction**, write the run's activation `revoked_at` (the event time), `revoked_by` (the event actor, with `on_behalf_of` the deciding human, `AX-16`) and `revocation_reason = HUMAN_REVOKE`. Consume the decision, citing the revocation event. | §6 `ACTIVE → REVOKED`; domain-model §6.2 (`revoked_at`, `revoked_by`, `revocation_reason`). No other row writes these fields, and 5-3 requires "activation revoked" |
+| 7 | Transaction TR2: run 5-3 `ALLOCATED → CLOSED_ABORTED` (`run.abort`), citing the TR1 revocation event as its "revocation record". No invocation is drained, and none is still non-terminal. | 5-3 |
+| 8 | `attempt_count` is unchanged: the run never entered `RUNNING`. | domain-model §4 `attempt_count` |
+| 9 | The stage stays `CONTRACTED`. 3-8 is barred because an `ALLOCATED` run has started. | 3-8; domain-model §5 `started_at` |
+| 10 | A later attempt needs a new contract: `∅ → DRAFT` (`contract.author`), then that contract's first activation/run pair — 6-2 + 5-1 under `AC-1`, with two `CONFIRM`s under `SUPERVISED`. 5-1 admits a `CONTRACTED` stage. The revoked contract is never reused (§6). There is no automatic revocation. | 5-1, §6 `∅ → DRAFT` and `DRAFT → ACTIVE`, §6 terminal note; `AC-1`..`AC-3` |
+
+Phase 1 depends on the controller restart and recovery mechanism, so this disposal path
+does **not** make Pilot-1 runnable before GR-33 N6. The
+restart-boundary semantics of `WD-7` are unchanged.
+
+### 13.6 Crash and restart
+
+| crash point | durable state | resolution |
+|---|---|---|
+| before T1 commits | nothing | approval unspent; start again |
+| after T1, before T2 (including during preflight) | invocation `PENDING`, run `ALLOCATED`, stage `CONTRACTED` | §13.5 phase 1 (`lookup`; `ABSENT` → 7.2-10 `FAILED`/`ORPHANED`), then phase 2 |
+| after T2, before `invoke` | invocation and run `DISPATCHED`; stage `RUNNING`; `attempt_count` +1 | `ABSENT` → 7.2-10 → 5-5 → `WD-8` / `WD-12` |
+| during `invoke`, or ambiguous (`WD-7`) | as above | `LIVE`: track; `FINISHED`: per `WD-9`; `ABSENT`: 5-5; unanswerable: the §5 `RECOVERY_AMBIGUITY` row |
+| after return, before T3 | as above | `FINISHED` (`WP-6` retention) → `WD-9` |
+| after a fail-closed T3 (`RUNNING`, no receipt) | invocation `RUNNING`, run `WORKING` | 7.2-9 records the true status and reason |
+
+Duplicate execution is impossible: `invoke` is reachable only from a current-epoch
+`DISPATCHED` (§9.3); there is no re-send once the invocation has left `DISPATCHED` or after
+`deadline_at`; there is no `invoke` after a restart; keys are distinct per invocation and
+per run (`WD-2`), with collision refusal behind that; and at most one run per stage is
+unfinished (`RUN-INV-1`). It is detectable by evidence-model §3.2.1 effect attribution and
+worker_provider `CF-1`, `CF-11`, `CF-13` and `CF-16`.
+
+### 13.7 Events and refusals
+
+| event | class | capability | payload |
+|---|---|---|---|
+| `∅ → PENDING` | `AUTHORITY` | `worker.invoke` | key, request digest, epoch, activation, ordinal |
+| `PENDING → REJECTED_BY_POLICY` | `AUTHORITY` | `worker.invoke` | §13.2 B cause |
+| `PENDING → DISPATCHED`; run `ALLOCATED → DISPATCHED`, `DISPATCHED → WORKING` | `AUTHORITY` | `worker.invoke` | key / invocation id |
+| stage `CONTRACTED → RUNNING` | `AUTHORITY` | `run.start` | run, activation, `input_snapshot_id`, `attempt_count` n→n+1 |
+| approval consumed | per §7.5 | `audit.append` | cites the act event |
+| receipt | `EVIDENCE` | `worker.invoke` / `recovery.reconcile` | actual termination reason; `DIRECT`/`RECONCILED` |
+| `DISPATCHED → FAILED` | `AUTHORITY` | `worker.invoke` | receipt reference (`REFUSAL`) |
+| run `DISPATCHED → CLOSED_ABORTED` | `AUTHORITY` | `run.abort` | receipt reference (`PROVIDER_ERROR` or `REFUSAL`) |
+| contract `ACTIVE → REVOKED` plus activation revocation fields | `AUTHORITY` | `contract.revoke` | `revoked_at`, `revoked_by`, `revocation_reason` |
+| run 5-3 | `AUTHORITY` | `run.abort` | cites the revocation event |
+
+| case | handling |
+|---|---|
+| capability or mode denial | an `AX-8` event in its own transaction (`RI-5` precedent). A policy `DENY` also raises a `POLICY_CONFLICT` escalation |
+| precondition refusal (§13.2 A, §13.2 C, E2) | no event, nothing consumed (§12.2 precedent) |
+| `CONTEXT_TOO_LARGE` after T1 | raises a `CONTRACT_AMBIGUITY` escalation per worker_provider §2.1 |

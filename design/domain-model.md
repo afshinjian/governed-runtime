@@ -211,7 +211,7 @@ run it belongs to does anything further (`RUN-INV-3`).
 | `criteria_state` | `{Str: CriterionState}` | D | M | R | per acceptance criterion |
 | `active_contract_id` | `Ref<StageContract>?` | N | M | R | at most one `ACTIVE` |
 | `runs` | `[Ref<StageRun>]` | D | A | R | |
-| `attempt_count` | `uint32` | D | M | R | |
+| `attempt_count` | `uint32` | D | M | R | number of distinct `StageRun`s of this stage that have entered `RUNNING`; a run is counted once, in the store transaction that commits its §3 `CONTRACTED → RUNNING` (transition-matrix §13 `WD-4`); re-entry into `RUNNING` by the same run does not count; every `attempt_count < max_attempts` precondition reads the value before its transition |
 | `max_attempts` | `uint32` | Y | M | H | exceeding forces escalation |
 | `terminal_reason` | `Enum<SATISFIED,REJECTED,ABANDONED,SUPERSEDED>?` | N | I | R | set once on terminal entry |
 | `created_at` / `updated_at` | `Ts` | Y | M | R | |
@@ -582,7 +582,7 @@ superseded within the stage's scope.
 | `granted_capabilities` | `Set<CapabilityId>` | Y | I | R | ⊆ run's effective set |
 | `sandbox_profile_id` | `Str(1..64)` | Y | I | R | |
 | `budget_allocated` | `Budget` | Y | I | R | |
-| `idempotency_key` | `Hash` | Y | I | R | `H(context_digest ‖ role ‖ attempt)`; stable for the life of the invocation, including across controller restarts |
+| `idempotency_key` | `Hash` | Y | I | R | `H(context_digest ‖ role ‖ attempt)`, where `attempt` is the tuple `⟨run_id, invocation_ordinal_within_run⟩` and the ordinal is 1 + the number of `WorkerInvocation` records of the same `run_id` admitted before this one, of any status, counted inside its §7.2 `∅ → PENDING` transaction. `‖` is the canonical length-prefixed `KEY_PREIMAGE` encoding and `H` is `"sha256:" + lowerhex(sha256(KEY_PREIMAGE))` (transition-matrix §13 `WD-2`, which also defines collision refusal). No field is added. Stable for the life of the invocation, including across controller restarts |
 | `request_ref` | `ArtifactRef` | Y | I | R | the exact `InvocationRequest`, persisted **before** the first provider call; it makes the `idempotency_key` durable and the request auditable. Recovery reads it and never re-sends it — resolution is by `lookup(idempotency_key)` alone (`WP-16`) |
 | `controller_epoch` | `uint64` | Y | I | R | `project.controller_epoch` at creation |
 | `reconciliation_state` | `Enum<NOT_REQUIRED,PENDING,ADOPTED,ORPHANED,UNRESOLVABLE>` | D | M | R | derived solely by the reconciliation-state derivation table, transition-matrix §5.1 — the one derivation shared with `CommitIntent`. `ADOPTED` there means the outcome was established, not that it succeeded |
@@ -606,7 +606,7 @@ superseded within the stage's scope.
 | `requested_validations` | `[Ref<ValidationOperation>]` | D | A | R | |
 | `capability_violations_attempted` | `[{capability: CapabilityId, at: Ts, detail: Str(1..1024)}]` | Y | I | R | |
 | `scope_breaches_attempted` | `[{path: Path, at: Ts}]` | Y | I | R | |
-| `termination_reason` | `Enum<COMPLETED,DEADLINE,BUDGET,POLICY_STOP,PROVIDER_ERROR,HUMAN_STOP,INTEGRITY>` | Y | I | R | |
+| `termination_reason` | `Enum<COMPLETED,DEADLINE,BUDGET,POLICY_STOP,PROVIDER_ERROR,HUMAN_STOP,INTEGRITY,REFUSAL>` | Y | I | R | always the recorded outcome's own `termination_reason`, never rewritten or substituted. The outcome's `status` and `termination_reason` form one evidence pair, and a receipt is minted directly only for a pair a legal row admits (transition-matrix §13 `WD-6`); reconciliation (7.2-9) records the same true pair. `REFUSAL` is recorded exactly when the outcome carried `REFUSAL`; a direct refusal requires the pair `REFUSED + REFUSAL` (worker_provider §2.1, `WP-13`, `WP-18`). An enum value, not a lifecycle state |
 | `attested_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
 | `attribution` | `Enum<DIRECT,RECONCILED>` | Y | I | R | `DIRECT` iff minted under `worker.invoke` from an invocation this controller ran; `RECONCILED` iff minted under `recovery.reconcile` from what `lookup` reported, including a reported `FAILED`, `TIMED_OUT`, `CANCELLED` or `REFUSED` outcome, and including the `ABSENT` case where the receipt records that nothing ran |
 | `receipt_hash` | `Hash` | D | I | R | |
