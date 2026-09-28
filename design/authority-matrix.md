@@ -302,11 +302,12 @@ a grant, and it is one of `AX-1`'s four forms.
 
 ### 5.2.1 The rows this procedure covers
 
-Nine of the eighteen `HUMAN`-class capabilities in §2 are named as `required_capability`
-by a legal row, on twenty rows in total: `project.create`, `project.abandon`,
+Ten of the eighteen `HUMAN`-class capabilities in §2 are named as `required_capability`
+by a legal row, on twenty-one rows in total: `project.create`, `project.abandon`,
 `project.archive`, `project.ceiling.set`, `budget.grant`, `stage.reject`, `stage.abandon`,
-`finding.waive` and `decision.record`. The other nine have no legal row and no exercise
-this procedure can bind; §5.2 supplies their authority form and not their procedure.
+`finding.waive`, `decision.record` and `secret.read`. The other eight have no legal row and
+no exercise this procedure can bind; §5.2 supplies their authority form and not their
+procedure.
 
 `project.ceiling.set` and `budget.grant` each have one row, in transition-matrix §10,
 authorized by `DEC(SET_CEILING)` and `DEC(GRANT_BUDGET)` respectively under `SUPERVISED`
@@ -315,6 +316,16 @@ admit only `decision_kind = GRANT_CAPABILITY`, step 6 above leaves both `grants`
 `revokes` empty, and step 9 consumes each decision by its own act. Writing a
 `CapabilityId` into `capability_ceiling` confers it on no principal (`AX-11`), and neither
 act reaches a run, an activation or a worker.
+
+`secret.read` has one row, in transition-matrix §12, authorized by `CONFIRM` — one
+`HumanDecision{kind: APPROVE}` per act — under `SUPERVISED` and denied under `AUTONOMOUS`.
+That `APPROVE` is per-act exercise authority and not a grant record: §5.1 and §5.3 step 1
+admit only `decision_kind = GRANT_CAPABILITY`, step 6 above leaves both `grants` and
+`revokes` empty, and step 9 consumes the decision by its own act. A project
+`GRANT_CAPABILITY` naming `secret.read` is neither required nor consumed by that row, and
+`capability_ceiling` membership is not a precondition of it (`AX-11`, `AX-13`).
+`secret.read` enters no grant set and no run set (`AX-12`), and no worker, adapter or
+provider performs the act.
 
 | id | rule |
 |---|---|

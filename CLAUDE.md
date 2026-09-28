@@ -305,13 +305,26 @@ GR-23 implemented the four-event genesis sequence without AX-17's creation
 witness; GR-27 conformed project creation to AX-17 and closed
 DESIGN-04-032..036.
 
-GR-33 N1 (candidate, awaiting independent review): the 23 amendments of the
-accepted Revision 05 (SHA-256 35f283c3…2c54) are transcribed verbatim into
-design/authority-matrix.md, domain-model.md, evidence-model.md and
-transition-matrix.md, each at its stated target with its quoted frozen text
-verified first. §5.2 and §5.3 are inserted after authority-matrix §5.1; every
-§3 untouched location is unchanged. N1 is not accepted, no KD item is closed,
-and until N1 is accepted design-01-frozen remains the operative baseline.
+GR-33 N1 (accepted and committed, 56765add09d5009f1af3ff46594a8090211a2e58):
+the 23 amendments of the accepted Revision 05 (SHA-256 35f283c3…2c54) are
+transcribed verbatim into design/authority-matrix.md, domain-model.md,
+evidence-model.md and transition-matrix.md, each at its stated target with
+its quoted frozen text verified first. §5.2 and §5.3 are inserted after
+authority-matrix §5.1; every §3 untouched location is unchanged. No KD item is
+closed.
+
+GR-33 N2 (accepted and committed, 13b1297a481047c33ddd1b38b43fa1d80813eb86)
+and GR-33 N3 (accepted and committed,
+8ad2c1012d127d882a5e8f792f85e335e7a51548) are unchanged here.
+
+GR-33 N4 (normative candidate, implemented, under independent review; not
+accepted): transition-matrix §12 adds one non-axis `secret.read` row
+(SUPERVISED CONFIRM, AUTONOMOUS DENY) and authority-matrix §5.2.1 recounts to
+ten of eighteen HUMAN-class capabilities on twenty-one rows. N4 is normative
+only: production code does NOT yet conform, and F-N4-01..F-N4-07 remain open
+for later production conformance. F-N4-06 (`secret.resolved` persists the
+secret's length) contradicts the GR-32 D2 credential claim under Composition
+root, which N4 does not edit. Pilot-1 remains BLOCKED.
 
 DESIGN-03 is not frozen and, per DESIGN-04 §5, must be revised against
 DESIGN-04, reviewed by the reviewer that raised DESIGN-03-FINDINGS-01.
