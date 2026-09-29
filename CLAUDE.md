@@ -341,6 +341,23 @@ restart (N6). The `>` (domain-model:768) versus `≥` (§3) inconsistency is
 left unchanged. N5 is normative only: production does NOT conform
 (DV-01..DV-12 in the N5 plan). Pilot-1 remains BLOCKED.
 
+GR-33 N6 (normative candidate, implemented, under independent review; not
+accepted): OWNER decisions D-N6-01 = A, D-N6-02 = A, D-N6-03 = E.
+authority-matrix §2.3 adds one KERNEL CapabilityId, `controller.start`
+(RUNTIME_KERNEL, AUTO in both modes, never grantable, no grant-set mutation;
+§3, §4.1 and the §5.2.1 HUMAN counts unchanged). transition-matrix adds §14
+"Controller start" (CS-1..CS-13, CS-3a..h per-project controller hold, one
+start per hold, atomic T_start co-committing `controller_epoch` e → e+1 with
+`controller.started`, barrier by derivation, crash table, events and
+refusals) and one appended §9.3 row for illegal `controller_epoch` writes;
+§0–§13 are otherwise unchanged and N5's "GR-33 N6 `controller.start`"
+references resolve to §14. worker_provider adds WP-19 (atomic, permanent
+provider-side `ABSENT` tombstone), the §6.1 step 4 finality clause and
+CF-17; no provider operation, parameter or field. N6 is normative only:
+production code does NOT yet conform, and DV-N6-01..DV-N6-14 in the N6 plan
+remain later production-conformance work. KD-12 remains NOT CLOSED. Pilot-1
+remains BLOCKED.
+
 DESIGN-03 is not frozen and, per DESIGN-04 §5, must be revised against
 DESIGN-04, reviewed by the reviewer that raised DESIGN-03-FINDINGS-01.
 

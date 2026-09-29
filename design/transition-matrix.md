@@ -524,6 +524,7 @@ or mode can authorize the action.
 | mint a `ReviewAttestation` | `WORKER`, `ADAPTER`, `HUMAN` | `NONE_GRANTABLE` | `DENY` | `DENY` | `review.attest` is `KERNEL`; a self-attested review would promote a CLAIM to EVIDENCE by assertion |
 | cite a `Review` directly as `required_evidence` | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `G-1`; the `Review` is the judgement, the `ReviewAttestation` is the kernel's measurement of it |
 | call `WorkerProvider.invoke` for a `WorkerInvocation` whose `request_ref`, `idempotency_key` and `controller_epoch` are not yet durable, or that is not in `DISPATCHED` committed under the current `project.controller_epoch` | `RUNTIME` | `NONE_GRANTABLE` | `DENY` | `DENY` | `G-9`, evidence-model §3.2.1: an effect with no durable identity is unreconcilable; outside current-epoch `DISPATCHED` the call is either a second execution after an outcome was recorded or a post-restart re-execution `WP-16` forbids. A same-key re-send while still `DISPATCHED` in the current epoch and before `deadline_at` is the `WP-6`/`CF-11` retry and is not this row |
+| write `project.controller_epoch` other than by §14 `T_start`, or to any value other than current + 1 | any | `NONE_GRANTABLE` | `DENY` | `DENY` | `P-INV-4`, §14 `CS-5`; the epoch is the fence every epoch-bound boundary re-reads and the source of every `reconciliation_state` derivation (§5.1), so a decrement, skip, reset or unrecorded write would either re-admit an outlived controller or hide an operation from recovery |
 
 ---
 
@@ -972,3 +973,107 @@ worker_provider `CF-1`, `CF-11`, `CF-13` and `CF-16`.
 | capability or mode denial | an `AX-8` event in its own transaction (`RI-5` precedent). A policy `DENY` also raises a `POLICY_CONFLICT` escalation |
 | precondition refusal (§13.2 A, §13.2 C, E2) | no event, nothing consumed (§12.2 precedent) |
 | `CONTEXT_TOO_LARGE` after T1 | raises a `CONTRACT_AMBIGUITY` escalation per worker_provider §2.1 |
+
+---
+
+## 14. Controller start
+
+One legal row for the `controller.start` act (authority-matrix §2.3). It is **not** an
+axis, following the precedent of §10, §12 and §13: it reads axis 1 and writes no
+lifecycle, suspension or entity field other than `Project.controller_epoch` (and the
+`event_head`/`event_seq` advance of its own event). `from_state` and `to_state` name the
+value of `project.controller_epoch`. The act is the one transition that begins a controller
+epoch, and it is what domain-model `P-INV-4`, worker_provider §6.1 and §13 `WD-7`, §13.2 C
+and §13.5 step 2 refer to as "controller start".
+
+| from_state | to_state | preconditions | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
+|---|---|---|---|---|---|---|---|
+| `controller_epoch = e` | `controller_epoch = e + 1` | the starting controller holds the project's controller hold (`CS-3`); the project's creation transaction has committed (`AX-17`); `project.lifecycle ≠ ARCHIVED`; `e < 18446744073709551615`; this controller has made no earlier write on the project | — | `controller.start` | `AUTO` | `AUTO` | — |
+
+| id | rule |
+|---|---|
+| `CS-1` | **Exact act.** `controller.start` permits exactly one thing: `controller_epoch` `e → e + 1` on one project, recorded by the `controller.started` event (§14.3). It initiates no effect, reconciles nothing, observes nothing, and consumes and grants nothing. |
+| `CS-2` | **Kernel-performed.** The actor is `RUNTIME`, acting as `RUNTIME_KERNEL`, the sole grantor (`AX-7`). `authority_ref` is absent (evidence-model §3.3). There is no `on_behalf_of`, because no deciding principal exists (`AX-16`). No `WORKER`, adapter, provider or `HUMAN` performs the act or holds the capability. The verdict is `AUTO` in both modes: authority-matrix §3 "all with class `KERNEL` → kernel only" and §4.1 cover it unchanged. No `HumanDecision` is required for, recorded for, or consumed by any start. |
+| `CS-3` | **Controller hold.** Exclusivity is normative, per `CS-3a`..`CS-3h` below. |
+| `CS-3a` | There is exactly one controller hold per project, and at most one live controller per project. |
+| `CS-3b` | `controller.start` requires the hold. A start without it is refused before any write. |
+| `CS-3c` | **One start per hold.** The hold admits exactly one `T_start`; a new epoch needs a new controller and a new hold. |
+| `CS-3d` | The hold is released only after the controller **and every effect process it spawned** have ended. |
+| `CS-3e` | Elapsed time never ends a hold. There is no TTL-based expiry, reclamation or lease-style takeover. A repository mutex, such as a `RepositoryLease`, does not satisfy `CS-3`. |
+| `CS-3f` | This section prescribes only the property. The mechanism is the implementation's choice. The hold is not a domain entity, field or enum and is not written to the store. |
+| `CS-3g` | A start attempted while another controller holds the hold is a precondition refusal and writes nothing. |
+| `CS-3h` | **The hold covers local processes only.** It does not have to outlive a network request sent before the local process tree ended. Safety for such a request after a handoff comes from provider-side `ABSENT` finality (worker_provider `WP-19`, `CS-13`), not from the hold. |
+| `CS-4` | **First write, once per hold.** `T_start` is the controller's first write on the project and happens once per hold. A second start by the same hold, or a start after any earlier write by this controller, is a precondition refusal. |
+| `CS-5` | **`T_start` is atomic.** Exactly two things are written, in one `BEGIN IMMEDIATE` transaction: the `controller.started` event and `controller_epoch = e + 1`, in the same atomic write that advances `event_head`/`event_seq` (`AE-INV-2`; evidence-model §3.2 step 5). Run, stage, invocation, intent and decision rows are **not** written. Only `T_start` changes `controller_epoch`, and every change is +1: no decrement, no skip, no reset (§9.3). Each epoch value is taken by exactly one start. |
+| `CS-6` | **Barrier by derivation.** From the commit of `T_start`, a record with `controller_epoch ≤ e` and a non-terminal `status` is `PENDING` by the §5.1 derivation **only while it is still awaiting reconciliation**, that is, while no recovery under `recovery.reconcile` has recorded a terminal `reconciliation_state` for it; no per-record write is required. A record whose `reconciliation_state` is already terminal under §5.1 — `ADOPTED`, `ORPHANED` or `UNRESOLVABLE` — keeps that state whatever its epoch or `status`, and an old-epoch record with a terminal `status` stays `NOT_REQUIRED`. `T_start` does not reset, reopen or rewrite a previously terminal `reconciliation_state`; in particular `UNRESOLVABLE` never reverts to `PENDING`. Any persisted copy of `reconciliation_state` is either written in `T_start` or never read by a gate. |
+| `CS-7` | **Recovery is separate.** Reconciliation (worker_provider §6.1, the §7.2 and §7.4 reconciliation rows) runs after `T_start`, in its own transactions, under `recovery.reconcile` and never under `controller.start`. There is no recovery pre-flight inside the act. |
+| `CS-8` | **Clear is per run.** The barrier clears per run exactly as `RUN-INV-3` defines. There is no project-wide flag and no "recovery complete" event. An `UNRESOLVABLE` record's run follows the §5 `RECOVERY_AMBIGUITY` row, or §13.5 step 4 for `ALLOCATED` runs. |
+| `CS-9` | **Epoch fencing is defense in depth.** Every epoch-bound boundary re-reads `project.controller_epoch` in its own transaction: 7.2-1 carries the epoch; §13.2 E2 requires invocation epoch = project epoch; §13.1 T3 refuses if the epoch changed; §9.3 bars `invoke` outside current-epoch `DISPATCHED`; §12.3 `SB-7`(8) requires artifact epoch = project epoch; and `RUN-INV-3` is derived inside the `AUTHORIZED → APPLYING` transaction. Fencing cannot close the window between a check and an external `invoke` or repository mutation, so it never substitutes for `CS-3`. |
+| `CS-10` | **No decision and no grant.** `T_start` changes no `decision_state`. `controller.start` never enters `HumanDecision.grants`, `ContractActivationRecord.granted_capabilities`, `WorkerInvocation.granted_capabilities`, `StageRun.effective_capabilities` or any project grant, and `T_start` writes none of them (`AX-7`). |
+| `CS-11` | **Gates.** `controller.start` is none of the three `RI-8` rows; it is not gated by §8 and does not widen §8. It is admissible under every `SuspensionState`, `SUSPENDED_BY_INTEGRITY` included: refusing it there would leave no controller able to record the `DEC(OVERRIDE)` that the §4 `SUSPENDED_BY_INTEGRITY → NONE` row requires, and the act initiates no effect and only widens the barrier. It is refused when `project.lifecycle = ARCHIVED`, whose evidence set is sealed (§9.2). |
+| `CS-12` | **Bounded.** This section adds one `CapabilityId` (`controller.start`, `KERNEL`) and no entity, field, enum value, `DecisionKind`, lifecycle value or `SuspensionState`. `controller.started` is a value of the existing free-text `event_type`. §0–§13 are unchanged except for the appended §9.3 `project.controller_epoch` row; `RI-8`, `AC-*`, §12 and §13 are unchanged, and the §13 references to "GR-33 N6 `controller.start`" are resolved by this section as their referent, not by edit. The epoch at genesis is not defined here: the `AX-17` genesis transaction creates no operation, and the project's first `controller.start` precedes every other act on it (`P-INV-4`, read per project). |
+| `CS-13` | **`ABSENT` is final.** Recovery acts on a `lookup` `ABSENT` only as the final, tombstoned answer of worker_provider `WP-19`. The hold covers local processes only (`CS-3h`). |
+
+### 14.1 Ordering
+
+| step | phase | writes | content |
+|---|---|---|---|
+| A | process start | none | Composition only. Nothing is governed and nothing is written to any project. |
+| H | controller hold taken (`CS-3`) | none to the store | Refuse, writing nothing, if the hold is unavailable. |
+| E | read-only checks | none | Project exists; its genesis transaction has committed; `lifecycle ≠ ARCHIVED`; `e < 18446744073709551615`; no earlier write by this controller. |
+| **T_start** | epoch advance, event, barrier | one `BEGIN IMMEDIATE` | (1) Re-read `e` and re-check every E check. (2) Append the `controller.started` event (§14.3). (3) Write `controller_epoch = e + 1` in the same atomic write that advances `event_head`/`event_seq`. (4) Commit. The barrier holds from this commit **by derivation** (`CS-6`). |
+| R | reconciliation | its own transactions | worker_provider §6.1 plus the §7.2 and §7.4 reconciliation rows, under `recovery.reconcile`, never under `controller.start` (`CS-7`). An `ABSENT` answer is acted on only as the final, tombstoned `ABSENT` of `WP-19` (`CS-13`). |
+| F | barrier clears | none added | Per run, when `RUN-INV-3` holds for it (`CS-8`). No event and no state are added. |
+
+Before a run's records are reconciled, the only provider call on that run is `lookup`
+under `recovery.reconcile`. A run with no `PENDING` or `UNRESOLVABLE` record may dispatch
+after `T_start`, subject to every existing gate; its relay secret is re-exercised per
+`SR-7` and `WD-14`.
+
+Meaning of a recovery `lookup(k)` after `T_start`. Only `ABSENT` is qualified; the rows
+acted on are the existing ones, unchanged:
+
+| answer | meaning | kernel act |
+|---|---|---|
+| `FINISHED(outcome)` | execution was established, or the pair was reported (`WP-18`) | adopt the existing outcome: 7.2-9, `ADOPTED`, then `WD-9` |
+| `LIVE(handle)` | execution began and is still running | stays `PENDING`, tracked under the same key, adopted when finished (worker_provider §6.1 step 5) |
+| `ABSENT` | never received, **and** permanently barred: the provider committed the tombstone before answering (`WP-19`) | only then may 7.2-10 (`→ FAILED`, `ORPHANED`, receipt `PROVIDER_ERROR`, `RECONCILED`) and the subsequent §13.5 / `WD-9` rows proceed |
+| error or unanswerable, including a failure to commit the tombstone | undecided | `UNRESOLVABLE` and `RECOVERY_AMBIGUITY` (`WP-16`, worker_provider §6.1 step 6) |
+
+Once recovery has recorded `ABSENT`/`ORPHANED` for `k`, no delayed prior-epoch `invoke(k)`
+can begin.
+
+### 14.2 Crash and restart
+
+| crash point | durable state | resolution |
+|---|---|---|
+| before `T_start` | nothing; the hold is released by process end | the next start proceeds normally |
+| during `T_start` | rolled back: no event, epoch unchanged | as above |
+| after `T_start`, before recovery | `e + 1` and its event are durable; the barrier is active by derivation and no work was done in `e + 1` | the next start writes `e + 2`; records of `≤ e` still awaiting reconciliation remain or become `PENDING` under the §5.1 derivation, records whose `reconciliation_state` is already terminal (`ADOPTED`, `ORPHANED`, `UNRESOLVABLE`) remain terminal and `UNRESOLVABLE` never reverts to `PENDING` (`CS-6`), and recovery runs under `e + 2` over the `PENDING` records only. An epoch in which no work happened is legitimate history |
+| during recovery | each settled record is terminal (`ADOPTED`, `ORPHANED` and `UNRESOLVABLE` never revert, §5.1); the rest stay `PENDING`; `LIVE` tracking is lost | the next start re-runs worker_provider §6.1 over the remainder; `lookup` executes nothing, so repeating it is safe |
+| after a provider committed an `ABSENT` tombstone, before the kernel recorded 7.2-10 | invocation still `PENDING`; key tombstoned at the provider | the next recovery's `lookup(k)` returns `ABSENT` again (`WP-19`), and 7.2-10 proceeds; `k` can never begin |
+| old process tree ended with an `invoke(k)` still in transit | invocation old-epoch, not terminal | if the request arrives before recovery's `lookup(k)`: `LIVE` or `FINISHED`, then adopted. If it arrives after the `ABSENT` tombstone: it never begins (`WP-19`) |
+
+### 14.3 Events and refusals
+
+| field | value |
+|---|---|
+| `event_type` | `controller.started` |
+| `epistemic_class` | `AUTHORITY`, the `KERNEL` transition envelope (§13 precedent) |
+| `actor` | `RUNTIME`; no `on_behalf_of` (`AX-16`) |
+| `capability_used` | `controller.start` |
+| `authority_ref` | absent (`AX-7`; evidence-model §3.3) |
+| `subject` | `{kind: PROJECT, id: project_id}` |
+| `payload` | exactly `{"controller_epoch_from": <e>, "controller_epoch_to": <e + 1>}`, each a canonical unsigned decimal string: ASCII digits, no sign, no whitespace, no leading zero other than `"0"`, value ≤ 18446744073709551615 (the `SB-3` encoding, restated for §14 because `SB-3` is §12-scoped). No host, pid, credential or secret-derived member |
+
+This event is the proof that a start happened. It is `AE-INV-2`'s event for the row, and
+the chain's own `seq` orders successive starts.
+
+| case | class | writes |
+|---|---|---|
+| hold unavailable (another live controller) | precondition refusal | none (§12.2, §13.7 precedent) |
+| project absent, or its genesis transaction is not committed | precondition refusal | none |
+| `lifecycle = ARCHIVED` | precondition refusal | none |
+| `e = 18446744073709551615` | precondition refusal | none |
+| a second start by the same hold, or any earlier write by this controller | precondition refusal | none |
+| any non-`RUNTIME` actor, or any `controller_epoch` write outside `T_start` | the §9.3 `project.controller_epoch` row, `NONE_GRANTABLE`; recorded per `AX-8` (`NEVER_GRANTABLE`) where a started controller observes it | per the §13.7 capability-denial rule |

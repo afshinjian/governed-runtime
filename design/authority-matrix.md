@@ -93,6 +93,7 @@ grant time), `NEVER` (`AX-6`).
 | `worker.invoke` | dispatch a `WorkerInvocation` | `KERNEL` | `RUNTIME_KERNEL` | DENY | workers never hold this; see `AX-7` |
 | `worker.delegate` | a worker spawning a sub-worker | `NEVER` | `NOBODY` | DENY | delegation must route through the kernel so grants stay bounded |
 | `recovery.reconcile` | adopt or orphan an operation left unreconciled by a controller restart: call `WorkerProvider.lookup(idempotency_key)`, or match a landed revision to a `CommitIntent.operation_token`, and mint the resulting receipt with `attribution = RECONCILED` | `KERNEL` | `RUNTIME_KERNEL` | DENY | never grantable to a worker or adapter; reconciliation is the kernel deciding what already happened. It authorizes **observation only** — it does not permit `invoke`, a repository mutation, or the creation of any operation, and it is the sole capability exempt from the `RUN-INV-3` barrier (transition-matrix §5) |
+| `controller.start` | begin a controller epoch on one project: increment `Project.controller_epoch` by exactly one and record it (transition-matrix §14) | `KERNEL` | `RUNTIME_KERNEL` | DENY | never grantable to a worker, adapter or human. It initiates no effect, reconciles nothing, observes nothing, and consumes and grants nothing. Exercised once per controller hold, as that controller's first write on the project |
 
 ### 2.4 Workspace and execution
 
