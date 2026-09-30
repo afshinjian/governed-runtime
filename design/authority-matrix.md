@@ -393,3 +393,28 @@ of an event `AE-INV-2` already requires.
 | controller recovery | before a run **initiates any new external effect** — a dispatch, or an apply — every `WorkerInvocation` and `CommitIntent` of that run whose `controller_epoch` precedes `project.controller_epoch` has `reconciliation_state ∈ {NOT_REQUIRED, ADOPTED, ORPHANED}`, derived by transition-matrix §5.1 and resolved by `lookup(idempotency_key)` or by scanning for `operation_token`, both under `recovery.reconcile`; `PENDING` names the unresolved state and `UNRESOLVABLE` raises `Escalation(RECOVERY_AMBIGUITY)` (`RUN-INV-3`). The check does not gate the reconciling transitions themselves, which hold `recovery.reconcile` and initiate nothing |
 | transition | `required_capability` from `transition-matrix.md` held at the moment of transition by one of `AX-1`'s forms — a run grant, a project grant, the kernel's own holding, or for this one act by a live decision under §5.2 — or held under `AX-1`'s named `decision.record` exception (`AX-15`), plus `required_evidence` present |
 | audit append | every enforced denial emits an `AuditEvent` with `epistemic_class = AUTHORITY` |
+
+---
+
+## 7. Capability register addendum (GR-33 N8)
+
+This table is part of the §2 register (the §2.4 "Workspace and execution" class of acts),
+placed here so that no cited line moves.
+
+| CapabilityId | permits | class | grantable by | default | mode restriction |
+|---|---|---|---|---|---|
+| `repository.bootstrap.record` | record the one `RepositoryBootstrapAuthority` of a project (transition-matrix row 16-1) and each `RepositoryBootstrapSuccession` of it (row 16-4); store-only — permits no ref write, CAS, object, worktree or index write or other repository effect, and confers no capability | `KERNEL` | `RUNTIME_KERNEL` | DENY | `SUPERVISED`: `CONFIRM` on row 16-4 only; never grantable to a worker, adapter or human; never exercised under recovery |
+
+Mode gate (§3 format), one row per act:
+
+| CapabilityId | `SUPERVISED` | `AUTONOMOUS` |
+|---|---|---|
+| `repository.bootstrap.record` (row 16-1, establishment) | kernel only, `AUTO` | kernel only, `AUTO` |
+| `repository.bootstrap.record` (row 16-4, succession) | `CONFIRM`: exactly one `HumanDecision{kind: APPROVE}` per transition-matrix `RB-18`, consumed atomically per `RB-21` | kernel only, `AUTO`: no decision |
+
+The verdict confers no delegation, retry or run-allocation authority, and
+`repository.bootstrap.record` is a `CapabilityId` in no grant set (D-N8-03 = A).
+
+§3, §4.1, §5.1 step 5, §5.2.1 (`HUMAN` counts: ten of eighteen, twenty-one rows, unchanged)
+and §6 apply unchanged through their `KERNEL` catch-alls, and `commit.apply`'s row (§2.6) is
+unchanged and still owns the repository effect.

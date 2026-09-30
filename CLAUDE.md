@@ -358,6 +358,27 @@ production code does NOT yet conform, and DV-N6-01..DV-N6-14 in the N6 plan
 remain later production-conformance work. KD-12 remains NOT CLOSED. Pilot-1
 remains BLOCKED.
 
+GR-33 N8 (normative candidate, implemented, under independent review; not
+accepted): OWNER decisions D-N8-01 = C, D-N8-02 = B, D-N8-03 = A.
+domain-model §13 adds two entities, `RepositoryBootstrapAuthority` (the
+immutable D-PC-08 binding of project_id, stage_run_id, input_snapshot_id,
+expected_ref_target — byte for byte the snapshot's `vcs_state.revision_id` —
+and project_ref) and `RepositoryBootstrapSuccession`; transition-matrix adds
+§16 "Repository bootstrap" (rows 16-1, 16-4, 16-2, 16-3; RB-1..RB-21;
+ordering, consistency predicate `BC`, crash and restart, events and refusals);
+evidence-model adds §8; authority-matrix adds §7, registering one `KERNEL`
+CapabilityId, `repository.bootstrap.record`, store-only, with no repository
+effect. Establishment (16-1, AUTO/AUTO) is its own transaction before any
+apply or project-ref CAS, never inside `AUTHORIZED → APPLYING` (D-N8-02 = B).
+A later run continues an unconsumed bootstrap only by explicit, linear
+succession (16-4; D-N8-01 = C), SUPERVISED `CONFIRM` with one APPROVE
+consumed atomically, AUTONOMOUS `AUTO` (D-N8-03 = A). `commit.apply` keeps
+the CAS and its consumption. A ref visible at the expected target with the
+RBA unconsumed fails closed; recovery is observation-only. No `DecisionKind`,
+lifecycle value or `SuspensionState` is added; §15 stays reserved for N7. N8
+is normative only: production code does NOT yet conform (DV-N8-01..DV-N8-08
+in the N8 plan). A9, N9 and PC-1 follow. Pilot-1 remains BLOCKED.
+
 DESIGN-03 is not frozen and, per DESIGN-04 §5, must be revised against
 DESIGN-04, reviewed by the reviewer that raised DESIGN-03-FINDINGS-01.
 

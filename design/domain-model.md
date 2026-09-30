@@ -900,3 +900,104 @@ qualify one entity, never the project or the stage.
 | `G-8` | Suspension never overwrites a lifecycle value; it is read alongside it. |
 | `G-9` | Every side effect outside the kernel's own store — a provider invocation, a repository mutation — has a durable identity persisted **before** the effect (`idempotency_key` with `request_ref`, or `operation_token`), and a non-terminal one that outlives its controller is reconciled before any further work on its run (`RUN-INV-3`, `CM-INV-2`). |
 | `G-10` | An authority record cites the grantor that produced it. A grant with no admissible grantor in the capability register is not a grant (`A-INV-3`, `AX-11`); a decision whose `decision_state ≠ VALID` is not authority (`HD-INV-4`). |
+
+---
+
+## 13. Repository bootstrap authority (GR-33 N8)
+
+`RepositoryBootstrapAuthority` (RBA) and `RepositoryBootstrapSuccession` (RBS) are §8
+action entities, placed here at the end of the document so that no existing line moves.
+Their transitions are transition-matrix §16; their evidence is evidence-model §8; their
+one capability, `repository.bootstrap.record`, is registered in authority-matrix §7.
+
+In this section B is a project's RBA, R₀ is the run named by its row 16-1 act, S is the
+snapshot named by `B.input_snapshot_id`, `ACT(R₀)` is the `ContractActivationRecord` of
+`R₀.activation_id`, Rs is a successor run, and `GL(p)` is the repository adapter's fixed
+governed-line name for project p.
+
+### 13.1 `RepositoryBootstrapAuthority`
+
+| field | type | req | mut | src | rule |
+|---|---|---|---|---|---|
+| `bootstrap_id` | `Id` | Y | I | R | identity; unique |
+| `project_id` | `Ref<Project>` | Y | I | R | **binding**; unique, so at most one record per project for the project's life |
+| `stage_run_id` | `Ref<StageRun>` | Y | I | R | **binding**. The original bound run R₀, named in the 16-1 act; `R₀.project_id = project_id`. It is never changed; succession does not rewrite it. |
+| `input_snapshot_id` | `Ref<RealitySnapshot>` | Y | I | R | **binding**. It equals `R₀.input_snapshot_id` **and** `ContractActivationRecord.input_snapshot_id` of `R₀.activation_id`. The snapshot has `project_id = project_id`, `completeness = COMPLETE` and a present `vcs_state`. |
+| `expected_ref_target` | `Str(1..128)` | Y | I | R | **binding**. It is exactly the `vcs_state.revision_id` string of `input_snapshot_id`, copied with no normalization, abbreviation expansion, ref resolution or object lookup. |
+| `project_ref` | `Str(1..256)` | Y | I | R | **binding**. It is `GL(project_id)`: the repository adapter's fixed governed-line name. That is a pure, injective function of `project_id` alone, not configurable per project, and never a path prefix of another project's name. For the one adapter (Git) it is `refs/heads/gruntime/<project_id>/governed` (D-PC-08). |
+| `controller_epoch` | `uint64` | Y | I | R | provenance only: `project.controller_epoch` at establishment. The record is not an operation, and transition-matrix §5.1 never reads this field. |
+| `recorded_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
+| `recorded_at` | `Ts` | Y | I | R | |
+| `consumed` | `bool` | D | M | R | true iff the project's chain holds the row 16-3 event for `bootstrap_id`; derived, never asserted |
+| `record_hash` | `Hash` | D | I | R | canonical record, excluding itself, `prev_event_hash` and `consumed` |
+| `prev_event_hash` | `Hash` | D | I | R | |
+
+The **binding tuple** is exactly D-PC-08's five fields: `project_id`, `stage_run_id`,
+`input_snapshot_id`, `expected_ref_target` and `project_ref`. Every other column is
+identity, provenance or chain, and is never a source of authority or of a CAS operand. No
+intent participates in establishment.
+
+### 13.2 `RepositoryBootstrapSuccession`
+
+The record hands off one unconsumed RBA's run binding from the currently bound run to
+exactly one successor run. It is not a general delegation mechanism. It applies to no other
+entity, capability or record, and it cannot exist for a consumed RBA.
+
+| field | type | req | mut | src | rule |
+|---|---|---|---|---|---|
+| `succession_id` | `Id` | Y | I | R | identity |
+| `bootstrap_id` | `Ref<RepositoryBootstrapAuthority>` | Y | I | R | the one RBA handed off; unconsumed at the act |
+| `ordinal` | `uint32` | Y | I | R | 1-based position in this RBA's succession chain; unique per `bootstrap_id` |
+| `predecessor_succession_id` | `Ref<RepositoryBootstrapSuccession>?` | N | I | R | absent iff `ordinal = 1`; otherwise the record with `ordinal − 1` |
+| `predecessor_run_id` | `Ref<StageRun>` | Y | I | R | the bound run at the act: `RBA.stage_run_id` if `ordinal = 1`, else the predecessor record's `successor_run_id`; unique per `bootstrap_id` |
+| `successor_run_id` | `Ref<StageRun>` | Y | I | R | a run of `project_id`, distinct from every run already in the chain (R₀ included) |
+| `project_id` | `Ref<Project>` | Y | I | R | **preserved**: copied from the RBA; equality-checked |
+| `input_snapshot_id` | `Ref<RealitySnapshot>` | Y | I | R | **preserved**: copied from the RBA; equality-checked. The successor's own `input_snapshot_id` is never read for this field. |
+| `expected_ref_target` | `Str(1..128)` | Y | I | R | **preserved**: copied byte for byte from the RBA; equality-checked |
+| `project_ref` | `Str(1..256)` | Y | I | R | **preserved**: copied from the RBA; equality-checked |
+| `confirmation_id` | `Ref<HumanDecision>?` | N | I | R | Present iff `governance_mode = SUPERVISED` at the act (D-N8-03 = A). It names the one `APPROVE` that satisfies transition-matrix `RB-18` and is consumed by this act alone (`RB-21`). It is absent under AUTONOMOUS. |
+| `controller_epoch` | `uint64` | Y | I | R | provenance only |
+| `recorded_by` | `ActorRef` | Y | I | R | `RUNTIME` only |
+| `recorded_at` | `Ts` | Y | I | R | |
+| `record_hash` | `Hash` | D | I | R | |
+| `prev_event_hash` | `Hash` | D | I | R | |
+
+The RBA is never mutated by a succession. Its `stage_run_id` remains R₀ for ever. The chain
+is append-only and linear, with no branching, cycle, skip, reorder or deletion.
+
+**Bound run.** `bound(B)` is `B.stage_run_id` if B has no succession. Otherwise it is the
+`successor_run_id` of B's highest-`ordinal` succession. It is a pure function of governed
+store records and is never taken from any repository state.
+
+### 13.3 Binding rules
+
+| binding | exact rule | checked (transition-matrix §16) |
+|---|---|---|
+| `project_id` | `= R₀.project_id = S.project_id`, and for every RBS equal to `B.project_id` | 16-1; 16-4; read at 16-2, 16-3 and bootstrapping 7.4-6 |
+| `stage_run_id` | R₀, named by the 16-1 act; a `StageRun` of `project_id`, non-terminal, with `AC-1` committed | 16-1 (immutable thereafter) |
+| `input_snapshot_id` | `= R₀.input_snapshot_id = ACT(R₀).input_snapshot_id`; S is `COMPLETE` with `vcs_state ≠ ∅`; each RBS copy is equal | 16-1; 16-4 |
+| `expected_ref_target` (E) | `= S.vcs_state.revision_id`, byte for byte, in the adapter's canonical full object-name form, or 16-1 refuses (no expansion); each RBS copy is equal | 16-1; 16-4 |
+| `project_ref` | `= GL(project_id)`; each RBS copy is equal | 16-1; 16-4 |
+| bootstrapping intent I (7.4-6 while `consumed = false`) | `I.run_id = bound(B)`; `I.project = project_id`; `I.target_ref = project_ref`; `I.base_revision_id = E`; `I.vcs_kind = DVCS` | bootstrapping 7.4-6; 16-2 |
+
+### 13.4 Cardinality
+
+| relation | cardinality |
+|---|---|
+| Project → RepositoryBootstrapAuthority | 1 : 0..1 |
+| RepositoryBootstrapAuthority → RepositoryBootstrapSuccession | 1 : 0..n (linear chain) |
+| StageRun → RepositoryBootstrapSuccession (as predecessor) | 1 : 0..1 per RBA |
+
+### 13.5 Invariants
+
+| id | invariant |
+|---|---|
+| `RBA-INV-1` | `project_ref` is created only by transition-matrix row 16-2, by an intent of `bound(B)`, against a durable, unconsumed RBA established earlier by row 16-1, whose E is the `vcs_state.revision_id` of the snapshot named by `input_snapshot_id`. It is adopted only as GR-33 N9 defines. Bootstrap never resets or rewinds it, and later advances happen only under `commit.apply`. |
+| `RBA-INV-2` | At most one RBA per project; immutable; never deleted, superseded or rebound; `stage_run_id` fixed for ever (transition-matrix `RB-5`). |
+| `RBA-INV-3` | Provenance closure and monotone refusal (transition-matrix `RB-4`, `RB-6`). RBA fields come only from R₀, `R₀.input_snapshot_id`'s snapshot record, `ACT(R₀)` and `GL`. RBS fields come only from B, its existing chain, Rs's `StageRun` record (identity, project and status only) and, under SUPERVISED, the confirmation's value artifact. `bound(B)` is computed from those records alone. Any ref value, reflog, packed-refs, `HEAD` or symbolic ref, marker or lock file, the live workspace, index or working tree, Git config, a private or exported view, another StageRun's snapshot, activation or record beyond those named, an implicit choice of successor, repository contents or objects (including resolving an abbreviated E), directory existence, and driver or CLI arguments as field values are inadmissible sources (transition-matrix §16.4); observing one is permitted only as a refusal input. |
+| `RBA-INV-4` | Neither record is authority: they confer no capability, are never `required_capability` authority (`G-2`), and enter no grant set. They create no retry, attempt, budget or human authority. They are not snapshot-bound and not transition-matrix §5.1 operations. |
+| `RBA-INV-5` | Under `G-9`, the RBA (with its succession chain) is the durable identity of the project-ref creation effect, persisted in an earlier transaction than the effect. It sits alongside `idempotency_key`/`request_ref` and `operation_token`, and `G-9` is otherwise unchanged. |
+| `RBA-INV-6` | Consumed exactly once, by row 16-3. After that, an absent ref is an integrity violation and is never re-created, and no succession may follow. |
+| `RBA-INV-7` | No `APPLIED` `CommitReceipt` of an intent targeting `project_ref` precedes consumption. |
+| `RBA-INV-8` | Both records exist only for `vcs_kind = DVCS`. |
+| `RBS-INV-1` | Succession is explicit and narrow: exactly one RBS per handoff, recorded by row 16-4, which preserves the four fields `project_id`, `input_snapshot_id`, `expected_ref_target` and `project_ref` unchanged. It is linear and append-only, and allowed only from a terminal bound run with no `APPLYING` intent, before consumption. No run acts under another run's binding without it (transition-matrix `RB-8`, `RB-17`..`RB-19`, `RB-21`). |

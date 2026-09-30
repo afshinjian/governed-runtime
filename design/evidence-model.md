@@ -284,3 +284,55 @@ stale independently and both are checked.
 
 Each export is itself written to the artifact store and appended as an
 `AuditEvent`, so the act of exporting is part of the record.
+
+---
+
+## 8. Repository bootstrap identity (GR-33 N8)
+
+The records and events of transition-matrix §16: the project's one
+`RepositoryBootstrapAuthority` (RBA, B) and its `RepositoryBootstrapSuccession` (RBS) chain,
+domain-model §13.
+
+| record | class | rule |
+|---|---|---|
+| RBA | durable identity / binding record; `AUTHORITY` envelope only | never a grant; cited only as a `G-1` prerequisite (the `AuditEvent` that persisted it) |
+| RBS | durable identity / binding record; `AUTHORITY` envelope only | never a grant; cited only as a `G-1` prerequisite |
+| `repository_bootstrap.recorded`, `repository_bootstrap.succeeded` | `AUTHORITY` (the `KERNEL` transition envelope) | recorded under `repository.bootstrap.record`; B and an RBS are not grants (`G-2`) |
+| `repository_bootstrap.consumed` | `EVIDENCE` | minted under `commit.apply` from a successful CAS plus an exact read-back, qualified by GR-33 N9 |
+
+§3.2.1 mapping for the project-ref creation effect:
+
+| step | bootstrap |
+|---|---|
+| 1 | B plus its succession chain: the durable identity, persisted in earlier transactions than the effect (domain-model `RBA-INV-5`) |
+| 2 | carriage: the effect's content is exactly (`project_ref`, E) |
+| 3 | the CAS, transition-matrix row 16-2 |
+| 4 | consumption, transition-matrix row 16-3 |
+
+A visible ref alone proves nothing: `project_ref` at E with B unconsumed is
+`RECOVERY_AMBIGUITY` (transition-matrix §16.2 `BC`(e)) and is never adopted by visibility.
+
+**Verification checks.** Each failure is `INTEGRITY_VIOLATION`, and the project goes to
+`SUSPENDED_BY_INTEGRITY`:
+
+1. **Attribution.** `consumed` resolves to an earlier `recorded` event with the same
+   `bootstrap_id` and an earlier 7.4-6 event of an intent of the bound run at that point.
+2. **Uniqueness.** At most one `recorded` and one `consumed` event per project; succession
+   uniqueness per transition-matrix §16.4.
+3. **Precedence.** Every `APPLIED` `CommitReceipt` of an intent targeting `project_ref` is
+   preceded by `consumed`. The `recorded` event precedes every bootstrapping 7.4-6 in a
+   separate transaction.
+4. **Record binding.** Each store row equals its event payload under `record_hash`.
+5. **Succession chain.** Ordinals are contiguous from 1. Each predecessor equals the prior
+   bound run. The preserved fields equal B's. Every `succeeded` precedes `consumed`. Every
+   SUPERVISED `succeeded` has its confirmation consumed by an event citing it.
+
+Retention and redaction: the records, their events and their payload artifacts are
+`PERMANENT` (§6). No secret, host path, pid or credential appears in any payload. A redacted
+RBA or RBS payload can no longer be re-verified: it is `EVIDENCE_UNRECOVERABLE` and a
+transition-matrix §16.2 `BC`(i) integrity defect, and the records are never repaired,
+recreated or reset.
+
+Authority trace (§7): 16-1 and 16-4 show the kernel's own holding of
+`repository.bootstrap.record` (plus the confirmation for 16-4 under SUPERVISED); 16-2 and
+16-3 show `commit.apply` plus the performing intent's authorization chain.

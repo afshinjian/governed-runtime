@@ -1077,3 +1077,194 @@ the chain's own `seq` orders successive starts.
 | `e = 18446744073709551615` | precondition refusal | none |
 | a second start by the same hold, or any earlier write by this controller | precondition refusal | none |
 | any non-`RUNTIME` actor, or any `controller_epoch` write outside `T_start` | the §9.3 `project.controller_epoch` row, `NONE_GRANTABLE`; recorded per `AX-8` (`NEVER_GRANTABLE`) where a started controller observes it | per the §13.7 capability-denial rule |
+
+---
+
+## 16. Repository bootstrap
+
+Four legal rows for the creation of a project's governed ref, `project_ref`, and for the
+durable authority that precedes it (GR-33 N8). §15 is reserved for GR-33 N7. The section is
+**not** an axis, following the precedent of §10, §12, §13 and §14: `from_state` and
+`to_state` are predicates over `RBA(p)` (the project's one `RepositoryBootstrapAuthority`,
+domain-model §13.1), B's succession chain (`RepositoryBootstrapSuccession`, domain-model
+§13.2) and the observed value of `project_ref`. B, R₀, S, `ACT(R₀)`, Rs, E (=
+`B.expected_ref_target`), `GL` and `bound(B)` are as domain-model §13 defines them, and
+"§13.3 binding" means a rule of domain-model §13.3. A **bootstrapping 7.4-6** is a row 7.4-6
+(`AUTHORIZED → APPLYING`) of an intent I with `I.target_ref = project_ref` while
+`RBA(p) = ∅` or B is unconsumed.
+
+Establishment (16-1) is a distinct, governed, durable act that precedes every repository
+effect application and the first project-ref CAS (D-N8-02 = B); it is never a consequence
+of `AUTHORIZED → APPLYING`. A later StageRun continues an unconsumed bootstrap only through
+an explicit, durable succession (16-4; D-N8-01 = C), whose mode gate is SUPERVISED
+`CONFIRM`, AUTONOMOUS `AUTO` (D-N8-03 = A). `commit.apply` keeps the repository effect: the
+CAS (16-2) and its consumption record (16-3).
+
+| row | from_state | to_state | preconditions (ALL) | required_evidence | required_capability | supervised_policy | autonomous_policy | illegal_because |
+|---|---|---|---|---|---|---|---|---|
+| **16-1** establish | `RBA(p) = ∅` | `RBA(p) = B`, unconsumed | (1) Its own `BEGIN IMMEDIATE` transaction writing only B and its event; not within `AC-1` or any §7.4, §5, §6, §13 or §14 transaction. (2) No RBA of p exists. (3) R₀ is a `StageRun` of p, non-terminal, whose `AC-1` committed earlier. (4) `project.lifecycle = ACTIVE`; project, stage-of-R₀ and R₀ suspension `NONE`. (5) `RUN-INV-3` holds for R₀ (no `PENDING`/`UNRESOLVABLE` record). (6) The `CS-9` epoch re-read, with the actor's controller holding the current epoch. (7) Every §13.3 binding for R₀ and S holds, E is canonical, and the adapter is `DVCS`. (8) `project_ref` is observed ABSENT (refusal-only, `RB-6`; present means `BC`(d)). | the `AuditEvent` that persisted S (prerequisite; pinned, deliberately **not** required current, `RB-7`); `ACT(R₀)` (prerequisite, existence and binding only) | `repository.bootstrap.record` | `AUTO` | `AUTO` | — |
+| **16-4** succeed | chain of B with bound run Rb | chain extended by one RBS with `successor_run_id = Rs` | (1) Its own `BEGIN IMMEDIATE` transaction whose write set is exactly `RB-21`'s: the RBS and its event, plus, under SUPERVISED only, the confirmation's authorized atomic companion `VALID → CONSUMED`. (2) B exists and `consumed = false`. (3) `project_ref` is observed ABSENT (refusal-only; present means `BC`(e) or `BC`(f)). (4) Rb = `bound(B)` is **terminal** (`CLOSED_*`). (5) No `CommitIntent` of p is `APPLYING`. (6) Rs is a `StageRun` of p, non-terminal, with `AC-1` committed, Rs ∉ chain (R₀ included). (7) Project `ACTIVE`; project, stage-of-Rs and Rs suspension `NONE`. (8) `RUN-INV-3` holds for Rs, plus the `CS-9` epoch re-read. (9) Predecessor fields per domain-model §13.2. (10) The four preserved fields are copied from B and compared equal. (11) SUPERVISED: every `RB-18` check holds before any write. AUTONOMOUS: no decision is required, cited or consumed, and (1)–(10) are unchanged. | B's `repository_bootstrap.recorded` event and the event of every earlier RBS in the chain (prerequisites); `DEC(APPROVE)` under SUPERVISED | `repository.bootstrap.record` | `CONFIRM` | `AUTO` | — |
+| **16-2** bootstrap CAS | `project_ref = ABSENT` | `project_ref = E` | (1) B, and every RBS of its chain, were durable in transactions committed **before** the performing intent I's 7.4-6. (2) `consumed = false`. (3) I is `APPLYING` in a 7.4-6 transaction committed by **this** controller, with `I.controller_epoch = project.controller_epoch` re-read at the effect boundary. (4) `I.run_id = bound(B)` and the §13.3 bootstrapping-intent rules. (5) The `CS-3` hold and the repository-wide writer exclusion are held. (6) The compare-and-swap has target `B.project_ref`, expected-old **ABSENT** (a literal), and new `B.expected_ref_target`. (7) At most once for I. (8) A trusted primitive (GR-33 A9). | B's recorded event and its chain's events (prerequisites); I's 7.4-6 event (prerequisite) | `commit.apply` | `AUTO` | `AUTO` | — |
+| **16-3** consume | B unconsumed | B consumed | (1) 16-2 was performed for I by this controller, and the CAS returned success with no error or uncertainty. (2) A read-back of `project_ref` equals E exactly. (3) Every publication-durability precondition an accepted GR-33 N9 imposes on a ref publication (`RB-15`). (4) `project.controller_epoch = I.controller_epoch` in this transaction. (5) No consumption event of B exists. (6) `I.run_id = bound(B)` still holds. | B's recorded event; I's 7.4-6 event; the N9 durability witness once N9 defines one | `commit.apply` | `AUTO` | `AUTO` | — |
+
+**Preconditions before the first project-ref CAS** are exactly 16-2 (1)–(8):
+
+- The RBA was established by 16-1 in an earlier, separate committed transaction.
+- Every succession on which the current binding depends is durable.
+- The record is unconsumed and the ref is absent.
+- The performing intent is current-epoch `APPLYING`, belongs to the bound run, has base E and
+  targets `project_ref`.
+- The hold and the exclusion are held.
+- The CAS operands come only from B.
+
+| id | rule |
+|---|---|
+| `RB-1` | **Exact acts.** §16 permits four acts: establish B (16-1), hand off its binding (16-4), create `project_ref` at E (16-2), and record consumption (16-3). While `RBA(p) = ∅` or B is unconsumed, no other transition writes `project_ref`. |
+| `RB-2` | **Placement.** 16-1 and 16-4 are each their own transaction. **16-1** co-commits with no other transition. **16-4** co-commits with no other transition except the one authorized atomic companion that `RB-21` names: under SUPERVISED, its confirmation's `VALID → CONSUMED`. That companion is not a "co-committed row" in the sense this rule forbids. 16-2 and 16-3 occur only within the application of an `APPLYING` intent, before that intent's own publication. |
+| `RB-3` | **Capabilities.** 16-1 and 16-4 use `repository.bootstrap.record`; 16-2 and 16-3 use `commit.apply`; each is held by the kernel. Nothing enters any grant set (`AX-12`, `AX-18`, `G-2`). |
+| `RB-4` | **Binding closure.** Every RBA field comes only from R₀, S, `ACT(R₀)` and `GL`. Every RBS field comes only from B, its chain, Rs and (SUPERVISED) the confirmation (domain-model §13.3, `RBA-INV-3`). |
+| `RB-5` | **One RBA, immutable.** At most one RBA per project. It is never deleted, replaced, superseded, rebound or mutated, and its `stage_run_id` is never changed by any act. |
+| `RB-6` | **Monotone refusal.** An observation of the repository (ref, reflog, marker, config, index, workspace, private view) may cause a refusal. It never supplies, selects, normalizes or substitutes an RBA/RBS field or a CAS operand, and never causes acceptance or succession. |
+| `RB-7` | **Not snapshot-bound.** Neither record goes stale, and a newer `SNAP` never changes B or E. |
+| `RB-8` | **Bound run only.** Only an intent of `bound(B)` may enter a bootstrapping 7.4-6 or perform 16-2/16-3. A run that is not `bound(B)`, R₀ after a succession included, is refused, however its intent's base and target look. No run ever acts under another run's binding without a durable 16-4 naming it. |
+| `RB-9` | **Consumed once.** After consumption, B authorizes nothing further. 16-2 and 16-4 never recur, and an ABSENT ref is `BC`(g). |
+| `RB-10` | **No retry authority.** B and its successions confer no attempt, retry, `max_attempts`, budget or human authority. A succession creates no run: Rs must already have been lawfully allocated under row 5-1 and every `attempt_count`/`max_attempts` rule. 16-2 happens at most once per intent. A CAS failure is never repeated within the intent, which leaves `APPLYING` only by existing §7.4 rows. `attempt_count` and `budget_used` are untouched, and the bootstrap is not a commit. |
+| `RB-11` | **Epoch.** 16-1 and 16-4 re-read the project epoch in-transaction (`CS-9`); the acting controller must hold the current epoch under the `CS-3` hold. The records store the epoch as provenance only; neither is an operation, and neither is `PENDING`, part of the `RUN-INV-3` barrier or §5.1, or reset by `T_start` (`CS-6` unchanged). A bootstrapping 7.4-6 follows the existing rules: `CS-9` re-read and `I.controller_epoch = project.controller_epoch`. Before the CAS the epoch is re-read at the effect boundary; if it changed, there is no CAS, and I is left `APPLYING` and old-epoch, for recovery. At 16-3 the epoch must equal the CAS's epoch; if not, there is no consumption, and the state becomes `BC`(e). A restart never resumes the CAS or 16-3, and never records 16-1 or 16-4 as part of recovery (§16.3). Under D-PC-01 = B a run holding an old-epoch non-terminal operation never applies again; continuation needs that run to reach `CLOSED_*` by its own rows, then a 16-4 to a lawfully allocated later run (`RB-19`). KD-12 and GR-33 N7 are unaffected. The CAS is a controller-performed effect under the `CS-3` hold, and the hold is released only after it ends (`CS-3d`). |
+| `RB-12` | **No rewind.** Nothing deletes, resets or moves `project_ref` backwards. §7.4 rollback rows never delete it, and later advances happen only under `commit.apply` as GR-33 N9 qualifies it. |
+| `RB-13` | **Activation.** No RBA or RBS read, write or ref operation takes place in `AC-1`. Activation-time repository-identity inputs come from the pinned `SNAP`, never the live index (`RS-INV-1`; D-PC-08). |
+| `RB-14` | **`vcs_kind`.** Records exist only for a `DVCS` adapter. For `CVCS`/`NONE`, 16-1..16-4 are unreachable and refuse. |
+| `RB-15` | **N9 hook.** GR-33 N9 may add preconditions to 16-2 and 16-3 (narrowing only). It may define consumption under `recovery.reconcile` for `BC`(e). It may not remove an N8 precondition, alter B or any RBS, add a capability, or authorize re-creation, succession under recovery, or a recovery CAS. |
+| `RB-16` | **Bounded.** This section adds two entities (domain-model §13), one `CapabilityId` (`repository.bootstrap.record`, `KERNEL`, authority-matrix §7) and three values of the existing free-text `event_type` (§16.4). It adds no `DecisionKind`, lifecycle value, `SuspensionState`, `EscalationTrigger`, enum value or field on any existing entity. §0–§14 are unchanged, and §15 is reserved for GR-33 N7. |
+| `RB-17` | **Succession is narrow.** An RBS applies to exactly one unconsumed RBA and moves only its bound run. It is not a delegation of any capability, grant, activation, decision or other record, and no other section may cite it as authority. |
+| `RB-18` | **Succession mode gate (D-N8-03 = A).**<br>**SUPERVISED: `CONFIRM`.** Exactly one `HumanDecision` D authorizes one 16-4 act. Every check below is evaluated before any write:<br>(a) `decision_kind = APPROVE`; `decided_by.actor_kind = HUMAN`; `auth_method ∈ {SESSION, SIGNATURE, MTLS}`; `HD-INV-1`/`HD-INV-2`.<br>(b) `D.project_id = B.project_id`.<br>(c) `subject = {kind: RUN, id: Rs}`, the exact successor.<br>(d) `scope = SINGLE_ACTION`; `grants = revokes = ∅` (`AX-12`).<br>(e) `decision_state = VALID` when the 16-4 transaction begins and when it is re-read in it: unexpired, nonce unconsumed, and not `STALE` under `HD-INV-4`. `snapshot_bound = true` follows from `APPROVE` and the `RUN` subject.<br>(f) `evidence_shown` holds exactly one `ArtifactRef`, the **succession value artifact**. Its octets are `JCS({"kind":"REPOSITORY_BOOTSTRAP_SUCCESSION","bootstrap_id","ordinal","predecessor_run_id","predecessor_succession_id","successor_run_id","project_id","input_snapshot_id","expected_ref_target","project_ref"})`, with `predecessor_succession_id` present iff `ordinal > 1` and `ordinal` a canonical decimal string. It follows the `PG-8`/`PG-10` digest, JCS and unredacted-artifact discipline.<br>(g) `options_offered = ["ACCEPT_SUCCESSION","REJECT_SUCCESSION"]` and `chosen = "ACCEPT_SUCCESSION"`. `REJECT_SUCCESSION` authorizes nothing.<br>(h) Every payload member equals the act's value exactly:<br>&nbsp;&nbsp;• the same RBA identity (`bootstrap_id`);<br>&nbsp;&nbsp;• chain position (`ordinal`, `predecessor_succession_id`);<br>&nbsp;&nbsp;• predecessor (`predecessor_run_id = bound(B)`);<br>&nbsp;&nbsp;• successor;<br>&nbsp;&nbsp;• project;<br>&nbsp;&nbsp;• the four preserved bindings, equal to B's.<br>(i) D has discharged no other transition and is cited by no other RBS.<br>The succession identity is thereby fixed by the approved value: (`bootstrap_id`, `ordinal`) is unique per §16.4, and D approves exactly that position. Any failure refuses the act with no write and no consumption: wrong successor, predecessor, chain position, project, RBA identity or preserved binding; a `STALE`, `EXPIRED`, `VOID` or already-`CONSUMED` decision; a replayed nonce; `REJECT_SUCCESSION`. D is single-use: after consumption it can authorize nothing, including a re-attempt of the same succession (§16.4 replay row). Record D immediately before the act, with no snapshot between (`HD-INV-4`).<br>**AUTONOMOUS: `AUTO`.** No `HumanDecision` is required, cited, recorded or consumed. Checks 16-4 (1)–(10) are identical to SUPERVISED, and `AUTO` weakens no RBA/RBS binding, eligibility, durability, epoch, replay, fail-closed or recovery rule.<br>**Bounded.** In either mode the verdict authorizes exactly one RBS. It is no generic delegation, retry, run-allocation or `max_attempts` authority, and no authority to infer a succession from Git, ref, repository or workspace state (`RB-10`, `RB-17`, domain-model `RBA-INV-3`). |
+| `RB-19` | **Succession eligibility.** A succession requires that the bound run be terminal and that no intent of the project be `APPLYING`. So two live runs never share a binding, and a succession never races an in-flight bootstrap CAS. A barred but non-terminal run (D-PC-01 = B) must first reach a `CLOSED_*` state by its own existing rows. §16 adds no path that closes it. |
+| `RB-20` | **Bootstrapping 7.4-6 gate.** When `project_ref` is ABSENT, 7.4-6 is admitted only if B (and its chain) were durably committed in earlier transactions and every §13.3 bootstrapping-intent rule holds. With `RBA(p) = ∅` it is refused: establishment first. 7.4-6 writes no RBA or RBS. This gate is conjoined with 7.4-6, like `RI-8`(c), and edits no §7.4 cell. |
+| `RB-21` | **16-4 write set and atomic companion.** The 16-4 transaction's write set is exactly:<br>(1) the RBS row;<br>(2) its `repository_bootstrap.succeeded` event;<br>(3) under SUPERVISED only, the confirmation D's `VALID → CONSUMED` (§7.5 row 2, under `audit.append`), recorded by its own event citing (2) — the `PG-1`/`AC-1`/`AX-17` pattern.<br>(3) is an **explicitly authorized atomic companion transition**. It exists because D is consumed by exactly the act it discharges and must never be spent without the RBS, or survive it unspent. It is required, not merely permitted, and `RB-2`'s no-co-commit rule does not prohibit it. (1)–(3) commit together or not at all, so there is no durable RBS with an unconsumed D and no consumed D without its RBS. Under AUTONOMOUS the write set is (1)–(2) only, with no companion. No other lifecycle, run, stage, contract, intent, apply, snapshot, suspension or repository-effect transition, and no RBA write, is ever in this transaction. The D-N8-02 separation of 16-1, 16-4, 7.4-6 and 16-2/16-3 is unchanged. |
+
+### 16.1 Ordering
+
+| step | phase | writes |
+|---|---|---|
+| T_est | 16-1, its own `BEGIN IMMEDIATE` | B plus `repository_bootstrap.recorded`. A failed check rolls back and writes nothing. |
+| T_succ (zero or more, only while unconsumed) | 16-4, its own `BEGIN IMMEDIATE` | exactly `RB-21`'s write set: RBS plus `repository_bootstrap.succeeded`, plus, under SUPERVISED only, the atomic companion `VALID → CONSUMED` of its confirmation |
+| T_apply | 7.4-6 of I, per `RB-20` | I's 7.4-6 event and status only. No RBA or RBS. |
+| X | the external effect | 16-2 CAS. Never in recovery. |
+| D | N9 durability | Whatever GR-33 N9 defines; §16 imposes nothing here. |
+| T_consume | 16-3, `BEGIN IMMEDIATE` | `repository_bootstrap.consumed` |
+| P | the intent's own publication | §7.4 as GR-33 N9 qualifies it; requires `consumed = true` |
+
+### 16.2 Consistency predicate
+
+`BC(p)` holds iff exactly one of (a)–(c) holds, **and** B's succession chain is well-formed:
+
+- (a) `RBA(p) = ∅` and `project_ref` ABSENT;
+- (b) B unconsumed and `project_ref` ABSENT;
+- (c) B consumed and `project_ref` present, with a value that is E before any governed
+  receipt, or else a value GR-33 N9's lineage rule accepts.
+
+`BC` is evaluated:
+
+- at 16-1 and 16-4;
+- at a bootstrapping 7.4-6;
+- immediately before X;
+- after X, at the read-back;
+- at every later publication admission on `project_ref`;
+- in recovery after `T_start`, as observation only.
+
+| case | condition | class | writes | escalation / suspension |
+|---|---|---|---|---|
+| (d) unexplained ref | `RBA(p) = ∅`, ref present | integrity | no RBA, no CAS, no adoption, no deletion | `ESC(INTEGRITY_VIOLATION)`, row 4-7 `SUSPENDED_BY_INTEGRITY` |
+| (e) unwitnessed visible ref | B unconsumed, ref = E | ambiguity | no consumption, CAS, succession, adoption or deletion | `ESC(RECOVERY_AMBIGUITY)`, row 4-7, unless GR-33 N9's witness-qualified consumption applies |
+| (f) foreign value | B unconsumed, ref ≠ E | integrity | none | as (d) |
+| (g) lost ref | B consumed, ref ABSENT | integrity | **never re-bootstrap** | as (d) |
+| (h) unexplained advance | B consumed, value not accepted by the lineage rule (including "any descendant") | integrity | never reset or adopt | as (d) |
+| (i) RBA defect | more than one RBA; `record_hash` mismatch; missing recorded event; a domain-model §13.3 binding violated; redacted payload | integrity | none | as (d); a redacted payload is also `EVIDENCE_UNRECOVERABLE` |
+| (j) duplicated succession | two RBS with the same predecessor or ordinal; an RBS whose successor already appears in the chain | integrity | none | as (d) |
+| (k) mismatched succession | an RBS whose preserved field ≠ B's; whose `predecessor_run_id ≠` the bound run at its ordinal; whose `bootstrap_id` or `project_id` is foreign; or whose event or hash is missing or invalid | integrity | none | as (d) |
+| (l) contradictory succession | an RBS recorded after consumption; an RBS whose SUPERVISED confirmation is absent, not consumed by it, or consumed by another act | integrity | none | as (d) |
+| (m) stale succession use | an intent of a run that is not `bound(B)` (R₀ after succession, or a predecessor) attempts a bootstrapping 7.4-6 or 16-2 | precondition refusal (`RB-8`) | none; I stays `AUTHORIZED` | — |
+| absence | bootstrapping 7.4-6, 16-2, 16-3 or 16-4 with no B | precondition refusal | none | — |
+| succession not eligible | bound run non-terminal; an intent `APPLYING`; Rs terminal, of another project, or not allocated | precondition refusal | none; any decision is not consumed | — |
+| SUPERVISED confirmation fails (`RB-18`) | no decision; more than one cited; kind ≠ `APPROVE`; not `HUMAN`/authenticated; wrong project; subject ≠ Rs; scope ≠ `SINGLE_ACTION`; non-empty grants or revokes; `STALE`/`EXPIRED`/`VOID`/`CONSUMED`; replayed nonce; `REJECT_SUCCESSION`; the value artifact missing, redacted, not JCS or digest-mismatched; any payload member ≠ the act's value (RBA identity, ordinal, predecessor, predecessor record, successor, project, preserved bindings) | precondition refusal | none: no RBS, no event, no consumption | — (an `AX-8` denial event where a capability denial applies) |
+| confirmation replay | a `CONSUMED` D cited again, or one D cited by two RBS | refusal; if found on disk, integrity (`BC`(l)) | none | as (d) when found on disk |
+| stale RBA | 16-2 or 16-4 with B consumed | precondition refusal; with the ref ABSENT this is (g) | none | as (g) where applicable |
+| wrong StageRun at 16-1 | R₀ terminal, of another project, or not allocated; `R₀.input_snapshot_id ≠ ACT(R₀).input_snapshot_id` | refusal; a stored contradiction is integrity | T_est rolled back | as (i) for the contradiction |
+| wrong snapshot | S not `COMPLETE`, no `vcs_state`, of another project, or E not canonical | precondition refusal | T_est rolled back | — |
+| wrong expected ref | `I.base_revision_id ≠ E` | refusal (§9.3 "base no longer matches") | none; I stays `AUTHORIZED` | — |
+| wrong project | `I.target_ref ≠ GL(p)`; a foreign B or RBS | refusal / integrity | none | as (k) for a foreign record |
+| CAS fails with ref present afterwards | concurrent writer | integrity (unattributable) | no overwrite | as (d) |
+| CAS uncertain | error after a possible rename | ambiguity | no consumption | as (e) |
+| CAS fails with ref ABSENT | I/O error | application error | I leaves `APPLYING` only by existing §7.4 rows; B unconsumed | — |
+
+- Escalation and suspension writes go in a separate legal transaction (the `RI-5`
+  precedent). The refused act writes nothing.
+- Clearing the suspension (row 4-20, `DEC(OVERRIDE)`) repairs nothing, changes neither the
+  records nor the ref, and grants nothing. `BC` is re-evaluated at the next gate.
+- Cases (d)–(l) are additional causes admitted by row 4-7's existing evidence cell (its
+  "failing verification record", or the `ESC(OPEN)` carrying `RECOVERY_AMBIGUITY`); §4 is
+  not edited.
+
+### 16.3 Crash and restart
+
+Recovery runs under `recovery.reconcile` after `T_start` and is **observation-only**:
+
+- It reads B, its chain, the project chain and `project_ref`, and evaluates `BC`.
+- It never performs 16-1, 16-2 or 16-4, never records 16-3 (unless GR-33 N9 defines it), and
+  never deletes, resets or creates a ref or record.
+- It never creates, recreates or resets an RBA, never creates an RBS, never consumes an
+  approval, and never infers bootstrap authority or succession from Git, ref, workspace or
+  repository state.
+- It never fsyncs or repairs the ref namespace.
+
+| crash point | durable state | resolution |
+|---|---|---|
+| during T_est or T_succ | rolled back | nothing to reconcile; the next explicit act may retry the store-only step under its own preconditions (it is not an effect and grants nothing) |
+| after T_est, before any bootstrapping 7.4-6 | B unconsumed; ref ABSENT; `BC`(b) | nothing to reconcile; a later bootstrapping 7.4-6 of `bound(B)` proceeds |
+| after T_succ | RBS durable; SUPERVISED confirmation consumed atomically | nothing to reconcile |
+| after T_apply, before X | B unconsumed; ref ABSENT; I `APPLYING`, old-epoch | row 7.4-12 (`FAILED`/`ORPHANED`) per existing predicates; `BC`(b). The run is barred (D-PC-01 = B). Continuation: the run reaches `CLOSED_*` by its own rows, then a 16-4 succession to a later allocated run (`RB-19`). |
+| during or after X, before T_consume | ref ABSENT: as the previous row; ref = E: `BC`(e) | ambiguity, fail closed, unless GR-33 N9 applies. No succession is possible while (e) holds. I reconciles by existing §7.4 rows. |
+| during T_consume | rolled back | as the previous row |
+| after T_consume, before P | B consumed; ref = E | `BC`(c); I reconciles by existing rows |
+| after P | §7.4 as GR-33 N9 qualifies it | B unaffected |
+
+**Stale or abandoned intents.**
+
+- An intent proposed or authorized before B exists, or before a succession, keeps its
+  status. It is admitted at 7.4-6 only if it belongs to `bound(B)` with base E. Otherwise it
+  is refused with no writes and remains subject to the existing §7.4 rows (reconciliation,
+  `DENIED`) exactly as today.
+- An established B whose bound run ends without any application stays unconsumed;
+  continuation is by 16-4 only.
+
+### 16.4 Events and refusals
+
+| event | `epistemic_class` | actor / capability / `authority_ref` | subject | `causal_parent` | payload (JCS, exactly these members) |
+|---|---|---|---|---|---|
+| `repository_bootstrap.recorded` | `AUTHORITY`: the `KERNEL` transition envelope (§13/§14 precedent). B is not a grant (`G-2`). | `RUNTIME` / `repository.bootstrap.record` / absent | `{kind: "REPOSITORY_BOOTSTRAP", id: bootstrap_id}` | the persisting event of S | `bootstrap_id`, `controller_epoch` (canonical unsigned decimal string, the `SB-3` encoding restated for §16), `expected_ref_target`, `input_snapshot_id`, `project_id`, `project_ref`, `stage_run_id` |
+| `repository_bootstrap.succeeded` | `AUTHORITY` (`KERNEL` envelope) | `RUNTIME` / `repository.bootstrap.record` / absent (`KERNEL`). Under SUPERVISED the confirmation is named in the payload and consumed by its own `audit.append` event citing this one, in the same transaction (`RB-21`). Under AUTONOMOUS there is no confirmation and no companion event. | `{kind: "REPOSITORY_BOOTSTRAP", id: bootstrap_id}` | the previous chain event (the recorded event, or the previous `succeeded`) | `bootstrap_id`, `confirmation_id` (present iff SUPERVISED), `controller_epoch`, `expected_ref_target`, `input_snapshot_id`, `ordinal` (canonical decimal string), `predecessor_run_id`, `predecessor_succession_id` (present iff `ordinal > 1`), `project_id`, `project_ref`, `succession_id`, `successor_run_id` |
+| `repository_bootstrap.consumed` | `EVIDENCE` (minted under `commit.apply`) | `RUNTIME` / `commit.apply` / absent | same | I's 7.4-6 event | `bootstrap_id`, `controller_epoch`, `intent_id`, `project_ref`, `recorded_event_hash`, `ref_target` (= E), `bound_run_id`. GR-33 N9 may add exactly one member naming its durability witness. |
+
+- Payload artifacts satisfy evidence-model §3.2 step 1 before their event commits. Each
+  record's store transaction is durable before any later row cites it.
+- Retention is `PERMANENT`. No secret, host path, pid or credential appears in any payload.
+- The three `event_type` values are values of the existing free-text field.
+
+Refusals are the §16.2 cases. A precondition refusal writes nothing and consumes nothing
+(§12.2, §13.7 precedent); a capability or mode denial is an `AX-8` event in its own
+transaction (`RI-5` precedent).
+
+Illegal operations. These are §9.3-class; they are stated here, and no §9.3 row is
+appended.
+
+| operation | actor | required_capability | supervised_policy | autonomous_policy | illegal_because |
+|---|---|---|---|---|---|
+| establish a second RBA for a project; replace, supersede, delete, rebind or mutate B | any | `NONE_GRANTABLE` | `DENY` | `DENY` | one immutable RBA per project (`RB-5`) |
+| establish B inside another row's transaction, or create B as a consequence of 7.4-6, `AC-1` or any §7.4 act | any | `NONE_GRANTABLE` | `DENY` | `DENY` | establishment is its own governed act before any repository effect (D-N8-02 = B; `RB-2`, `RB-20`) |
+| a second or branching succession; a cycle; a succession of a consumed B; skipping or reordering ordinals | any | `NONE_GRANTABLE` | `DENY` | `DENY` | one linear chain per RBA, only while unconsumed (`RB-17`, `RB-19`) |
+| a bootstrap CAS with expected-old ≠ ABSENT or new ≠ E; a CAS after consumption | any | `NONE_GRANTABLE` | `DENY` | `DENY` | every 16-2 has identical operands taken only from B, and B is consumed once (`RB-9`) |
+| a bootstrap CAS in recovery; re-attempting the CAS within an intent | any | `NONE_GRANTABLE` | `DENY` | `DENY` | 16-2 at most once per intent and never under `recovery.reconcile` (`RB-10`, §16.3) |
+| a second consumption; consumption without CAS success and read-back | any | `NONE_GRANTABLE` | `DENY` | `DENY` | one 16-3 event per `bootstrap_id`, minted only from a measured effect |
+| citing B or an RBS as `required_capability` authority or as a grant | any | `NONE_GRANTABLE` | `DENY` | `DENY` | neither record is authority (`G-2`; `RB-3`, `RB-17`) |
+| replaying a consumed confirmation nonce, or citing one D for two RBS | any | `NONE_GRANTABLE` | `DENY` | `DENY` | the confirmation is single-use and consumed atomically with its RBS (`RB-18`, `RB-21`) |
+| an intent of a run that is not `bound(B)` exercising the bootstrap binding | any | `NONE_GRANTABLE` | `DENY` | `DENY` | no run acts under another run's binding without a durable 16-4 naming it (`RB-8`) |
+| deriving any RBA or RBS field, `bound(B)`, a successor or a CAS operand from any ref value, reflog, packed-refs, `HEAD` or symbolic ref; a marker or lock file; the live workspace, index or working tree; Git config; a private or exported view; the successor's or any other StageRun's snapshot, activation or record beyond domain-model `RBA-INV-3`; an implicit choice of successor; repository contents or objects, including resolving an abbreviated E; directory existence; or driver or CLI arguments as field values | any | `NONE_GRANTABLE` | `DENY` | `DENY` | provenance closure: such an observation is admissible only as a refusal input (`RB-4`, `RB-6`) |
